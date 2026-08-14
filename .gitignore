@@ -1,0 +1,7 @@
+result
+result-*
+.direnv/
+.atl/
+.logs/
+.codegraph/
+.alt/
