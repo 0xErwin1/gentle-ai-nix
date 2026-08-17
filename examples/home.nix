@@ -9,10 +9,17 @@
     # Clients, each with whatever differs for it alone.
     providers = {
       opencode.enable = true;
-      codex.enable = true;
+
+      # Profiles are per client because subscriptions are: the cheap tier
+      # where the quota is tight, the expensive one where it is not.
+      codex = {
+        enable = true;
+        modelPreset = "low-cost";
+      };
 
       claude-code = {
         enable = true;
+        modelPreset = "performance";
         skills = [ "cognitive-doc-design" ];
         settings.theme = "dark";
         models.sdd-apply = "opus";
@@ -43,11 +50,6 @@
     };
 
     permissions.deny = [ "Bash(rm -rf:*)" ];
-
-    # Name the profile rather than restating the models it resolves to, so it
-    # stays the profile Gentle AI recommends rather than the one it recommended
-    # when this file was written.
-    models.codexPreset = "recommended";
 
     # Roles reference each other by attribute name, so renaming one is a single
     # edit here and every generated reference follows.

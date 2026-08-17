@@ -49,15 +49,17 @@ Options are grouped the way you think about the installation. Names inside the g
 
 | Group | Purpose |
 |-------|---------|
-| `providers.<name>` | A client, with `skills`, `settings` and `models` for it alone. |
+| `providers.<name>` | A client, with `modelPreset`, `skills`, `settings` and `models` for it alone. |
 | `components.<name>` | What Gentle AI configures — skills, persona, permissions, sdd, theme, engram, gga. |
 | `skills.<name>` | Naming none installs every skill Gentle AI ships. Entries only narrow that: `false` drops one, `true` restricts to the ones named. |
 | `communityTools.<name>`, `openCodePlugins.<name>` | The optional extras, same shape. |
 | `roles.<id>` | Logical agent roles. `references` name ids, so renaming one is a single edit. |
 | `sdd`, `review`, `install`, `backgroundSubagents` | Workflow modes, the review kill switch, scope and channel, background policy. |
-| `models` | Assignments the contract keeps outside a provider, plus `codexPreset` — name one of Gentle AI's own model profiles instead of restating the models it resolves to. |
+| `models` | Assignments the contract keeps outside a provider. |
 | `permissions`, `mcpServers` | Rules layered over the shipped guardrails, and servers no component configures. |
 | `persona`, `preset`, `schemaVersion`, `package` | The rest. |
+
+Model profiles live on the client, not on the installation: `providers.codex.modelPreset = "low-cost"` alongside `providers.claude-code.modelPreset = "performance"` is a thing you can want, because subscriptions differ per client. Naming the profile rather than restating the models it resolves to is what keeps it the profile Gentle AI recommends today rather than the one it recommended when you wrote the file. A client that offers no profiles is reported rather than accepted and ignored.
 
 Engram is a component, not something to wire by hand: `components.engram.enable` is what configures the MCP server, the plugin and the protocol section in every client that takes them. Nix supplies the binary through `engramPackage` so nothing is downloaded at activation.
 

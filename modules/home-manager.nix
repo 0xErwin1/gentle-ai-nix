@@ -87,6 +87,25 @@ let
           '';
         };
 
+        modelPreset = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "economy";
+          description = ''
+            One of Gentle AI's own model profiles for this client, by name.
+            Profiles are per client because subscriptions are: the cheap tier on
+            one and the expensive tier on another is a thing you can want, and a
+            single global profile cannot say it.
+
+            Naming the profile rather than restating the models it resolves to
+            is what keeps it the profile Gentle AI recommends today. An
+            assignment set explicitly in `models` still wins over it.
+
+            Not every client offers profiles; one that does not is reported
+            rather than accepted and ignored.
+          '';
+        };
+
         models = mkOption {
           type = types.attrsOf types.anything;
           default = { };
@@ -239,6 +258,10 @@ let
     lib.mapAttrs (_: provider: provider.settings) enabledProviders
   );
 
+  providerPresets = lib.filterAttrs (_: value: value != null) (
+    lib.mapAttrs (_: provider: provider.modelPreset) enabledProviders
+  );
+
   # Providers express model assignments in their own vocabulary, so the contract
   # keeps one field per shape rather than one field pretending they are alike.
   # This table is the whole of the provider knowledge in this module, and it is
@@ -323,7 +346,7 @@ let
     // whenSet "codexCarrilModelAssignments" cfg.models.codexCarril
     // whenSet "codexPhaseModelAssignments" cfg.models.codexPhases
     // whenSet "codexOrchestrator" cfg.models.codexOrchestrator
-    // whenSet "codexModelPreset" cfg.models.codexPreset
+    // whenSet "modelPresets" providerPresets
     // whenSet "permissions" (
       whenSet "allow" cfg.permissions.allow
       // whenSet "deny" cfg.permissions.deny
@@ -573,20 +596,6 @@ in
         description = "Model and effort for the Codex main session.";
       };
 
-      codexPreset = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        example = "recommended";
-        description = ''
-          One of Gentle AI's own Codex model profiles, by name. Naming the
-          profile rather than restating the models and efforts it resolves to is
-          what keeps it the profile Gentle AI recommends today: spelling the
-          values out pins the matrix as it was when you wrote them.
-
-          An assignment set explicitly under `models` or `providers.codex.models`
-          still wins over the profile.
-        '';
-      };
     };
 
     permissions = {
