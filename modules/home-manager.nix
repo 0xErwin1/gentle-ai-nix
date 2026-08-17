@@ -293,12 +293,20 @@ let
           type = types.enum [
             "replace"
             "append"
+            "fill"
           ];
           default = "replace";
           description = ''
-            Whether this content replaces what Gentle AI rendered at the path or
-            is appended after it. Appending is how a section of your own
-            survives in a file Gentle AI regenerates.
+            How this content meets what Gentle AI rendered at the same path.
+
+            `replace` overwrites it. `append` adds after it, which is how a
+            section of your own survives in a file Gentle AI regenerates.
+
+            `fill` copies only what is not there already, so a directory of your
+            own can be layered over a directory Gentle AI renders without your
+            copy of a file it also ships winning. That is what lets you keep a
+            tree of extra agents or skills beside the generated ones without
+            listing them, and without a stale copy shadowing the current one.
           '';
         };
       };
@@ -481,6 +489,12 @@ let
               mkdir -p "$(dirname "$target")"
               touch "$target"
               cat ${content} >> "$target"
+            ''
+          else if entry.mode == "fill" then
+            ''
+              target="$out/tree/${entry.target}"
+              mkdir -p "$target"
+              cp -r --no-preserve=mode,ownership --no-clobber ${content}/. "$target/" 2>/dev/null || true
             ''
           else
             ''
