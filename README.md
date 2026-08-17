@@ -19,12 +19,22 @@ Declare a Gentle AI installation in your Home Manager configuration and let Gent
 
      programs.gentle-ai = {
        enable = true;
-       settings = {
-         agents = [ "opencode" "claude-code" ];
-         components = [ "skills" "persona" "permissions" "sdd" "theme" ];
-         persona = "neutral";
-         sddMode = "single";
+
+       providers = {
+         opencode.enable = true;
+         claude-code.enable = true;
        };
+
+       components = {
+         skills.enable = true;
+         persona.enable = true;
+         permissions.enable = true;
+         sdd.enable = true;
+         engram.enable = true;
+       };
+
+       persona = "neutral";
+       sdd.mode = "single";
      };
    }
    ```
@@ -35,17 +45,48 @@ A document Gentle AI rejects fails the build with its diagnostics, so an invalid
 
 ## What you declare
 
-`settings` is the `selection` block of the Gentle AI desired-state document, passed through verbatim. Any field the contract accepts works here without this flake knowing it exists — and Gentle AI rejects an unknown field rather than ignoring it, so a typo is a build failure.
+Options are grouped the way you think about the installation. Names inside the groups are Gentle AI's own ids and are deliberately not enumerated here: Gentle AI rejects one it does not know rather than ignoring it, so anything it gains works the day it ships.
 
-| Option | Purpose |
-|--------|---------|
-| `settings` | Clients, components, skills, persona, preset, SDD mode, MCP servers, permissions, model assignments. |
-| `roles` | Logical agent roles. `references` name role ids, so renaming a role is one edit and every generated reference follows. |
-| `extensions` | Provider-specific configuration the neutral contract does not model, keyed by adapter. |
-| `schemaVersion` | The contract version this document is written against. Pinning it turns an incompatible upgrade into a build failure instead of a silent reinterpretation. |
-| `package` | The Gentle AI package. It both renders the configuration and is installed, so what runs matches what was rendered. |
+| Group | Purpose |
+|-------|---------|
+| `providers.<name>` | A client, with `skills`, `settings` and `models` for it alone. |
+| `components.<name>` | What Gentle AI configures — skills, persona, permissions, sdd, theme, engram, gga. |
+| `skills.<name>` | Skills enabled for every provider that does not override them. |
+| `communityTools.<name>`, `openCodePlugins.<name>` | The optional extras, same shape. |
+| `roles.<id>` | Logical agent roles. `references` name ids, so renaming one is a single edit. |
+| `sdd`, `review`, `install`, `backgroundSubagents` | Workflow modes, the review kill switch, scope and channel, background policy. |
+| `models`, `permissions`, `mcpServers` | Assignments the contract keeps outside a provider, rules layered over the shipped guardrails, and servers no component configures. |
+| `persona`, `preset`, `schemaVersion`, `package` | The rest. |
 
-See [`examples/home.nix`](examples/home.nix) for a configuration using all of them.
+Engram is a component, not something to wire by hand: `components.engram.enable` is what configures the MCP server, the plugin and the protocol section in every client that takes them. Nix supplies the binary through `engramPackage` so nothing is downloaded at activation.
+
+## Editing the harness
+
+A wrapper you cannot edit is a worse harness than the one you wrote yourself. Three ways in, cheapest first.
+
+| You want to | Use |
+|-------------|-----|
+| Add a skill, agent or command Gentle AI does not ship | `extraFiles."<path>".source` |
+| Replace a file Gentle AI does ship | `extraFiles."<path>".text` — same path, your content wins |
+| Change a provider's own settings | `providers.<name>.settings` |
+| Reach a contract field newer than this module | `settings` — raw `selection`, merged last |
+| Anything else | `overrideRendered` — a function over the rendered derivation |
+
+```nix
+programs.gentle-ai = {
+  extraFiles.".config/opencode/skills/house-style/SKILL.md".source = ./house-style.md;
+  extraFiles.".claude/agents/gentle-apply.md".text = "---\nname: gentle-apply\n---\nMy own prompt.\n";
+
+  overrideRendered = rendered: pkgs.runCommandLocal "patched" { } ''
+    cp -r --no-preserve=mode,ownership ${rendered} "$out"
+    substituteInPlace "$out/tree/.config/opencode/AGENTS.md" --replace-warn "Gentle AI" "Our harness"
+  '';
+};
+```
+
+`extraFiles` is layered onto the rendered tree rather than declared as a second `home.file` entry, which is what makes overriding a generated file possible at all: two Home Manager entries for one path collide instead of layering.
+
+See [`examples/home.nix`](examples/home.nix) for a configuration using all of it.
 
 ## How it works
 

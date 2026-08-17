@@ -30,7 +30,7 @@ let
   minimal = {
     programs.gentle-ai = {
       enable = true;
-      settings.agents = [ "opencode" ];
+      providers.opencode.enable = true;
     };
   };
 
@@ -38,34 +38,39 @@ let
     {
       programs.gentle-ai = {
         enable = true;
-        settings = {
-          agents = [
-            "opencode"
-            "claude-code"
-          ];
-          components = [
-            "skills"
-            "persona"
-            "sdd"
-          ];
-          persona = "neutral";
-          sddMode = "single";
+
+        providers = {
+          opencode.enable = true;
+          claude-code.enable = true;
         };
-        roles = [
-          {
-            id = "orchestrator";
+
+        components = {
+          skills.enable = true;
+          persona.enable = true;
+          sdd.enable = true;
+        };
+
+        persona = "neutral";
+        sdd.mode = "single";
+
+        roles = {
+          orchestrator = {
             renderedName = "check-orchestrator";
             mode = "primary";
             references = [ "apply" ];
             description = "Coordinates";
             prompt = "You coordinate.";
-          }
-          {
-            id = "apply";
+          };
+          apply = {
             renderedName = "check-apply";
             mode = "subagent";
-          }
-        ];
+          };
+        };
+
+        extraFiles = {
+          ".config/opencode/skills/check-own/SKILL.md".text = "OWN-SKILL";
+          ".claude/agents/check-apply.md".text = "OVERRIDDEN";
+        };
       };
     }
   ];
@@ -91,12 +96,25 @@ in
   '';
 
   # A document naming no client configures nothing, which is a mistake worth a
-  # message rather than an empty successful activation.
+  # message rather than an empty successful activation. The accepted case is
+  # asserted alongside it, because a check that only ever sees rejection would
+  # also pass if nothing evaluated at all.
   noAgentsRejected = treeCheck "no-agents-rejected" ''
     ${lib.optionalString (!(rejected [ { programs.gentle-ai.enable = true; } ])) ''
-      echo "a document naming no agents was accepted" >&2
+      echo "a document naming no client was accepted" >&2
       exit 1
     ''}
+    ${lib.optionalString (!(accepted [ minimal ])) ''
+      echo "a document naming a client was rejected" >&2
+      exit 1
+    ''}
+  '';
+
+  # Layering is what makes the harness editable: an entry must be able to add a
+  # file Gentle AI does not ship and to replace one it does.
+  ownContentLayersOverTheRender = treeCheck "extra-files" ''
+    grep -q "OWN-SKILL" "$rendered/tree/.config/opencode/skills/check-own/SKILL.md"
+    grep -q "OVERRIDDEN" "$rendered/tree/.claude/agents/check-apply.md"
   '';
 
   # A role the document declared must reach every client that expresses roles,
