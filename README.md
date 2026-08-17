@@ -94,6 +94,16 @@ programs.gentle-ai = {
 
 See [`examples/home.nix`](examples/home.nix) for a configuration using all of it.
 
+## Reference
+
+Every option, with its type, default and example, is in [`docs/options.md`](docs/options.md). It is generated from the module itself and a check fails the build if the committed copy drifts, so it cannot describe an option the module does not have.
+
+```console
+nix build .#options-doc && cp result docs/options.md
+```
+
+For the fields these options produce — what each accepts, and what omitting it means — see the [contract reference](https://github.com/Gentleman-Programming/gentle-ai/blob/main/docs/declarative-config-reference.md) in Gentle AI itself.
+
 ## How it works
 
 ```

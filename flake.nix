@@ -36,6 +36,14 @@
         {
           inherit gentle-ai engram;
           default = gentle-ai;
+
+          # Reference documentation for every option this module declares.
+          # Regenerate the committed copy with:
+          #   nix build .#options-doc && cp result docs/options.md
+          options-doc = import ./docs/options.nix {
+            inherit pkgs;
+            module = self.homeManagerModules.default;
+          };
         }
       );
 

@@ -144,6 +144,25 @@ in
 
   # treefmt rewrites in place, so it runs against a writable copy and the check
   # is whether anything changed rather than whether it refused to run.
+  # Generated reference documentation is only useful while it matches the
+  # module. Committing it without this check is how a reference starts
+  # describing options that were renamed a release ago.
+  optionsDocumented =
+    pkgs.runCommandLocal "gentle-ai-check-options-doc"
+      {
+        generated = import ../docs/options.nix {
+          inherit pkgs;
+          module = self.homeManagerModules.default;
+        };
+      }
+      ''
+        if ! diff -u ${../docs/options.md} "$generated"; then
+          echo "docs/options.md is stale; regenerate it with 'nix build .#options-doc && cp result docs/options.md'" >&2
+          exit 1
+        fi
+        touch "$out"
+      '';
+
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
     cp -r --no-preserve=mode,ownership ${self} source
     ${lib.getExe pkgs.nixfmt-tree} --tree-root source --no-cache --fail-on-change source >/dev/null || {
