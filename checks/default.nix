@@ -165,7 +165,9 @@ in
 
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
     cp -r --no-preserve=mode,ownership ${self} source
-    ${lib.getExe pkgs.nixfmt-tree} --tree-root source --no-cache --fail-on-change source >/dev/null || {
+    ${
+      lib.getExe self.formatter.${system}
+    } --tree-root source --no-cache --fail-on-change source >/dev/null || {
       echo "the flake is not formatted; run 'nix fmt'" >&2
       exit 1
     }
