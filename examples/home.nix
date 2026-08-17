@@ -9,6 +9,7 @@
     # Clients, each with whatever differs for it alone.
     providers = {
       opencode.enable = true;
+      codex.enable = true;
 
       claude-code = {
         enable = true;
@@ -30,10 +31,9 @@
       engram.enable = true;
     };
 
-    skills = {
-      comment-writer.enable = true;
-      cognitive-doc-design.enable = true;
-    };
+    # Naming no skill installs every one Gentle AI ships. Entries are only for
+    # narrowing that: false drops one and leaves the rest.
+    skills.go-testing.enable = false;
 
     persona = "neutral";
 
@@ -43,6 +43,11 @@
     };
 
     permissions.deny = [ "Bash(rm -rf:*)" ];
+
+    # Name the profile rather than restating the models it resolves to, so it
+    # stays the profile Gentle AI recommends rather than the one it recommended
+    # when this file was written.
+    models.codexPreset = "recommended";
 
     # Roles reference each other by attribute name, so renaming one is a single
     # edit here and every generated reference follows.
@@ -79,6 +84,19 @@
         ---
         Implement the assigned task, our way.
       '';
+
+      # A section of your own inside a file Gentle AI regenerates. Appending
+      # leaves everything it wrote in place.
+      "opencode-house-rules" = {
+        target = ".config/opencode/AGENTS.md";
+        mode = "append";
+        text = ''
+
+          ## House rules
+
+          Ask before touching anything under infra/.
+        '';
+      };
     };
 
     # Anything the options above do not reach. Applied after extraFiles.

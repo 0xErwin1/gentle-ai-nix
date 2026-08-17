@@ -33,6 +33,7 @@ let
   defaultEngramPackage = pkgs.callPackage ../packages/engram.nix { };
 
   enabledNames = group: lib.attrNames (lib.filterAttrs (_: value: value.enable) group);
+  disabledNames = group: lib.attrNames (lib.filterAttrs (_: value: !value.enable) group);
 
   # Only a value the operator actually set reaches the document. The contract
   # reads an omitted field as unresolved and a present one as a decision, so
@@ -212,6 +213,18 @@ let
           default = name;
           description = "Path relative to the home directory.";
         };
+        mode = mkOption {
+          type = types.enum [
+            "replace"
+            "append"
+          ];
+          default = "replace";
+          description = ''
+            Whether this content replaces what Gentle AI rendered at the path or
+            is appended after it. Appending is how a section of your own
+            survives in a file Gentle AI regenerates.
+          '';
+        };
       };
     }
   );
@@ -290,6 +303,7 @@ let
     whenSet "agents" (enabledNames cfg.providers)
     // whenSet "components" (enabledNames cfg.components)
     // whenSet "skills" (enabledNames cfg.skills)
+    // whenSet "skillExclusions" (disabledNames cfg.skills)
     // whenSet "skillAssignments" providerSkills
     // whenSet "communityTools" (enabledNames cfg.communityTools)
     // whenSet "openCodePlugins" (enabledNames cfg.openCodePlugins)
@@ -309,6 +323,7 @@ let
     // whenSet "codexCarrilModelAssignments" cfg.models.codexCarril
     // whenSet "codexPhaseModelAssignments" cfg.models.codexPhases
     // whenSet "codexOrchestrator" cfg.models.codexOrchestrator
+    // whenSet "codexModelPreset" cfg.models.codexPreset
     // whenSet "permissions" (
       whenSet "allow" cfg.permissions.allow
       // whenSet "deny" cfg.permissions.deny
@@ -341,14 +356,27 @@ let
     else
       pkgs.runCommandLocal "gentle-ai-config-overlaid" { } ''
         cp -r --no-preserve=mode,ownership ${base} "$out"
-        ${lib.concatMapStringsSep "\n" (entry: ''
-          target="$out/tree/${entry.target}"
-          mkdir -p "$(dirname "$target")"
-          rm -rf "$target"
-          cp -r --no-preserve=mode,ownership ${
-            if entry.source != null then entry.source else pkgs.writeText "gentle-ai-extra-file" entry.text
-          } "$target"
-        '') (lib.attrValues cfg.extraFiles)}
+        ${lib.concatMapStringsSep "\n" (
+          entry:
+          let
+            content =
+              if entry.source != null then entry.source else pkgs.writeText "gentle-ai-extra-file" entry.text;
+          in
+          if entry.mode == "append" then
+            ''
+              target="$out/tree/${entry.target}"
+              mkdir -p "$(dirname "$target")"
+              touch "$target"
+              cat ${content} >> "$target"
+            ''
+          else
+            ''
+              target="$out/tree/${entry.target}"
+              mkdir -p "$(dirname "$target")"
+              rm -rf "$target"
+              cp -r --no-preserve=mode,ownership ${content} "$target"
+            ''
+        ) (lib.attrValues cfg.extraFiles)}
       '';
 
   rendered = cfg.overrideRendered overlaid;
@@ -431,7 +459,26 @@ in
     };
 
     components = enableGroup "component";
-    skills = enableGroup "skill";
+
+    skills = mkOption {
+      type = types.attrsOf (
+        types.submodule (
+          { name, ... }:
+          {
+            options.enable = mkEnableOption "the ${name} skill";
+          }
+        )
+      );
+      default = { };
+      example = literalExpression "{ go-testing.enable = false; }";
+      description = ''
+        Skills, keyed by Gentle AI's own id. Naming none installs every skill
+        Gentle AI ships, so this is only for narrowing that: an entry set to
+        false excludes one skill and leaves the rest, and any entry set to true
+        narrows the installation to the ones named.
+      '';
+    };
+
     communityTools = enableGroup "community tool";
     openCodePlugins = enableGroup "OpenCode plugin";
 
@@ -524,6 +571,21 @@ in
         type = types.nullOr (types.attrsOf types.anything);
         default = null;
         description = "Model and effort for the Codex main session.";
+      };
+
+      codexPreset = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "recommended";
+        description = ''
+          One of Gentle AI's own Codex model profiles, by name. Naming the
+          profile rather than restating the models and efforts it resolves to is
+          what keeps it the profile Gentle AI recommends today: spelling the
+          values out pins the matrix as it was when you wrote them.
+
+          An assignment set explicitly under `models` or `providers.codex.models`
+          still wins over the profile.
+        '';
       };
     };
 

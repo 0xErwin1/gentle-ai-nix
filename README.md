@@ -51,11 +51,12 @@ Options are grouped the way you think about the installation. Names inside the g
 |-------|---------|
 | `providers.<name>` | A client, with `skills`, `settings` and `models` for it alone. |
 | `components.<name>` | What Gentle AI configures — skills, persona, permissions, sdd, theme, engram, gga. |
-| `skills.<name>` | Skills enabled for every provider that does not override them. |
+| `skills.<name>` | Naming none installs every skill Gentle AI ships. Entries only narrow that: `false` drops one, `true` restricts to the ones named. |
 | `communityTools.<name>`, `openCodePlugins.<name>` | The optional extras, same shape. |
 | `roles.<id>` | Logical agent roles. `references` name ids, so renaming one is a single edit. |
 | `sdd`, `review`, `install`, `backgroundSubagents` | Workflow modes, the review kill switch, scope and channel, background policy. |
-| `models`, `permissions`, `mcpServers` | Assignments the contract keeps outside a provider, rules layered over the shipped guardrails, and servers no component configures. |
+| `models` | Assignments the contract keeps outside a provider, plus `codexPreset` — name one of Gentle AI's own model profiles instead of restating the models it resolves to. |
+| `permissions`, `mcpServers` | Rules layered over the shipped guardrails, and servers no component configures. |
 | `persona`, `preset`, `schemaVersion`, `package` | The rest. |
 
 Engram is a component, not something to wire by hand: `components.engram.enable` is what configures the MCP server, the plugin and the protocol section in every client that takes them. Nix supplies the binary through `engramPackage` so nothing is downloaded at activation.
@@ -68,6 +69,7 @@ A wrapper you cannot edit is a worse harness than the one you wrote yourself. Th
 |-------------|-----|
 | Add a skill, agent or command Gentle AI does not ship | `extraFiles."<path>".source` |
 | Replace a file Gentle AI does ship | `extraFiles."<path>".text` — same path, your content wins |
+| Keep a section of your own in a file Gentle AI regenerates | `extraFiles.<name> = { target; mode = "append"; text; }` |
 | Change a provider's own settings | `providers.<name>.settings` |
 | Reach a contract field newer than this module | `settings` — raw `selection`, merged last |
 | Anything else | `overrideRendered` — a function over the rendered derivation |
@@ -105,7 +107,7 @@ programs.gentle-ai.extensions┘
 
 ## Requirements
 
-This flake calls `gentle-ai config render`, which is the declarative configuration contract from [Gentle AI issue #3248](https://github.com/Gentleman-Programming/gentle-ai/issues/3248). Pin `packages/gentle-ai.nix` — or `programs.gentle-ai.package` — to a Gentle AI revision that provides it. A package without it fails the build when the renderer runs, naming the missing command.
+This flake calls `gentle-ai config render`, the declarative configuration contract from [Gentle AI issue #3248](https://github.com/Gentleman-Programming/gentle-ai/issues/3248). It is not in an upstream release yet, so `packages/gentle-ai.nix` is pinned to the branch chain carrying it. Once the contract merges, move `owner`, `rev` and `hash` back to an upstream tag; nothing else changes. Override `programs.gentle-ai.package` to build from somewhere else in the meantime.
 
 ## Checklist
 

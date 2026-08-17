@@ -142,10 +142,14 @@ in
     grep -q '"resources"' "$rendered/manifest.json"
   '';
 
+  # treefmt rewrites in place, so it runs against a writable copy and the check
+  # is whether anything changed rather than whether it refused to run.
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
-    ${lib.getExe pkgs.nixfmt-tree} --check ${self} 2>&1 | tee "$out" || {
-      echo "run 'nix fmt' to format the flake" >&2
+    cp -r --no-preserve=mode,ownership ${self} source
+    ${lib.getExe pkgs.nixfmt-tree} --tree-root source --no-cache --fail-on-change source >/dev/null || {
+      echo "the flake is not formatted; run 'nix fmt'" >&2
       exit 1
     }
+    touch "$out"
   '';
 }
