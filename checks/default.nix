@@ -163,6 +163,72 @@ in
         touch "$out"
       '';
 
+  # A merge that took the client's own state with it would be indistinguishable
+  # from a working one until someone lost their OAuth session, so the merger is
+  # exercised against a file holding exactly the kind of state it must preserve.
+  mergePreservesClientState =
+    pkgs.runCommandLocal "gentle-ai-check-merge"
+      {
+        nativeBuildInputs = [
+          (pkgs.writers.writePython3Bin "gentle-ai-merge" {
+            libraries = [ pkgs.python3Packages.tomlkit ];
+            flakeIgnore = [
+              "E501"
+              "W503"
+            ];
+          } (builtins.readFile ../lib/merge.py))
+        ];
+      }
+      ''
+        set -euo pipefail
+        printf 'v4lue' > secret
+
+        cat > target.json <<'JSON'
+        {"mcpServers":{"engram":{"command":"engram"}},"oauthAccount":{"id":"me"},"projects":{"/a":{}}}
+        JSON
+        cat > fragment.json <<'JSON'
+        {"mcpServers":{"atlas":{"env":{"TOKEN":"@TOKEN@"}}}}
+        JSON
+
+        gentle-ai-merge --fragment fragment.json --target target.json --secret "TOKEN=$PWD/secret"
+
+        grep -q '"oauthAccount"' target.json || { echo "the merge dropped the client's own state" >&2; exit 1; }
+        grep -q '"engram"' target.json || { echo "the merge dropped an entry it did not declare" >&2; exit 1; }
+        grep -q '"atlas"' target.json || { echo "the merge did not add the declared entry" >&2; exit 1; }
+        grep -q 'v4lue' target.json || { echo "the placeholder was not resolved" >&2; exit 1; }
+        grep -q '@TOKEN@' target.json && { echo "the placeholder survived" >&2; exit 1; }
+
+        cat > target.toml <<'TOML'
+        # a comment worth keeping
+        [projects."/w"]
+        trust_level = "trusted"
+        TOML
+        cat > fragment.toml <<'TOML'
+        [mcp_servers.atlas]
+        command = "atlas"
+        TOML
+
+        gentle-ai-merge --fragment fragment.toml --target target.toml --secret "TOKEN=$PWD/secret"
+        cp target.toml once.toml
+        gentle-ai-merge --fragment fragment.toml --target target.toml --secret "TOKEN=$PWD/secret"
+
+        grep -q 'a comment worth keeping' target.toml || { echo "the TOML merge dropped a comment" >&2; exit 1; }
+        grep -q 'trust_level' target.toml || { echo "the TOML merge dropped the client's own state" >&2; exit 1; }
+        grep -q 'mcp_servers.atlas' target.toml || { echo "the TOML merge did not add the declared table" >&2; exit 1; }
+        diff -u once.toml target.toml || { echo "merging twice changed the file" >&2; exit 1; }
+
+        # An unreadable secret must leave the placeholder rather than empty it:
+        # an empty credential reads as a configured one and fails at use.
+        cat > bare.toml <<'TOML'
+        [mcp_servers.atlas]
+        token = "@ABSENT@"
+        TOML
+        gentle-ai-merge --fragment bare.toml --target kept.toml 2>/dev/null
+        grep -q '@ABSENT@' kept.toml || { echo "an unresolved placeholder was emptied" >&2; exit 1; }
+
+        touch "$out"
+      '';
+
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
     cp -r --no-preserve=mode,ownership ${self} source
     ${

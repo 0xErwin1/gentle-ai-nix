@@ -128,6 +128,25 @@ Where that path comes from is not this flake's business: a sops-nix or agenix
 secret exposes exactly such a file, and so does a plain one, so none of them is
 a dependency here.
 
+**A file the client also writes** — Claude Code keeps its OAuth session and
+project history in `.claude.json`, Codex its per-project trust levels in
+`config.toml` — cannot be replaced either. Those are merged instead:
+
+```nix
+secrets.merge = [ ".claude.json" ".codex/config.toml" ];
+```
+
+The fragment goes in and everything it does not mention stays, comments and all.
+Merging is additive: an entry dropped from the document is not removed from the
+file, because the entry may be one the client wrote and the file is not ours to
+prune.
+
+| | `secrets.paths` | `secrets.merge` |
+|---|---|---|
+| Ownership | Gentle AI owns the file whole | shared with the client |
+| Written | replaced | merged in |
+| Formats | any | JSON and TOML |
+
 ## Reference
 
 Every option, with its type, default and example, is in [`docs/options.md`](docs/options.md). It is generated from the module itself and a check fails the build if the committed copy drifts, so it cannot describe an option the module does not have.

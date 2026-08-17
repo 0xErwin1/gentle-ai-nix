@@ -1743,14 +1743,20 @@ false
 
 
 
-## programs\.gentle-ai\.secrets\.paths
+## programs\.gentle-ai\.secrets\.merge
 
 
 
-Rendered paths that carry a credential\. They are kept out of the
-projection and written as real files at activation with every
-placeholder below replaced, because a store symlink can be neither
-private nor written\.
+Rendered paths Gentle AI shares with the client itself\. Claude Code
+keeps its OAuth and project history in ` .claude.json `, Codex its
+per-project trust levels in ` config.toml `, so writing the rendered
+copy over them would take that state with it\. The fragment is merged
+in instead and everything it does not mention is left alone\.
+
+JSON and TOML are supported; TOML keeps its comments and ordering\.
+Merging is additive, so a server dropped from the document is not
+removed from the file — that entry may be one the client wrote, and
+this file is not ours to prune\.
 
 
 
@@ -1770,7 +1776,39 @@ list of string
 *Example:*
 
 ```nix
-[ ".codex/config.toml" ]
+[ ".claude.json" ".codex/config.toml" ]
+```
+
+
+
+## programs\.gentle-ai\.secrets\.paths
+
+
+
+Rendered paths that carry a credential and that Gentle AI owns whole\.
+They are kept out of the projection and written as real files at
+activation with every placeholder below replaced, because a store
+symlink can be neither private nor written\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[ ".claude/mcp/atlas.json" ]
 ```
 
 

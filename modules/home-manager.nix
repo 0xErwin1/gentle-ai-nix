@@ -570,7 +570,19 @@ let
   # Where that file comes from is deliberately not this module's business: a
   # sops-nix or agenix secret exposes exactly such a path, and so does a plain
   # file, so none of them has to be a dependency here.
-  withheld = cfg.secrets.paths;
+  withheld = cfg.secrets.paths ++ cfg.secrets.merge;
+
+  merger = pkgs.writers.writePython3Bin "gentle-ai-merge" {
+    libraries = [ pkgs.python3Packages.tomlkit ];
+    flakeIgnore = [
+      "E501"
+      "W503"
+    ];
+  } (builtins.readFile ../lib/merge.py);
+
+  secretArguments = lib.concatMapStringsSep " " (
+    name: "--secret ${lib.escapeShellArg "${name}=${cfg.secrets.placeholders.${name}}"}"
+  ) (lib.attrNames cfg.secrets.placeholders);
 
   projected =
     if withheld == [ ] then
@@ -909,12 +921,30 @@ in
       paths = mkOption {
         type = types.listOf types.str;
         default = [ ];
-        example = literalExpression ''[ ".codex/config.toml" ]'';
+        example = literalExpression ''[ ".claude/mcp/atlas.json" ]'';
         description = ''
-          Rendered paths that carry a credential. They are kept out of the
-          projection and written as real files at activation with every
-          placeholder below replaced, because a store symlink can be neither
-          private nor written.
+          Rendered paths that carry a credential and that Gentle AI owns whole.
+          They are kept out of the projection and written as real files at
+          activation with every placeholder below replaced, because a store
+          symlink can be neither private nor written.
+        '';
+      };
+
+      merge = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = literalExpression ''[ ".claude.json" ".codex/config.toml" ]'';
+        description = ''
+          Rendered paths Gentle AI shares with the client itself. Claude Code
+          keeps its OAuth and project history in `.claude.json`, Codex its
+          per-project trust levels in `config.toml`, so writing the rendered
+          copy over them would take that state with it. The fragment is merged
+          in instead and everything it does not mention is left alone.
+
+          JSON and TOML are supported; TOML keeps its comments and ordering.
+          Merging is additive, so a server dropped from the document is not
+          removed from the file — that entry may be one the client wrote, and
+          this file is not ours to prune.
         '';
       };
 
@@ -1027,7 +1057,18 @@ in
       }) linkedTargets
     );
 
-    home.activation.gentleAiSecrets = lib.mkIf (withheld != [ ]) (
+    home.activation.gentleAiMergedSecrets = lib.mkIf (cfg.secrets.merge != [ ]) (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] (
+        lib.concatMapStringsSep "\n" (path: ''
+          run ${lib.getExe merger} \
+            --fragment ${lib.escapeShellArg "${rendered}/tree/${path}"} \
+            --target ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"} \
+            ${secretArguments}
+        '') cfg.secrets.merge
+      )
+    );
+
+    home.activation.gentleAiSecrets = lib.mkIf (cfg.secrets.paths != [ ]) (
       lib.hm.dag.entryAfter [ "writeBoundary" ] (
         ''
           _gentle_ai_quote() { printf '%s' "$1" | sed -e 's/[\\&|]/\\\\&/g'; }
