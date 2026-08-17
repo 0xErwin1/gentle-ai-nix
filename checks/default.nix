@@ -229,6 +229,66 @@ in
         touch "$out"
       '';
 
+  # Provisioning is the one activation step that reaches a network and installs
+  # something Nix does not track, so what it must never do is as important as
+  # what it does: no repeat on an unchanged list, and no failed activation when
+  # the client itself is not installed.
+  provisioningRunsDeclaredCommandsOnce =
+    pkgs.runCommandLocal "gentle-ai-check-provision"
+      {
+        nativeBuildInputs = [
+          (pkgs.writers.writePython3Bin "gentle-ai-provision" {
+            flakeIgnore = [
+              "E501"
+              "W503"
+            ];
+          } (builtins.readFile ../lib/provision.py))
+        ];
+      }
+      ''
+        set -euo pipefail
+
+        cat > manifest.json <<'JSON'
+        {"manifest":{"resources":[
+          {"path":".pi/agent/settings.json","selector":"file","digest":"abc"},
+          {"path":"engram","selector":"provision","digest":"present","component":"engram"},
+          {"path":"pi","selector":"provision","digest":"present","agent":"pi",
+           "commands":[["fake-pi","install","npm:gentle-pi"],["fake-pi","install","npm:gentle-engram"]]}
+        ]}}
+        JSON
+
+        mkdir -p bin stamps
+        cat > bin/fake-pi <<'SH'
+        #!/bin/sh
+        echo "$@" >> "$RECORD"
+        SH
+        chmod +x bin/fake-pi
+        export RECORD="$PWD/ran"
+        touch "$RECORD"
+
+        # Without the client on PATH the step reports and returns, so one
+        # uninstalled client cannot take an unrelated switch down with it.
+        gentle-ai-provision --manifest manifest.json --agent pi --stamp-dir stamps 2>/dev/null
+        test -s "$RECORD" && { echo "commands ran without the client installed" >&2; exit 1; }
+        test -e stamps/pi.provisioned && { echo "a skipped run recorded a stamp" >&2; exit 1; }
+
+        export PATH="$PWD/bin:$PATH"
+        gentle-ai-provision --manifest manifest.json --agent pi --stamp-dir stamps 2>/dev/null
+        grep -q 'npm:gentle-pi' "$RECORD" || { echo "the declared commands did not run" >&2; exit 1; }
+        grep -q 'npm:gentle-engram' "$RECORD" || { echo "only part of the stack ran" >&2; exit 1; }
+
+        cp "$RECORD" once
+        gentle-ai-provision --manifest manifest.json --agent pi --stamp-dir stamps 2>/dev/null
+        diff -u once "$RECORD" || { echo "an unchanged command list ran twice" >&2; exit 1; }
+
+        # A component provision is engram's, not an agent's: reading one as the
+        # other would run a package stack for a client no document named.
+        gentle-ai-provision --manifest manifest.json --agent engram --stamp-dir stamps 2>/dev/null
+        diff -u once "$RECORD" || { echo "a component provision ran agent commands" >&2; exit 1; }
+
+        touch "$out"
+      '';
+
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
     cp -r --no-preserve=mode,ownership ${self} source
     ${

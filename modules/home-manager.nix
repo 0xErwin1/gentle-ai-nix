@@ -190,6 +190,26 @@ let
             a provider/model pair — so values are passed through as written.
           '';
         };
+
+        provisionPackages = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Run the package installation this client's harness needs, using the
+            client's own tool, during activation.
+
+            Some clients keep their harness in packages rather than in files —
+            Pi is the one that does today. Rendering produces the configuration
+            around such a harness but cannot produce the harness itself, because
+            installing it means running that client's installer against a
+            network. Enabling this runs exactly the commands Gentle AI declares
+            for the client, once per change to that command list, and skips with
+            a message when the client's own binary is not on PATH.
+
+            It is off by default: it is the one part of this module that
+            reaches the network, and what it installs is not tracked by Nix.
+          '';
+        };
       };
     }
   );
@@ -605,6 +625,20 @@ let
   # sops-nix or agenix secret exposes exactly such a path, and so does a plain
   # file, so none of them has to be a dependency here.
   withheld = cfg.secrets.paths ++ cfg.secrets.merge;
+
+  provisioner = pkgs.writers.writePython3Bin "gentle-ai-provision" {
+    flakeIgnore = [
+      "E501"
+      "W503"
+    ];
+  } (builtins.readFile ../lib/provision.py);
+
+  # Which clients were asked to have their package harness installed. The
+  # commands themselves are read from the rendered manifest at activation, so
+  # this module never holds a copy of a package list that could go stale.
+  provisioningProviders = lib.attrNames (
+    lib.filterAttrs (_: provider: provider.provisionPackages) enabledProviders
+  );
 
   merger = pkgs.writers.writePython3Bin "gentle-ai-merge" {
     libraries = [ pkgs.python3Packages.tomlkit ];
@@ -1171,6 +1205,20 @@ in
           run cp -rL --no-preserve=mode,ownership ${lib.escapeShellArg entry.source} ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
           run chmod -R u+w ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
         '') copiedTargets
+      )
+    );
+
+    # Last, because it is the only step that reaches a network: everything a
+    # switch can produce on its own is already in place when it runs, so a
+    # registry being down costs the packages rather than the whole activation.
+    home.activation.gentleAiProvisionPackages = lib.mkIf (provisioningProviders != [ ]) (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] (
+        lib.concatMapStringsSep "\n" (name: ''
+          run ${lib.getExe provisioner} \
+            --manifest ${lib.escapeShellArg "${rendered}/manifest.json"} \
+            --agent ${lib.escapeShellArg name} \
+            --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"}
+        '') provisioningProviders
       )
     );
   };

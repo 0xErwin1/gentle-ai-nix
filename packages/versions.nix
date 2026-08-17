@@ -45,8 +45,8 @@
   contract = {
     version = "2.4.0-unstable-declarative-config";
     owner = "0xErwin1";
-    rev = "cbba7a6ffb3320d7970b9f5ace71eeab2b86c05a";
-    hash = "sha256-gMP10Er003Efbqj2f+aKz6SQcJDoSxezo3vjyv/nfbo=";
+    rev = "c3a52380d50130398158b438ceb258b20f0c82ed";
+    hash = "sha256-8xUlq+JROM79AklbgrB8ZBc7OGRFjPaOkvLCHnSMMSM=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = true;
   };

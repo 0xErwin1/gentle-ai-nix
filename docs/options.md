@@ -1522,6 +1522,39 @@ string
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.provisionPackages
+
+
+
+Run the package installation this client’s harness needs, using the
+client’s own tool, during activation\.
+
+Some clients keep their harness in packages rather than in files —
+Pi is the one that does today\. Rendering produces the configuration
+around such a harness but cannot produce the harness itself, because
+installing it means running that client’s installer against a
+network\. Enabling this runs exactly the commands Gentle AI declares
+for the client, once per change to that command list, and skips with
+a message when the client’s own binary is not on PATH\.
+
+It is off by default: it is the one part of this module that
+reaches the network, and what it installs is not tracked by Nix\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.settings
 
 
