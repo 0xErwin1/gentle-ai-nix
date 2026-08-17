@@ -14,19 +14,23 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "2.3.0";
+    version = "2.4.0";
     owner = "Gentleman-Programming";
-    rev = "v2.3.0";
-    hash = "sha256-APKVSlsz8BOBDXQGNNOCdpgyFKSiZwku1Y1c3ZVzYv8=";
+    rev = "v2.4.0";
+    hash = "sha256-53zHrrm1l/Pkh7H5HjbbIcv58ph4jZ5NaXX5KmKK714=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = false;
   };
 
+  # A release candidate is only ahead of stable while one is open. The 2.4.0
+  # candidates were promoted, so the newest build in this channel is the
+  # release itself, which is what `gentle-ai upgrade --channel beta` also
+  # resolves to. It moves ahead again with the first candidate after 2.4.0.
   beta = {
-    version = "2.4.0-rc.8";
+    version = "2.4.0";
     owner = "Gentleman-Programming";
-    rev = "v2.4.0-rc.8";
-    hash = "sha256-plB9mxudrfZJBPpHjPRyTFi318TyggiEVQrOxdjwYAc=";
+    rev = "v2.4.0";
+    hash = "sha256-53zHrrm1l/Pkh7H5HjbbIcv58ph4jZ5NaXX5KmKK714=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = false;
   };
@@ -39,10 +43,10 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.3.0-unstable-declarative-config";
+    version = "2.4.0-unstable-declarative-config";
     owner = "0xErwin1";
-    rev = "a9bb5999b71f97f9549622e4ba8dda0b0a9f0aad";
-    hash = "sha256-tZQfMrvSJhG8bd4Y5ih8r9trT+JG0jEC98ytNdUgxWM=";
+    rev = "cbba7a6ffb3320d7970b9f5ace71eeab2b86c05a";
+    hash = "sha256-gMP10Er003Efbqj2f+aKz6SQcJDoSxezo3vjyv/nfbo=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = true;
   };
