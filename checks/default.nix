@@ -229,6 +229,43 @@ in
         touch "$out"
       '';
 
+  # Home Manager activates with a PATH of its own build tools. A provisioning
+  # step that inherits only that PATH finds no client, skips, and leaves an
+  # installation that looks done and installed nothing — which is exactly what
+  # it did the first time. The activation script itself is the only place that
+  # is visible, so it is what this reads.
+  provisioningSeesTheClient =
+    let
+      provisioning = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
+              enable = true;
+              provisionPackages = true;
+            };
+          };
+        }
+      ];
+    in
+    pkgs.runCommandLocal "gentle-ai-check-provision-path"
+      { activation = provisioning.config.home.activationPackage; }
+      ''
+        set -euo pipefail
+
+        line=$(grep -n 'gentle-ai-provision' "$activation/activate" | head -1 | cut -d: -f1)
+        test -n "$line" || { echo "no provisioning step in the activation script" >&2; exit 1; }
+
+        context=$(sed -n "$((line > 3 ? line - 3 : 1)),''${line}p" "$activation/activate")
+        echo "$context" | grep -qF ${lib.escapeShellArg "${provisioning.config.home.profileDirectory}/bin"} || {
+          echo "the provisioning step cannot see the client's own profile:" >&2
+          echo "$context" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   # Provisioning is the one activation step that reaches a network and installs
   # something Nix does not track, so what it must never do is as important as
   # what it does: no repeat on an unchanged list, and no failed activation when

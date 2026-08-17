@@ -862,18 +862,35 @@ in
       '';
     };
 
-    backgroundSubagents = {
-      opencode = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "OpenCode background subagent policy.";
+    backgroundSubagents =
+      let
+        intent =
+          client:
+          mkOption {
+            type = types.nullOr (
+              types.enum [
+                "auto"
+                "on"
+                "off"
+              ]
+            );
+            default = null;
+            example = "on";
+            description = ''
+              Whether ${client} runs its sub-agents in the background, which
+              changes the orchestration policy its prompts carry.
+
+              `on` and `off` are the answer; `auto` defers to whatever the
+              client's runtime turns out to support, and renders the same thing as
+              declaring nothing, because a build cannot ask the runtime without
+              making the same configuration differ per machine.
+            '';
+          };
+      in
+      {
+        opencode = intent "OpenCode";
+        pi = intent "Pi";
       };
-      pi = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "Pi background subagent policy.";
-      };
-    };
 
     models = {
       claudePhases = mkOption {
@@ -1214,10 +1231,15 @@ in
     home.activation.gentleAiProvisionPackages = lib.mkIf (provisioningProviders != [ ]) (
       lib.hm.dag.entryAfter [ "writeBoundary" ] (
         lib.concatMapStringsSep "\n" (name: ''
-          run ${lib.getExe provisioner} \
-            --manifest ${lib.escapeShellArg "${rendered}/manifest.json"} \
-            --agent ${lib.escapeShellArg name} \
-            --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"}
+          # Home Manager activates with a PATH of its own build tools, which is
+          # not where the client lives. Without its own profile on PATH the
+          # step finds no client and skips every time, so the harness silently
+          # never arrives.
+          PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
+            run ${lib.getExe provisioner} \
+              --manifest ${lib.escapeShellArg "${rendered}/manifest.json"} \
+              --agent ${lib.escapeShellArg name} \
+              --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"}
         '') provisioningProviders
       )
     );

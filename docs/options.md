@@ -51,12 +51,18 @@ gentle-ai-nix.packages.${pkgs.system}.gentle-ai
 
 ## programs\.gentle-ai\.backgroundSubagents\.opencode
 
-OpenCode background subagent policy\.
+Whether OpenCode runs its sub-agents in the background, which
+changes the orchestration policy its prompts carry\.
+
+` on ` and ` off ` are the answer; ` auto ` defers to whatever the
+client’s runtime turns out to support, and renders the same thing as
+declaring nothing, because a build cannot ask the runtime without
+making the same configuration differ per machine\.
 
 
 
 *Type:*
-null or string
+null or one of “auto”, “on”, “off”
 
 
 
@@ -68,16 +74,30 @@ null
 
 
 
+*Example:*
+
+```nix
+"on"
+```
+
+
+
 ## programs\.gentle-ai\.backgroundSubagents\.pi
 
 
 
-Pi background subagent policy\.
+Whether Pi runs its sub-agents in the background, which
+changes the orchestration policy its prompts carry\.
+
+` on ` and ` off ` are the answer; ` auto ` defers to whatever the
+client’s runtime turns out to support, and renders the same thing as
+declaring nothing, because a build cannot ask the runtime without
+making the same configuration differ per machine\.
 
 
 
 *Type:*
-null or string
+null or one of “auto”, “on”, “off”
 
 
 
@@ -85,6 +105,14 @@ null or string
 
 ```nix
 null
+```
+
+
+
+*Example:*
+
+```nix
+"on"
 ```
 
 
