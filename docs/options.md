@@ -193,6 +193,153 @@ true
 
 
 
+## programs\.gentle-ai\.customProviders
+
+
+
+Clients Gentle AI has no adapter for, given the harness another client
+already produced\. This is how a tool that reads the same kind of agents
+and skills participates without Gentle AI needing to learn about it\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  agens = {
+    root = ".config/agens";
+    from = "claude-code";
+    delivery = "copy";
+    assets = {
+      "CLAUDE.md" = "AGENTS.md";
+      agents = "agents";
+      commands = "commands";
+      skills = "skills";
+    };
+  };
+}
+
+```
+
+
+
+## programs\.gentle-ai\.customProviders\.\<name>\.assets
+
+
+
+What to take, mapped from a path inside the source client’s
+directory to a path inside this one\. Left empty, the source
+directory is taken whole\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  "CLAUDE.md" = "AGENTS.md";
+  agents = "agents";
+  skills = "skills";
+}
+
+```
+
+
+
+## programs\.gentle-ai\.customProviders\.\<name>\.delivery
+
+
+
+How the assets arrive\. Copy exists for clients that refuse to read
+through a symbolic link; it is authoritative, so each target is
+replaced on every activation and edits under it do not survive\.
+
+
+
+*Type:*
+one of “symlink”, “copy”
+
+
+
+*Default:*
+
+```nix
+"symlink"
+```
+
+
+
+## programs\.gentle-ai\.customProviders\.\<name>\.from
+
+
+
+The declared client whose rendered harness this one receives\. Gentle
+AI has no adapter for ‹name›, so rather than mapping every asset by
+hand it is given what a client Gentle AI does know already produced\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+"claude-code"
+```
+
+
+
+## programs\.gentle-ai\.customProviders\.\<name>\.root
+
+
+
+Directory this client reads, relative to the home directory\.
+
+
+
+*Type:*
+string
+
+
+
+*Example:*
+
+```nix
+".config/agens"
+```
+
+
+
 ## programs\.gentle-ai\.document
 
 
@@ -1592,6 +1739,69 @@ boolean
 
 ```nix
 false
+```
+
+
+
+## programs\.gentle-ai\.secrets\.paths
+
+
+
+Rendered paths that carry a credential\. They are kept out of the
+projection and written as real files at activation with every
+placeholder below replaced, because a store symlink can be neither
+private nor written\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[ ".codex/config.toml" ]
+```
+
+
+
+## programs\.gentle-ai\.secrets\.placeholders
+
+
+
+Maps a placeholder name to a file holding its value, read at
+activation\. ` ATLAS_TOKEN ` replaces every ` @ATLAS_TOKEN@ ` in the paths
+above\. A sops-nix or agenix secret exposes exactly such a path\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{ ATLAS_TOKEN = config.sops.secrets."ai/atlas-token".path; }
 ```
 
 

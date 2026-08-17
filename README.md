@@ -94,6 +94,40 @@ programs.gentle-ai = {
 
 See [`examples/home.nix`](examples/home.nix) for a configuration using all of it.
 
+## Beyond the contract
+
+Two things live here rather than in Gentle AI, because they are how a Nix
+installation works rather than what a Gentle AI installation is.
+
+**A client Gentle AI has no adapter for** can still receive the harness another
+client produced:
+
+```nix
+customProviders.agens = {
+  root = ".config/agens";
+  from = "claude-code";
+  delivery = "copy";                      # for a client that refuses symlinks
+  assets = { "CLAUDE.md" = "AGENTS.md"; agents = "agents"; skills = "skills"; };
+};
+```
+
+**A file that has to carry a credential** cannot be a store symlink — the store
+is world-readable and read-only. Those paths are held back from the projection
+and written at activation with the placeholder replaced:
+
+```nix
+mcpServers.atlas.env.ATLAS_TOKEN = "@ATLAS_TOKEN@";
+
+secrets = {
+  paths = [ ".config/opencode/opencode.json" ];
+  placeholders.ATLAS_TOKEN = config.sops.secrets."ai/atlas-token".path;
+};
+```
+
+Where that path comes from is not this flake's business: a sops-nix or agenix
+secret exposes exactly such a file, and so does a plain one, so none of them is
+a dependency here.
+
 ## Reference
 
 Every option, with its type, default and example, is in [`docs/options.md`](docs/options.md). It is generated from the module itself and a check fails the build if the committed copy drifts, so it cannot describe an option the module does not have.

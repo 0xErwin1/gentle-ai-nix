@@ -270,6 +270,59 @@ let
     };
   };
 
+  customProviderType = types.submodule (
+    { name, ... }:
+    {
+      options = {
+        root = mkOption {
+          type = types.str;
+          example = ".config/agens";
+          description = "Directory this client reads, relative to the home directory.";
+        };
+
+        from = mkOption {
+          type = types.str;
+          example = "claude-code";
+          description = ''
+            The declared client whose rendered harness this one receives. Gentle
+            AI has no adapter for ${name}, so rather than mapping every asset by
+            hand it is given what a client Gentle AI does know already produced.
+          '';
+        };
+
+        assets = mkOption {
+          type = types.attrsOf types.str;
+          default = { };
+          example = literalExpression ''
+            {
+              "CLAUDE.md" = "AGENTS.md";
+              agents = "agents";
+              skills = "skills";
+            }
+          '';
+          description = ''
+            What to take, mapped from a path inside the source client's
+            directory to a path inside this one. Left empty, the source
+            directory is taken whole.
+          '';
+        };
+
+        delivery = mkOption {
+          type = types.enum [
+            "symlink"
+            "copy"
+          ];
+          default = "symlink";
+          description = ''
+            How the assets arrive. Copy exists for clients that refuse to read
+            through a symbolic link; it is authoritative, so each target is
+            replaced on every activation and edits under it do not survive.
+          '';
+        };
+      };
+    }
+  );
+
   extraFileType = types.submodule (
     { name, ... }:
     {
@@ -507,6 +560,73 @@ let
       '';
 
   rendered = cfg.overrideRendered overlaid;
+
+  # A file that has to carry a credential cannot be a store symlink: the store
+  # is world-readable and read-only, so the value could neither be kept private
+  # nor written at all. Those paths are held back from the projection and
+  # delivered as real files at activation instead, with the placeholder replaced
+  # by the contents of a file the operator points at.
+  #
+  # Where that file comes from is deliberately not this module's business: a
+  # sops-nix or agenix secret exposes exactly such a path, and so does a plain
+  # file, so none of them has to be a dependency here.
+  withheld = cfg.secrets.paths;
+
+  projected =
+    if withheld == [ ] then
+      rendered
+    else
+      pkgs.runCommandLocal "gentle-ai-config-projected" { } ''
+        cp -r --no-preserve=mode,ownership ${rendered} "$out"
+        ${lib.concatMapStringsSep "\n" (path: ''rm -f "$out/tree/${path}"'') withheld}
+      '';
+
+  providerRoots = {
+    "opencode" = ".config/opencode";
+    "claude-code" = ".claude";
+    "codex" = ".codex";
+    "pi" = ".pi";
+    "gemini-cli" = ".gemini";
+    "qwen-code" = ".qwen";
+    "kimi" = ".kimi";
+    "openclaw" = ".openclaw";
+  };
+
+  # A client Gentle AI has no adapter for still reads the same kind of harness,
+  # so it is given one another client already produced rather than a hand-written
+  # mapping that drifts the moment Gentle AI changes what it renders.
+  customProviderCopies = lib.concatLists (
+    lib.mapAttrsToList (
+      name: provider:
+      let
+        source = "${rendered}/tree/${providerRoots.${provider.from}}";
+        pairs =
+          if provider.assets == { } then
+            [
+              {
+                from = ".";
+                to = ".";
+              }
+            ]
+          else
+            lib.mapAttrsToList (from: to: { inherit from to; }) provider.assets;
+      in
+      map (pair: {
+        inherit (provider) delivery;
+        source = "${source}/${pair.from}";
+        target = "${provider.root}/${pair.to}";
+      }) pairs
+    ) cfg.customProviders
+  );
+
+  copiedTargets = builtins.filter (entry: entry.delivery == "copy") customProviderCopies;
+  linkedTargets = builtins.filter (entry: entry.delivery == "symlink") customProviderCopies;
+
+  unknownSourceProviders = lib.attrNames (
+    lib.filterAttrs (
+      _: provider: !(providerRoots ? ${provider.from}) || !(enabledProviders ? ${provider.from})
+    ) cfg.customProviders
+  );
 
   engramEnabled = cfg.components ? engram && cfg.components.engram.enable;
 
@@ -760,6 +880,56 @@ in
       '';
     };
 
+    customProviders = mkOption {
+      type = types.attrsOf customProviderType;
+      default = { };
+      example = literalExpression ''
+        {
+          agens = {
+            root = ".config/agens";
+            from = "claude-code";
+            delivery = "copy";
+            assets = {
+              "CLAUDE.md" = "AGENTS.md";
+              agents = "agents";
+              commands = "commands";
+              skills = "skills";
+            };
+          };
+        }
+      '';
+      description = ''
+        Clients Gentle AI has no adapter for, given the harness another client
+        already produced. This is how a tool that reads the same kind of agents
+        and skills participates without Gentle AI needing to learn about it.
+      '';
+    };
+
+    secrets = {
+      paths = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = literalExpression ''[ ".codex/config.toml" ]'';
+        description = ''
+          Rendered paths that carry a credential. They are kept out of the
+          projection and written as real files at activation with every
+          placeholder below replaced, because a store symlink can be neither
+          private nor written.
+        '';
+      };
+
+      placeholders = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        example = literalExpression ''{ ATLAS_TOKEN = config.sops.secrets."ai/atlas-token".path; }'';
+        description = ''
+          Maps a placeholder name to a file holding its value, read at
+          activation. `ATLAS_TOKEN` replaces every `@ATLAS_TOKEN@` in the paths
+          above. A sops-nix or agenix secret exposes exactly such a path.
+        '';
+      };
+    };
+
     extraFiles = mkOption {
       type = types.attrsOf extraFileType;
       default = { };
@@ -806,6 +976,10 @@ in
         message = "programs.gentle-ai.providers must enable at least one client to configure";
       }
       {
+        assertion = unknownSourceProviders == [ ];
+        message = "programs.gentle-ai.customProviders.${lib.concatStringsSep ", " unknownSourceProviders} takes its harness from a client that is not enabled, or that has no known directory";
+      }
+      {
         assertion = misplacedProfiles == [ ];
         message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " misplacedProfiles} declares profiles, which only ${lib.concatStringsSep ", " profileCapable} expresses";
       }
@@ -836,10 +1010,59 @@ in
     # every file its own symlink, which leaves unrelated files in the same
     # directories alone and lets Home Manager report a genuine collision instead
     # of one module silently shadowing another's directory.
-    home.file.gentle-ai = {
-      source = "${rendered}/tree";
-      target = ".";
-      recursive = true;
-    };
+    home.file = {
+      gentle-ai = {
+        source = "${projected}/tree";
+        target = ".";
+        recursive = true;
+      };
+    }
+    // lib.listToAttrs (
+      lib.imap0 (index: entry: {
+        name = "gentle-ai-custom-${toString index}";
+        value = {
+          inherit (entry) source target;
+          recursive = true;
+        };
+      }) linkedTargets
+    );
+
+    home.activation.gentleAiSecrets = lib.mkIf (withheld != [ ]) (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] (
+        ''
+          _gentle_ai_quote() { printf '%s' "$1" | sed -e 's/[\\&|]/\\\\&/g'; }
+        ''
+        + lib.concatMapStringsSep "\n" (path: ''
+          run mkdir -p "$(dirname ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"})"
+          run cp -L --no-preserve=mode,ownership ${lib.escapeShellArg "${rendered}/tree/${path}"} ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"}
+          run chmod u+w,go-rwx ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"}
+          ${lib.concatMapStringsSep "\n" (name: ''
+            if [ -r ${lib.escapeShellArg cfg.secrets.placeholders.${name}} ]; then
+              _gentle_ai_value="$(_gentle_ai_quote "$(cat ${
+                lib.escapeShellArg cfg.secrets.placeholders.${name}
+              })")"
+              run sed -i "s|@${name}@|$_gentle_ai_value|g" ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"}
+              unset _gentle_ai_value
+            else
+              warnEcho "gentle-ai: ${name} is unreadable; @${name}@ stays unresolved in ${path}"
+            fi
+          '') (lib.attrNames cfg.secrets.placeholders)}
+        '') withheld
+      )
+    );
+
+    # Copied rather than linked, for the clients that refuse to read through a
+    # symbolic link. The copy is authoritative: each target is replaced on every
+    # activation, so an edit under it does not survive.
+    home.activation.gentleAiCustomProviders = lib.mkIf (copiedTargets != [ ]) (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] (
+        lib.concatMapStringsSep "\n" (entry: ''
+          run rm -rf ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
+          run mkdir -p "$(dirname ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"})"
+          run cp -rL --no-preserve=mode,ownership ${lib.escapeShellArg entry.source} ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
+          run chmod -R u+w ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
+        '') copiedTargets
+      )
+    );
   };
 }
