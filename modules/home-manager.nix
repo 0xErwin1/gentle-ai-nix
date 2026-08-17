@@ -62,6 +62,29 @@ let
   toModelAssignment =
     assignment: { inherit (assignment) provider model; } // whenSet "effort" assignment.effort;
 
+  profileType = types.submodule {
+    options = {
+      orchestrator = mkOption {
+        type = types.nullOr modelAssignmentType;
+        default = null;
+        description = "Model this profile's orchestrator runs on.";
+      };
+      phases = mkOption {
+        type = types.attrsOf modelAssignmentType;
+        default = { };
+        example = literalExpression ''
+          {
+            sdd-apply = {
+              provider = "anthropic";
+              model = "claude-sonnet-5";
+            };
+          }
+        '';
+        description = "Model per SDD phase within this profile.";
+      };
+    };
+  };
+
   providerType = types.submodule (
     { name, ... }:
     {
@@ -103,6 +126,40 @@ let
 
             Not every client offers profiles; one that does not is reported
             rather than accepted and ignored.
+          '';
+        };
+
+        profiles = mkOption {
+          type = types.attrsOf profileType;
+          default = { };
+          example = literalExpression ''
+            {
+              cheap.orchestrator = {
+                provider = "anthropic";
+                model = "claude-haiku";
+              };
+            }
+          '';
+          description = ''
+            Named SDD profiles for this client, switchable at runtime. Each one
+            generates its own orchestrator and phase agents alongside the
+            default set, so a task can run on cheap models without reconfiguring
+            anything.
+
+            Only OpenCode expresses these today.
+          '';
+        };
+
+        profileStrategy = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "generated-multi";
+          description = ''
+            How profiles are materialised for this client: generated alongside
+            the default agents, or left to an external profile manager that
+            keeps one active at a time. Omitted, Gentle AI detects it.
+
+            Only OpenCode expresses this today.
           '';
         };
 
@@ -262,6 +319,39 @@ let
     lib.mapAttrs (_: provider: provider.modelPreset) enabledProviders
   );
 
+  profile =
+    name: value:
+    {
+      inherit name;
+    }
+    // optionalAttrs (value.orchestrator != null) {
+      orchestrator = toModelAssignment value.orchestrator;
+    }
+    // whenSet "phaseAssignments" (lib.mapAttrs (_: toModelAssignment) value.phases);
+
+  # Profiles and their strategy are one client's concept, so they are collected
+  # from the clients that declared them rather than from an installation-wide
+  # option that could only ever mean one of them.
+  declaredProfiles = lib.concatLists (
+    lib.mapAttrsToList (_: provider: lib.mapAttrsToList profile provider.profiles) enabledProviders
+  );
+
+  declaredProfileStrategy = lib.findFirst (value: value != null) null (
+    lib.mapAttrsToList (_: provider: provider.profileStrategy) enabledProviders
+  );
+
+  # Only one client expresses profiles today, so anything else declaring them is
+  # a mistake worth naming rather than configuration that quietly does nothing.
+  profileCapable = [ "opencode" ];
+
+  misplacedProfiles = lib.attrNames (
+    lib.filterAttrs (
+      name: provider:
+      (provider.profiles != { } || provider.profileStrategy != null)
+      && !(builtins.elem name profileCapable)
+    ) enabledProviders
+  );
+
   # Providers express model assignments in their own vocabulary, so the contract
   # keeps one field per shape rather than one field pretending they are alike.
   # This table is the whole of the provider knowledge in this module, and it is
@@ -333,9 +423,9 @@ let
     // whenSet "persona" cfg.persona
     // whenSet "preset" cfg.preset
     // whenSet "sddMode" cfg.sdd.mode
-    // whenSet "sddProfileStrategy" cfg.sdd.profileStrategy
+    // whenSet "sddProfileStrategy" declaredProfileStrategy
     // optionalAttrs cfg.sdd.strictTdd { strictTDD = true; }
-    // whenSet "profiles" cfg.sdd.profiles
+    // whenSet "profiles" declaredProfiles
     // whenSet "scope" cfg.install.scope
     // whenSet "channel" cfg.install.channel
     // whenSet "rddMode" cfg.review.mode
@@ -523,31 +613,10 @@ in
         default = null;
         description = "SDD orchestrator mode.";
       };
-      profileStrategy = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = "How SDD profiles are derived.";
-      };
       strictTdd = mkOption {
         type = types.bool;
         default = false;
         description = "Whether SDD phases enforce strict TDD.";
-      };
-      profiles = mkOption {
-        type = types.listOf (types.attrsOf types.anything);
-        default = [ ];
-        example = literalExpression ''
-          [
-            {
-              name = "fast";
-              orchestrator = {
-                provider = "anthropic";
-                model = "claude-sonnet-5";
-              };
-            }
-          ]
-        '';
-        description = "Named SDD profiles with their own orchestrator and phase models.";
       };
     };
 
@@ -721,6 +790,10 @@ in
       {
         assertion = enabledNames cfg.providers != [ ];
         message = "programs.gentle-ai.providers must enable at least one client to configure";
+      }
+      {
+        assertion = misplacedProfiles == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " misplacedProfiles} declares profiles, which only ${lib.concatStringsSep ", " profileCapable} expresses";
       }
       {
         assertion = unmodelledProviders == [ ];

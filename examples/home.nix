@@ -8,7 +8,24 @@
 
     # Clients, each with whatever differs for it alone.
     providers = {
-      opencode.enable = true;
+      opencode = {
+        enable = true;
+
+        # Named model configurations you switch between at runtime. Each one
+        # generates its own orchestrator and phase agents alongside the default
+        # set, so a throwaway task can run on cheap models without
+        # reconfiguring anything.
+        profiles.cheap = {
+          orchestrator = {
+            provider = "anthropic";
+            model = "claude-haiku";
+          };
+          phases.sdd-apply = {
+            provider = "anthropic";
+            model = "claude-sonnet-5";
+          };
+        };
+      };
 
       # Profiles are per client because subscriptions are: the cheap tier
       # where the quota is tight, the expensive one where it is not.

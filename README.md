@@ -49,15 +49,17 @@ Options are grouped the way you think about the installation. Names inside the g
 
 | Group | Purpose |
 |-------|---------|
-| `providers.<name>` | A client, with `modelPreset`, `skills`, `settings` and `models` for it alone. |
+| `providers.<name>` | A client, with `modelPreset`, `profiles`, `skills`, `settings` and `models` for it alone. |
 | `components.<name>` | What Gentle AI configures — skills, persona, permissions, sdd, theme, engram, gga. |
 | `skills.<name>` | Naming none installs every skill Gentle AI ships. Entries only narrow that: `false` drops one, `true` restricts to the ones named. |
 | `communityTools.<name>`, `openCodePlugins.<name>` | The optional extras, same shape. |
 | `roles.<id>` | Logical agent roles. `references` name ids, so renaming one is a single edit. |
-| `sdd`, `review`, `install`, `backgroundSubagents` | Workflow modes, the review kill switch, scope and channel, background policy. |
+| `sdd`, `review`, `install`, `backgroundSubagents` | Workflow mode and strict TDD, the review kill switch, scope and channel, background policy. |
 | `models` | Assignments the contract keeps outside a provider. |
 | `permissions`, `mcpServers` | Rules layered over the shipped guardrails, and servers no component configures. |
 | `persona`, `preset`, `schemaVersion`, `package` | The rest. |
+
+Two different things are called a profile, and both live on the client. `providers.<name>.modelPreset` names a tier Gentle AI recommends — Codex, Claude and Kiro each offer their own, with their own vocabulary. `providers.opencode.profiles.<name>` is a model configuration *you* name, which generates its own orchestrator and phase agents so you can switch to it at runtime. OpenCode offers no recommended tier: it discovers what your subscription actually gives you access to and you assign from that.
 
 Model profiles live on the client, not on the installation: `providers.codex.modelPreset = "low-cost"` alongside `providers.claude-code.modelPreset = "performance"` is a thing you can want, because subscriptions differ per client. Naming the profile rather than restating the models it resolves to is what keeps it the profile Gentle AI recommends today rather than the one it recommended when you wrote the file. A client that offers no profiles is reported rather than accepted and ignored.
 
