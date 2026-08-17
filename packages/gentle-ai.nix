@@ -15,8 +15,8 @@ buildGoModule rec {
   src = fetchFromGitHub {
     owner = "0xErwin1";
     repo = "gentle-ai";
-    rev = "383ff55370de98508744dce0d51447080866832b";
-    hash = "sha256-HzUNpLGK0EaRSAAv+MzZNDhsj6qj+KGpbkbsin4e2qM=";
+    rev = "4acd2453dc4398a23c01c50d002144e0d09103ff";
+    hash = "sha256-QF5rIeC7MNoJL+UXNNBt8IzZXSXDg7ALM6CNOEPKlHA=";
   };
 
   vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
