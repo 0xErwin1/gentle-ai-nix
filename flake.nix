@@ -36,6 +36,14 @@
         {
           inherit gentle-ai engram;
           default = gentle-ai;
+
+          # Reference documentation for every option this module declares.
+          # Regenerate the committed copy with:
+          #   nix build .#options-doc && cp result docs/options.md
+          options-doc = import ./docs/options.nix {
+            inherit pkgs;
+            module = self.homeManagerModules.default;
+          };
         }
       );
 
@@ -56,6 +64,18 @@
         }
       );
 
-      formatter = forAllSystems (system: nixpkgs.legacyPackages.${system}.nixfmt-tree);
+      # Generated documentation is excluded: it is rendered by nixosOptionsDoc,
+      # so reformatting it only makes the committed copy differ from a fresh
+      # render, which is exactly what the options-doc check exists to catch.
+      formatter = forAllSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in
+        pkgs.writeShellApplication {
+          name = "gentle-ai-nix-fmt";
+          text = ''exec ${nixpkgs.lib.getExe pkgs.nixfmt-tree} --excludes docs/options.md "$@"'';
+        }
+      );
     };
 }

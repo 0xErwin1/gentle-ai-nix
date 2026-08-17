@@ -4,15 +4,19 @@
   fetchFromGitHub,
 }:
 
+# This flake renders through `gentle-ai config render`, the declarative
+# configuration contract from Gentle AI issue #3248. The contract is not in an
+# upstream release yet, so the package is pinned to the branch chain that
+# carries it. Move owner, rev and hash back to an upstream tag once it merges.
 buildGoModule rec {
   pname = "gentle-ai";
-  version = "2.3.0";
+  version = "2.3.0-unstable-declarative-config";
 
   src = fetchFromGitHub {
-    owner = "Gentleman-Programming";
+    owner = "0xErwin1";
     repo = "gentle-ai";
-    rev = "v${version}";
-    hash = "sha256-APKVSlsz8BOBDXQGNNOCdpgyFKSiZwku1Y1c3ZVzYv8=";
+    rev = "bf32f10e460388d79eb25e70b67d30e3a3d2e05c";
+    hash = "sha256-D7Ql34R5sFA8/eCVcIoanmZgAhtizc7Fo4n2zasdihU=";
   };
 
   vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";

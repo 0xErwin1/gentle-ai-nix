@@ -1,143 +1,192 @@
 # Gentle AI for Home Manager
 
-This flake installs Gentle AI, OpenCode, and Engram, then composes the public Gentle AI OpenCode harness through Home Manager's native `programs.opencode` module. It keeps user settings additive and provides deterministic `AGENTS.md` fragments without activation-time rewriting.
+Declare a Gentle AI installation in your Home Manager configuration and let Gentle AI decide what that means on disk. This flake carries no knowledge of agents, skills, commands or provider file layouts: it hands your declaration to `gentle-ai config render` and projects the result. A change to how Gentle AI renders its own assets arrives with the package, not with a matching change here.
 
-## Quick Start
+## Quick path
 
-Add the inputs to your flake:
+1. Add the input to your flake:
 
-```nix
-{
-  inputs = {
-    gentle-ai-nix.url = "github:0xErwin1/gentle-ai-nix";
-    gentle-ai-nix.inputs.nixpkgs.follows = "nixpkgs";
-    gentle-ai-nix.inputs.home-manager.follows = "home-manager";
-  };
-}
-```
+   ```nix
+   inputs.gentle-ai-nix.url = "github:0xErwin1/gentle-ai-nix";
+   inputs.gentle-ai-nix.inputs.nixpkgs.follows = "nixpkgs";
+   ```
 
-Import and enable the module:
+2. Import the module and declare what you want:
 
-```nix
-{
-  imports = [ inputs.gentle-ai-nix.homeManagerModules.default ];
-  programs.gentle-ai.enable = true;
-}
-```
+   ```nix
+   {
+     imports = [ inputs.gentle-ai-nix.homeManagerModules.default ];
 
-Apply your normal Home Manager configuration, then restart OpenCode. OpenCode reads settings, agents, commands, skills, and plugins only at process startup.
+     programs.gentle-ai = {
+       enable = true;
 
-## What It Manages
+       providers = {
+         opencode.enable = true;
+         claude-code.enable = true;
+       };
 
-The default configuration:
+       components = {
+         skills.enable = true;
+         persona.enable = true;
+         permissions.enable = true;
+         sdd.enable = true;
+         engram.enable = true;
+       };
 
-- installs pinned Gentle AI and Engram packages;
-- enables `programs.opencode` with the nixpkgs OpenCode package;
-- adds the Gentle AI orchestrator and SDD/review agents through `programs.opencode.settings`;
-- adds SDD commands and skills through native Home Manager options;
-- configures the local Engram MCP server as `engram mcp --tools=agent`;
-- projects upstream Gentle AI and Engram local plugins;
-- composes the public persona and Engram protocol into OpenCode's `AGENTS.md`.
+       persona = "neutral";
+       sdd.mode = "single";
+     };
+   }
+   ```
 
-It does not configure providers, credentials, models, private policy, or unrelated AI clients.
+3. Switch, then restart your clients. They read agents, commands, skills and settings only at startup.
 
-## Options
+A document Gentle AI rejects fails the build with its diagnostics, so an invalid declaration never reaches your home directory.
 
-| Option | Default | Purpose |
-|---|---:|---|
-| `programs.gentle-ai.enable` | `false` | Enable the integration. |
-| `programs.gentle-ai.package` | pinned package | Gentle AI package, or `null` to skip installation. Its `src` supplies harness assets by default. |
-| `programs.gentle-ai.source` | `null` | Explicit Gentle AI harness source override. |
-| `programs.gentle-ai.sourceVersion` | `null` | Required version for an explicit source; must match a non-null package. |
-| `programs.gentle-ai.opencode.enable` | `true` | Enable OpenCode and project the harness. |
-| `programs.gentle-ai.opencode.package` | `pkgs.opencode` | OpenCode package, or `null`. |
-| `programs.gentle-ai.opencode.context.enablePersona` | `true` | Include the public Gentle AI persona. |
-| `programs.gentle-ai.opencode.context.fragments` | `[ ]` | Ordered user-owned `AGENTS.md` fragments. |
-| `programs.gentle-ai.engram.enable` | `true` | Install and integrate Engram. |
-| `programs.gentle-ai.engram.package` | pinned package | Engram package, or `null` to skip installation. Its `src` supplies the plugin by default. |
-| `programs.gentle-ai.engram.source` | `null` | Explicit Engram plugin source override. |
-| `programs.gentle-ai.engram.sourceVersion` | `null` | Required version for an explicit Engram source; must match a non-null package. |
+## What you declare
 
-Package options are nullable and overridable. Harness assets are derived from each selected package's `src`, so changing a package changes its assets as one unit. A package without `src` requires an explicit source and matching `sourceVersion`; source-only overrides also require a declared version. The module rejects silent binary/asset version drift.
+Options are grouped the way you think about the installation. Names inside the groups are Gentle AI's own ids and are deliberately not enumerated here: Gentle AI rejects one it does not know rather than ignoring it, so anything it gains works the day it ships.
 
-Disabling Engram removes its package, MCP entry, plugin, and context fragment. Disabling OpenCode leaves Gentle AI and Engram packages available but creates no OpenCode configuration.
+| Group | Purpose |
+|-------|---------|
+| `providers.<name>` | A client, with `modelPreset`, `profiles`, `skills`, `settings` and `models` for it alone. |
+| `components.<name>` | What Gentle AI configures — skills, persona, permissions, sdd, theme, engram, gga. |
+| `skills.<name>` | Naming none installs every skill Gentle AI ships. Entries only narrow that: `false` drops one, `true` restricts to the ones named. |
+| `communityTools.<name>`, `openCodePlugins.<name>` | The optional extras, same shape. |
+| `roles.<id>` | Logical agent roles. `references` name ids, so renaming one is a single edit. |
+| `sdd`, `review`, `install`, `backgroundSubagents` | Workflow mode and strict TDD, the review kill switch, scope and channel, background policy. |
+| `models` | Assignments the contract keeps outside a provider. |
+| `permissions`, `mcpServers` | Rules layered over the shipped guardrails, and servers no component configures. |
+| `persona`, `preset`, `schemaVersion`, `package` | The rest. |
+
+Two different things are called a profile, and both live on the client. `providers.<name>.modelPreset` names a tier Gentle AI recommends — Codex, Claude and Kiro each offer their own, with their own vocabulary. `providers.opencode.profiles.<name>` is a model configuration *you* name, which generates its own orchestrator and phase agents so you can switch to it at runtime. OpenCode offers no recommended tier: it discovers what your subscription actually gives you access to and you assign from that.
+
+Model profiles live on the client, not on the installation: `providers.codex.modelPreset = "low-cost"` alongside `providers.claude-code.modelPreset = "performance"` is a thing you can want, because subscriptions differ per client. Naming the profile rather than restating the models it resolves to is what keeps it the profile Gentle AI recommends today rather than the one it recommended when you wrote the file. A client that offers no profiles is reported rather than accepted and ignored.
+
+Engram is a component, not something to wire by hand: `components.engram.enable` is what configures the MCP server, the plugin and the protocol section in every client that takes them. Nix supplies the binary through `engramPackage` so nothing is downloaded at activation.
+
+## Editing the harness
+
+A wrapper you cannot edit is a worse harness than the one you wrote yourself. Three ways in, cheapest first.
+
+| You want to | Use |
+|-------------|-----|
+| Add a skill, agent or command Gentle AI does not ship | `extraFiles."<path>".source` |
+| Replace a file Gentle AI does ship | `extraFiles."<path>".text` — same path, your content wins |
+| Keep a section of your own in a file Gentle AI regenerates | `extraFiles.<name> = { target; mode = "append"; text; }` |
+| Change a provider's own settings | `providers.<name>.settings` |
+| Reach a contract field newer than this module | `settings` — raw `selection`, merged last |
+| Anything else | `overrideRendered` — a function over the rendered derivation |
 
 ```nix
 programs.gentle-ai = {
-  package = myGentleAiPackage;
-  source = myGentleAiSource;
-  sourceVersion = myGentleAiPackage.version;
+  extraFiles.".config/opencode/skills/house-style/SKILL.md".source = ./house-style.md;
+  extraFiles.".claude/agents/gentle-apply.md".text = "---\nname: gentle-apply\n---\nMy own prompt.\n";
+
+  overrideRendered = rendered: pkgs.runCommandLocal "patched" { } ''
+    cp -r --no-preserve=mode,ownership ${rendered} "$out"
+    substituteInPlace "$out/tree/.config/opencode/AGENTS.md" --replace-warn "Gentle AI" "Our harness"
+  '';
 };
 ```
 
-## Ordered Context
+`extraFiles` is layered onto the rendered tree rather than declared as a second `home.file` entry, which is what makes overriding a generated file possible at all: two Home Manager entries for one path collide instead of layering.
 
-Each fragment requires a stable `id`, accepts `text` or `source`, and sorts by `order` then `id`. Duplicate IDs and fragments with both or neither content source fail module assertions.
+See [`examples/home.nix`](examples/home.nix) for a configuration using all of it.
 
-```nix
-programs.gentle-ai.opencode.context.fragments = [
-  {
-    id = "local-policy";
-    order = 300;
-    source = ./AGENTS.local.md;
-  }
-  {
-    id = "project-guidance";
-    order = 400;
-    text = "Read project-level AGENTS.md files before editing.";
-  }
-];
-```
+## Beyond the contract
 
-Managed order starts with the persona at `100` and Engram at `200`. User fragments can be placed before, between, or after them. Home Manager owns one final `programs.opencode.context`; no activation script rewrites markers or existing files.
+Two things live here rather than in Gentle AI, because they are how a Nix
+installation works rather than what a Gentle AI installation is.
 
-## Native Extensions
-
-Continue using Home Manager's OpenCode module directly. User values override Gentle AI defaults where they overlap, and unrelated values merge normally.
+**A client Gentle AI has no adapter for** can still receive the harness another
+client produced:
 
 ```nix
-programs.opencode = {
-  settings = {
-    model = "anthropic/claude-sonnet-4-6";
-    share = "manual";
-  };
-  tui.theme = "system";
-  commands.my-command = ./commands/my-command.md;
-  skills.my-skill = ./skills/my-skill;
+customProviders.agens = {
+  root = ".config/agens";
+  from = "claude-code";
+  delivery = "copy";                      # for a client that refuses symlinks
+  assets = { "CLAUDE.md" = "AGENTS.md"; agents = "agents"; skills = "skills"; };
 };
 ```
 
-## Secrets
+**A file that has to carry a credential** cannot be a store symlink — the store
+is world-readable and read-only. Those paths are held back from the projection
+and written at activation with the placeholder replaced:
 
-Never put API keys, tokens, passwords, or secret file contents in Nix strings or fragment sources. Nix evaluation copies those values into the world-readable Nix store. Configure provider credentials outside Nix through environment variables or secret-managed files, and use OpenCode references such as `{env:VARIABLE}` or `{file:path}` where supported.
+```nix
+mcpServers.atlas.env.ATLAS_TOKEN = "@ATLAS_TOKEN@";
 
-The Engram MCP entry contains only a command name and arguments. It embeds no credentials.
-
-## Migration
-
-Migration from a custom projection setup must be atomic because Home Manager rejects two declarations for the same generated path.
-
-1. Remove the old owners of `opencode.json`, `tui.json`, `AGENTS.md`, `commands/`, `agents/`, `skills/`, `plugins/`, and `prompts/sdd/` in the same Home Manager change that imports this module.
-2. Move host-specific settings to native `programs.opencode.*` options.
-3. Move private `AGENTS.md` policy into an ordered local fragment. Do not add that fragment to this public repository.
-4. Apply Home Manager once and restart OpenCode.
-5. Verify `opencode`, `gentle-ai version`, and `engram version`, then start a fresh OpenCode session to verify MCP and plugin loading.
-
-Do not run `gentle-ai sync` against files owned by this module. Declarative Home Manager state is authoritative; imperative sync would attempt to mutate Nix-managed symlinks.
-
-## Compatibility and Status
-
-The initial release targets current Home Manager versions that provide `programs.opencode.settings`, `tui`, `context`, `commands`, `agents`, `skills`, and MCP-compatible settings. Linux and Darwin systems supported by the upstream Go projects are exposed.
-
-Gentle AI `2.3.0` and Engram `1.20.0` are pinned from verified upstream tags. Their public assets are rendered during Nix evaluation using the selected source trees; unresolved upstream template tokens fail evaluation. OpenCode defaults to `pkgs.opencode`, so its version follows the consumer's nixpkgs input and remains overridable.
-
-See [`examples/home.nix`](examples/home.nix) for a runnable module fragment.
-
-## Development
-
-```sh
-nix fmt
-nix flake check
+secrets = {
+  paths = [ ".config/opencode/opencode.json" ];
+  placeholders.ATLAS_TOKEN = config.sops.secrets."ai/atlas-token".path;
+};
 ```
 
-The repository is licensed under MIT; see [`LICENSE`](LICENSE).
+Where that path comes from is not this flake's business: a sops-nix or agenix
+secret exposes exactly such a file, and so does a plain one, so none of them is
+a dependency here.
+
+**A file the client also writes** — Claude Code keeps its OAuth session and
+project history in `.claude.json`, Codex its per-project trust levels in
+`config.toml` — cannot be replaced either. Those are merged instead:
+
+```nix
+secrets.merge = [ ".claude.json" ".codex/config.toml" ];
+```
+
+The fragment goes in and everything it does not mention stays, comments and all.
+Merging is additive: an entry dropped from the document is not removed from the
+file, because the entry may be one the client wrote and the file is not ours to
+prune.
+
+| | `secrets.paths` | `secrets.merge` |
+|---|---|---|
+| Ownership | Gentle AI owns the file whole | shared with the client |
+| Written | replaced | merged in |
+| Formats | any | JSON and TOML |
+
+## Reference
+
+Every option, with its type, default and example, is in [`docs/options.md`](docs/options.md). It is generated from the module itself and a check fails the build if the committed copy drifts, so it cannot describe an option the module does not have.
+
+```console
+nix build .#options-doc && cp result docs/options.md
+```
+
+For the fields these options produce — what each accepts, and what omitting it means — see the [contract reference](https://github.com/Gentleman-Programming/gentle-ai/blob/main/docs/declarative-config-reference.md) in Gentle AI itself.
+
+## How it works
+
+```
+programs.gentle-ai.settings ─┐
+programs.gentle-ai.roles ────┼─► gentle-ai.json ─► gentle-ai config render ─► store tree ─► home.file
+programs.gentle-ai.extensions┘
+```
+
+| Decision | Why |
+|----------|-----|
+| Rendering happens in a derivation | The result is a store path: reproducible, cacheable, and inspectable through `programs.gentle-ai.rendered` before it is linked. |
+| The document carries your home directory | Rendered content records absolute paths to its own files, so it is built for the directory it will live in rather than for the build sandbox. |
+| The tree is linked recursively | Every file is its own symlink, so unrelated files in the same directories are left alone and a genuine collision is reported instead of one module shadowing another's directory. |
+| Nothing is rewritten at activation | Activation only links what was already rendered and verified at build time. |
+
+## Requirements
+
+This flake calls `gentle-ai config render`, the declarative configuration contract from [Gentle AI issue #3248](https://github.com/Gentleman-Programming/gentle-ai/issues/3248). It is not in an upstream release yet, so `packages/gentle-ai.nix` is pinned to the branch chain carrying it. Once the contract merges, move `owner`, `rev` and `hash` back to an upstream tag; nothing else changes. Override `programs.gentle-ai.package` to build from somewhere else in the meantime.
+
+## Checklist
+
+- [ ] `nix flake check` passes against your pinned Gentle AI package.
+- [ ] `nix build .#homeConfigurations.<name>.activationPackage` succeeds before switching.
+- [ ] Every adapter named in `roles`, `settings.skillAssignments` or `extensions` also appears in `settings.agents`.
+- [ ] Clients were restarted after the switch.
+
+## Next step
+
+Inspect what your declaration produces without switching:
+
+```console
+nix eval --raw .#homeConfigurations.<name>.config.programs.gentle-ai.rendered
+```
