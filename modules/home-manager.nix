@@ -163,6 +163,17 @@ let
           '';
         };
 
+        mcpServers = mkOption {
+          type = types.attrsOf mcpServerType;
+          default = { };
+          description = ''
+            MCP servers for this client only, replacing the flat set. A client
+            that identifies itself to a server, or one an installation gives
+            tools the others have no use for, is named here; the rest take the
+            flat set.
+          '';
+        };
+
         models = mkOption {
           type = types.attrsOf types.anything;
           default = { };
@@ -376,6 +387,10 @@ let
     lib.mapAttrs (_: provider: provider.settings) enabledProviders
   );
 
+  providerServers = lib.filterAttrs (_: value: value != { }) (
+    lib.mapAttrs (_: provider: lib.mapAttrs (_: mcpServer) provider.mcpServers) enabledProviders
+  );
+
   providerPresets = lib.filterAttrs (_: value: value != null) (
     lib.mapAttrs (_: provider: provider.modelPreset) enabledProviders
   );
@@ -504,6 +519,7 @@ let
       // whenSet "ask" cfg.permissions.ask
     )
     // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) cfg.mcpServers)
+    // whenSet "mcpServerAssignments" providerServers
     // cfg.settings;
 
   document = {
@@ -580,9 +596,12 @@ let
     ];
   } (builtins.readFile ../lib/merge.py);
 
-  secretArguments = lib.concatMapStringsSep " " (
-    name: "--secret ${lib.escapeShellArg "${name}=${cfg.secrets.placeholders.${name}}"}"
-  ) (lib.attrNames cfg.secrets.placeholders);
+  secretArguments =
+    lib.concatMapStringsSep " " (path: "--env-file ${lib.escapeShellArg path}") cfg.secrets.envFiles
+    + " "
+    + lib.concatMapStringsSep " " (
+      name: "--secret ${lib.escapeShellArg "${name}=${cfg.secrets.placeholders.${name}}"}"
+    ) (lib.attrNames cfg.secrets.placeholders);
 
   projected =
     if withheld == [ ] then
@@ -948,6 +967,19 @@ in
         '';
       };
 
+      envFiles = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = literalExpression ''[ "/home/you/.config/secrets/mcp.env" ]'';
+        description = ''
+          Files of `NAME=value` lines, each supplying a placeholder. This is the
+          shape a shell-sourced secret file already has, and the shape a sops
+          template can render, so an existing one needs no rewriting.
+
+          An unreadable file is reported and its placeholders stay unresolved.
+        '';
+      };
+
       placeholders = mkOption {
         type = types.attrsOf types.str;
         default = { };
@@ -1070,25 +1102,12 @@ in
 
     home.activation.gentleAiSecrets = lib.mkIf (cfg.secrets.paths != [ ]) (
       lib.hm.dag.entryAfter [ "writeBoundary" ] (
-        ''
-          _gentle_ai_quote() { printf '%s' "$1" | sed -e 's/[\\&|]/\\\\&/g'; }
-        ''
-        + lib.concatMapStringsSep "\n" (path: ''
-          run mkdir -p "$(dirname ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"})"
-          run cp -L --no-preserve=mode,ownership ${lib.escapeShellArg "${rendered}/tree/${path}"} ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"}
-          run chmod u+w,go-rwx ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"}
-          ${lib.concatMapStringsSep "\n" (name: ''
-            if [ -r ${lib.escapeShellArg cfg.secrets.placeholders.${name}} ]; then
-              _gentle_ai_value="$(_gentle_ai_quote "$(cat ${
-                lib.escapeShellArg cfg.secrets.placeholders.${name}
-              })")"
-              run sed -i "s|@${name}@|$_gentle_ai_value|g" ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"}
-              unset _gentle_ai_value
-            else
-              warnEcho "gentle-ai: ${name} is unreadable; @${name}@ stays unresolved in ${path}"
-            fi
-          '') (lib.attrNames cfg.secrets.placeholders)}
-        '') withheld
+        lib.concatMapStringsSep "\n" (path: ''
+          run ${lib.getExe merger} --replace \
+            --fragment ${lib.escapeShellArg "${rendered}/tree/${path}"} \
+            --target ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"} \
+            ${secretArguments}
+        '') cfg.secrets.paths
       )
     );
 

@@ -95,6 +95,32 @@ def merge_toml(fragment: str, existing: str) -> str:
 MERGERS = {".json": merge_json, ".toml": merge_toml}
 
 
+def read_env_file(path: Path) -> dict[str, str]:
+    """Read NAME=value lines, the shape a shell-sourced secret file already has.
+
+    An unreadable file is reported rather than fatal: the placeholders it would
+    have supplied stay unresolved, which says plainly that the secret never
+    arrived instead of writing an empty credential.
+    """
+    values: dict[str, str] = {}
+    try:
+        content = path.read_text()
+    except OSError as error:
+        print(f"gentle-ai: cannot read {path}: {error}", file=sys.stderr)
+        return values
+
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, separator, value = line.partition("=")
+        if not separator:
+            continue
+        values[name.strip()] = value.strip().strip("'\"")
+
+    return values
+
+
 def write_private(target: Path, text: str) -> None:
     """Write through a temporary file so an interrupted run cannot truncate the
     target, and keep the result unreadable by anyone else: it holds a credential.
@@ -123,9 +149,21 @@ def main() -> int:
         metavar="NAME=PATH",
         help="file holding the value for @NAME@; repeatable",
     )
+    parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="write the fragment over the target instead of merging into it",
+    )
+    parser.add_argument(
+        "--env-file",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="file of NAME=value lines, each supplying a placeholder; repeatable",
+    )
     arguments = parser.parse_args()
 
-    merge = MERGERS.get(arguments.target.suffix)
+    merge = (lambda fragment, _existing: fragment) if arguments.replace else MERGERS.get(arguments.target.suffix)
     if merge is None:
         supported = ", ".join(sorted(MERGERS))
         print(
@@ -135,6 +173,8 @@ def main() -> int:
         return 1
 
     values: dict[str, str] = {}
+    for path in arguments.env_file:
+        values.update(read_env_file(Path(path)))
     for pair in arguments.secret:
         name, _, path = pair.partition("=")
         try:

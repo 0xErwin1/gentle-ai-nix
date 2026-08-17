@@ -1040,6 +1040,135 @@ true
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.mcpServers
+
+
+
+MCP servers for this client only, replacing the flat set\. A client
+that identifies itself to a server, or one an installation gives
+tools the others have no use for, is named here; the rest take the
+flat set\.
+
+
+
+*Type:*
+attribute set of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.mcpServers\.\<name>\.enable
+
+
+
+Whether the client should start this server\.
+
+
+
+*Type:*
+null or boolean
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.mcpServers\.\<name>\.args
+
+
+
+Arguments for the command\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.mcpServers\.\<name>\.command
+
+
+
+Executable for a local server\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.mcpServers\.\<name>\.env
+
+
+
+Environment for the command\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.mcpServers\.\<name>\.url
+
+
+
+Endpoint for a remote server\. Mutually exclusive with command\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.modelPreset
 
 
@@ -1739,6 +1868,39 @@ boolean
 
 ```nix
 false
+```
+
+
+
+## programs\.gentle-ai\.secrets\.envFiles
+
+
+
+Files of ` NAME=value ` lines, each supplying a placeholder\. This is the
+shape a shell-sourced secret file already has, and the shape a sops
+template can render, so an existing one needs no rewriting\.
+
+An unreadable file is reported and its placeholders stay unresolved\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[ "/home/you/.config/secrets/mcp.env" ]
 ```
 
 
