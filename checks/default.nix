@@ -217,6 +217,29 @@ in
         grep -q 'mcp_servers.atlas' target.toml || { echo "the TOML merge did not add the declared table" >&2; exit 1; }
         diff -u once.toml target.toml || { echo "merging twice changed the file" >&2; exit 1; }
 
+        # An array the client maintains is the one thing a merge must not
+        # replace. Pi rebuilds its package list as it installs, so replacing it
+        # with the two entries the document names uninstalls the harness from
+        # the client's point of view on the next switch. An array the harness
+        # owns still has to be replaceable, or a rule removed from the
+        # declaration would live on forever.
+        cat > client.json <<'JSON'
+        {"packages":["npm:gentle-pi","npm:pi-btw"],"permissions":{"deny":["stale"]}}
+        JSON
+        cat > declared.json <<'JSON'
+        {"packages":["npm:pi-mcp-adapter"],"permissions":{"deny":["current"]}}
+        JSON
+
+        gentle-ai-merge --fragment declared.json --target client.json --union-list packages
+
+        grep -q 'npm:gentle-pi' client.json || { echo "the merge dropped a package the client installed" >&2; exit 1; }
+        grep -q 'npm:pi-mcp-adapter' client.json || { echo "the merge did not add the declared package" >&2; exit 1; }
+        grep -q 'stale' client.json && { echo "a harness-owned list accumulated instead of being replaced" >&2; exit 1; }
+
+        cp client.json once.json
+        gentle-ai-merge --fragment declared.json --target client.json --union-list packages
+        diff -u once.json client.json || { echo "merging twice grew the unioned list" >&2; exit 1; }
+
         # An unreadable secret must leave the placeholder rather than empty it:
         # an empty credential reads as a configured one and fails at use.
         cat > bare.toml <<'TOML'

@@ -26,18 +26,29 @@ from pathlib import Path
 PLACEHOLDER = re.compile(r"@([A-Z][A-Z0-9_]*)@")
 
 
-def deep_merge(base, overlay):
+def deep_merge(base, overlay, union_lists=(), path=""):
     """Overlay wins, and a mapping is merged rather than replaced.
 
     Replacing a mapping wholesale would drop sibling keys the client owns, which
     is the whole reason this file is merged instead of written.
+
+    A list is replaced, because a list the harness owns has to be able to lose
+    an entry: appending forever would keep a rule alive after it was removed
+    from the declaration. Lists named in union_lists are the exception, for the
+    ones the client appends to itself -- there, replacing is what destroys
+    state, and the fragment means "these must be present" rather than "these are
+    all there is".
     """
+    if isinstance(base, list) and isinstance(overlay, list) and path in union_lists:
+        return base + [entry for entry in overlay if entry not in base]
+
     if not isinstance(base, dict) or not isinstance(overlay, dict):
         return overlay
 
     merged = dict(base)
     for key, value in overlay.items():
-        merged[key] = deep_merge(base.get(key), value) if key in base else value
+        below = f"{path}.{key}" if path else key
+        merged[key] = deep_merge(base.get(key), value, union_lists, below) if key in base else value
 
     return merged
 
@@ -65,14 +76,14 @@ def substitute(text: str, values: dict[str, str], target: Path) -> str:
     return result
 
 
-def merge_json(fragment: str, existing: str) -> str:
+def merge_json(fragment: str, existing: str, union_lists=()) -> str:
     overlay = json.loads(fragment)
     base = json.loads(existing) if existing.strip() else {}
 
-    return json.dumps(deep_merge(base, overlay), indent=2) + "\n"
+    return json.dumps(deep_merge(base, overlay, union_lists), indent=2) + "\n"
 
 
-def merge_toml(fragment: str, existing: str) -> str:
+def merge_toml(fragment: str, existing: str, union_lists=()) -> str:
     # tomlkit round-trips comments, ordering and formatting, so a file a person
     # edits by hand survives being merged into.
     import tomlkit
@@ -155,6 +166,13 @@ def main() -> int:
         help="write the fragment over the target instead of merging into it",
     )
     parser.add_argument(
+        "--union-list",
+        action="append",
+        default=[],
+        metavar="DOTTED.PATH",
+        help="array the client appends to itself, merged by union instead of replaced; repeatable",
+    )
+    parser.add_argument(
         "--env-file",
         action="append",
         default=[],
@@ -163,7 +181,7 @@ def main() -> int:
     )
     arguments = parser.parse_args()
 
-    merge = (lambda fragment, _existing: fragment) if arguments.replace else MERGERS.get(arguments.target.suffix)
+    merge = (lambda fragment, _existing, _union: fragment) if arguments.replace else MERGERS.get(arguments.target.suffix)
     if merge is None:
         supported = ", ".join(sorted(MERGERS))
         print(
@@ -185,7 +203,7 @@ def main() -> int:
     existing = arguments.target.read_text() if arguments.target.exists() else ""
 
     try:
-        merged = merge(arguments.fragment.read_text(), existing)
+        merged = merge(arguments.fragment.read_text(), existing, tuple(arguments.union_list))
     except Exception as error:
         print(
             f"gentle-ai: cannot merge into {arguments.target}: {error}; the file is unchanged",

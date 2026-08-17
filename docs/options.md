@@ -2070,10 +2070,13 @@ Merging is additive, so a server dropped from the document is not
 removed from the file — that entry may be one the client wrote, and
 this file is not ours to prune\.
 
+An entry is a path, or an attribute set naming the arrays in it the
+client appends to itself\. See ` unionLists ` for when that matters\.
+
 
 
 *Type:*
-list of string
+list of (string or (submodule))
 
 
 
@@ -2088,7 +2091,14 @@ list of string
 *Example:*
 
 ```nix
-[ ".claude.json" ".codex/config.toml" ]
+[
+  ".claude.json"
+  {
+    path = ".pi/agent/settings.json";
+    unionLists = [ "packages" ];
+  }
+]
+
 ```
 
 

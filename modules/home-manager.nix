@@ -369,6 +369,49 @@ let
     }
   );
 
+  mergeTargetType = types.submodule (
+    { name, ... }:
+    {
+      options = {
+        path = mkOption {
+          type = types.str;
+          default = name;
+          description = "Path relative to the home directory.";
+        };
+
+        unionLists = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = literalExpression ''[ "packages" ]'';
+          description = ''
+            Dotted paths to arrays in this file that the client appends to
+            itself, merged by union instead of being replaced.
+
+            An array is replaced by default, because one the harness owns has to
+            be able to lose an entry: a rule removed from the declaration has to
+            disappear from the file. Where the client is the one appending — a
+            list of installed packages it maintains — replacing is what destroys
+            state, and the rendered entries mean "these must be present" rather
+            than "these are all there is".
+          '';
+        };
+      };
+    }
+  );
+
+  # A merge target is a path or a path with a policy, so the rest of the module
+  # reads one shape.
+  mergeTargets = map (
+    entry:
+    if builtins.isString entry then
+      {
+        path = entry;
+        unionLists = [ ];
+      }
+    else
+      entry
+  ) cfg.secrets.merge;
+
   extraFileType = types.submodule (
     { name, ... }:
     {
@@ -624,7 +667,7 @@ let
   # Where that file comes from is deliberately not this module's business: a
   # sops-nix or agenix secret exposes exactly such a path, and so does a plain
   # file, so none of them has to be a dependency here.
-  withheld = cfg.secrets.paths ++ cfg.secrets.merge;
+  withheld = cfg.secrets.paths ++ map (entry: entry.path) mergeTargets;
 
   provisioner = pkgs.writers.writePython3Bin "gentle-ai-provision" {
     flakeIgnore = [
@@ -1035,9 +1078,17 @@ in
       };
 
       merge = mkOption {
-        type = types.listOf types.str;
+        type = types.listOf (types.either types.str mergeTargetType);
         default = [ ];
-        example = literalExpression ''[ ".claude.json" ".codex/config.toml" ]'';
+        example = literalExpression ''
+          [
+            ".claude.json"
+            {
+              path = ".pi/agent/settings.json";
+              unionLists = [ "packages" ];
+            }
+          ]
+        '';
         description = ''
           Rendered paths Gentle AI shares with the client itself. Claude Code
           keeps its OAuth and project history in `.claude.json`, Codex its
@@ -1049,6 +1100,9 @@ in
           Merging is additive, so a server dropped from the document is not
           removed from the file — that entry may be one the client wrote, and
           this file is not ours to prune.
+
+          An entry is a path, or an attribute set naming the arrays in it the
+          client appends to itself. See `unionLists` for when that matters.
         '';
       };
 
@@ -1191,12 +1245,15 @@ in
 
     home.activation.gentleAiMergedSecrets = lib.mkIf (cfg.secrets.merge != [ ]) (
       lib.hm.dag.entryAfter [ "writeBoundary" ] (
-        lib.concatMapStringsSep "\n" (path: ''
+        lib.concatMapStringsSep "\n" (entry: ''
           run ${lib.getExe merger} \
-            --fragment ${lib.escapeShellArg "${rendered}/tree/${path}"} \
-            --target ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"} \
+            --fragment ${lib.escapeShellArg "${rendered}/tree/${entry.path}"} \
+            --target ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.path}"} \
+            ${
+              lib.concatMapStringsSep " " (name: "--union-list ${lib.escapeShellArg name}") entry.unionLists
+            } \
             ${secretArguments}
-        '') cfg.secrets.merge
+        '') mergeTargets
       )
     );
 
