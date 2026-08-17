@@ -539,6 +539,8 @@ let
   // whenSet "roles" (lib.mapAttrsToList role cfg.roles)
   // whenSet "extensions" (providerSettings // cfg.extensions);
 
+  documentFile = pkgs.writeText "gentle-ai-document.json" (builtins.toJSON document);
+
   base = pkgs.callPackage ../lib/render.nix { } {
     inherit document;
     inherit (config.home) homeDirectory;
@@ -1098,6 +1100,17 @@ in
         };
       }) linkedTargets
     );
+
+    # Gentle AI reads its own state to answer for the installation, and that
+    # state is written only by its install and sync commands. Rendering the tree
+    # here leaves doctor reporting an installation that is plainly present as
+    # absent, and recommending it be installed again. Adopting records the
+    # document without claiming a single file.
+    home.activation.gentleAiAdopt = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      run ${lib.getExe cfg.package} config adopt \
+        --config ${documentFile} \
+        --home ${lib.escapeShellArg config.home.homeDirectory} >/dev/null
+    '';
 
     home.activation.gentleAiMergedSecrets = lib.mkIf (cfg.secrets.merge != [ ]) (
       lib.hm.dag.entryAfter [ "writeBoundary" ] (
