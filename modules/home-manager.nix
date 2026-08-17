@@ -29,7 +29,13 @@ let
 
   cfg = config.programs.gentle-ai;
 
-  defaultGentleAiPackage = pkgs.callPackage ../packages/gentle-ai.nix { };
+  releases = import ../packages/versions.nix;
+
+  selectedRelease = releases.${cfg.release};
+
+  defaultGentleAiPackage = pkgs.callPackage ../packages/gentle-ai.nix {
+    release = selectedRelease;
+  };
   defaultEngramPackage = pkgs.callPackage ../packages/engram.nix { };
 
   enabledNames = group: lib.attrNames (lib.filterAttrs (_: value: value.enable) group);
@@ -700,6 +706,22 @@ in
   options.programs.gentle-ai = {
     enable = mkEnableOption "Gentle AI";
 
+    release = mkOption {
+      type = types.enum (lib.attrNames releases);
+      default = "contract";
+      description = ''
+        Which Gentle AI release to build, by channel.
+
+        `stable` and `beta` are the published ones. `contract` is the branch
+        carrying the declarative configuration contract this module renders
+        through, and is the default only because no release has that contract
+        yet: choosing a published channel builds fine and then fails when the
+        renderer runs, because `gentle-ai config` does not exist there.
+
+        Setting `package` directly overrides this.
+      '';
+    };
+
     package = mkOption {
       type = types.package;
       default = defaultGentleAiPackage;
@@ -1045,6 +1067,10 @@ in
 
   config = mkIf cfg.enable {
     assertions = [
+      {
+        assertion = cfg.package != defaultGentleAiPackage || selectedRelease.providesContract;
+        message = "programs.gentle-ai.release = \"${cfg.release}\" selects Gentle AI ${selectedRelease.version}, which has no `gentle-ai config` and so cannot render this configuration; use the contract channel until it lands in a release, or set programs.gentle-ai.package to a build that has it";
+      }
       {
         assertion = enabledNames cfg.providers != [ ];
         message = "programs.gentle-ai.providers must enable at least one client to configure";

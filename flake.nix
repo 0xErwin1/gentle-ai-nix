@@ -30,12 +30,20 @@
         system:
         let
           pkgs = import nixpkgs { inherit system; };
-          gentle-ai = pkgs.callPackage ./packages/gentle-ai.nix { };
+          releases = import ./packages/versions.nix;
+          gentleAiFor = release: pkgs.callPackage ./packages/gentle-ai.nix { inherit release; };
+
+          gentle-ai = gentleAiFor releases.contract;
           engram = pkgs.callPackage ./packages/engram.nix { };
         in
         {
           inherit gentle-ai engram;
           default = gentle-ai;
+
+          # One package per release channel, so `programs.gentle-ai.package` can
+          # take any of them and `nix run` can reach them by name.
+          gentle-ai-stable = gentleAiFor releases.stable;
+          gentle-ai-beta = gentleAiFor releases.beta;
 
           # Reference documentation for every option this module declares.
           # Regenerate the committed copy with:

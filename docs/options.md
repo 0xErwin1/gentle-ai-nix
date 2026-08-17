@@ -1574,6 +1574,35 @@ null
 
 
 
+## programs\.gentle-ai\.release
+
+
+
+Which Gentle AI release to build, by channel\.
+
+` stable ` and ` beta ` are the published ones\. ` contract ` is the branch
+carrying the declarative configuration contract this module renders
+through, and is the default only because no release has that contract
+yet: choosing a published channel builds fine and then fails when the
+renderer runs, because ` gentle-ai config ` does not exist there\.
+
+Setting ` package ` directly overrides this\.
+
+
+
+*Type:*
+one of “beta”, “contract”, “stable”
+
+
+
+*Default:*
+
+```nix
+"contract"
+```
+
+
+
 ## programs\.gentle-ai\.rendered
 
 

@@ -172,9 +172,34 @@ programs.gentle-ai.extensions┘
 | The tree is linked recursively | Every file is its own symlink, so unrelated files in the same directories are left alone and a genuine collision is reported instead of one module shadowing another's directory. |
 | Nothing is rewritten at activation | Activation only links what was already rendered and verified at build time. |
 
+## Releases
+
+Gentle AI is built per channel, selected declaratively:
+
+```nix
+programs.gentle-ai.release = "beta";   # stable | beta | contract
+```
+
+| Channel | Version | Has `gentle-ai config` |
+|---------|---------|------------------------|
+| `stable` | 2.3.0 | no |
+| `beta` | 2.4.0-rc.8 | no |
+| `contract` | the branch carrying it | yes |
+
+`contract` is the default, and only because the declarative configuration
+contract this flake renders through is not in a release yet. Choosing a
+published channel is rejected while the configuration is evaluated, naming the
+reason, rather than failing later inside the renderer. Setting
+`programs.gentle-ai.package` overrides the channel entirely.
+
+The channels are also packages: `nix build .#gentle-ai-stable`,
+`nix build .#gentle-ai-beta`.
+
+Adding a release is one entry in [`packages/versions.nix`](packages/versions.nix).
+
 ## Requirements
 
-This flake calls `gentle-ai config render`, the declarative configuration contract from [Gentle AI issue #3248](https://github.com/Gentleman-Programming/gentle-ai/issues/3248). It is not in an upstream release yet, so `packages/gentle-ai.nix` is pinned to the branch chain carrying it. Once the contract merges, move `owner`, `rev` and `hash` back to an upstream tag; nothing else changes. Override `programs.gentle-ai.package` to build from somewhere else in the meantime.
+This flake calls `gentle-ai config render`, the declarative configuration contract from [Gentle AI issue #3248](https://github.com/Gentleman-Programming/gentle-ai/issues/3248). It is not in an upstream release yet, which is what the `contract` channel above exists for. Once it merges, drop that entry from `packages/versions.nix` and set `providesContract = true` on the release that carries it; nothing else changes.
 
 ## Checklist
 
