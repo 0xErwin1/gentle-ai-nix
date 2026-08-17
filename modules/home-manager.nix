@@ -273,6 +273,15 @@ let
         default = null;
         description = "Endpoint for a remote server. Mutually exclusive with command.";
       };
+      headers = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        example = literalExpression ''{ Authorization = "Bearer @TOKEN@"; }'';
+        description = ''
+          Credentials a remote server takes in an HTTP header. Without them a
+          hosted endpoint can be named but not reached.
+        '';
+      };
       enable = mkOption {
         type = types.nullOr types.bool;
         default = null;
@@ -486,6 +495,7 @@ let
     // whenSet "args" value.args
     // whenSet "env" value.env
     // whenSet "url" value.url
+    // whenSet "headers" value.headers
     // optionalAttrs (value.enable != null) { enabled = value.enable; };
 
   selection =

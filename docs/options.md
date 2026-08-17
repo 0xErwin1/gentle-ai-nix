@@ -682,6 +682,36 @@ attribute set of string
 
 
 
+## programs\.gentle-ai\.mcpServers\.\<name>\.headers
+
+
+
+Credentials a remote server takes in an HTTP header\. Without them a
+hosted endpoint can be named but not reached\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{ Authorization = "Bearer @TOKEN@"; }
+```
+
+
+
 ## programs\.gentle-ai\.mcpServers\.\<name>\.url
 
 
@@ -1144,6 +1174,36 @@ attribute set of string
 
 ```nix
 { }
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.mcpServers\.\<name>\.headers
+
+
+
+Credentials a remote server takes in an HTTP header\. Without them a
+hosted endpoint can be named but not reached\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{ Authorization = "Bearer @TOKEN@"; }
 ```
 
 
