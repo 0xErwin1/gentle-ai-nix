@@ -191,39 +191,6 @@ let
           '';
         };
 
-        package = mkOption {
-          type = types.nullOr types.package;
-          default = null;
-          example = literalExpression "pkgs.claude-code";
-          description = ''
-            This client's own package. Given one,
-            `programs.gentle-ai.wrappedPackages.<name>` is the copy to install:
-            same client, started the way the declaration says.
-
-            Nothing else here needs it. It exists because some settings a client
-            reads are ones it also rewrites, and the only place those hold is
-            the command line.
-          '';
-        };
-
-        permissionMode = mkOption {
-          type = types.nullOr types.str;
-          default = if name == "claude-code" then "bypassPermissions" else null;
-          defaultText = literalExpression ''"bypassPermissions" for clients that take one, null otherwise'';
-          example = "plan";
-          description = ''
-            The permission mode every session of this client starts in, applied
-            through `wrappedPackage`.
-
-            It is a session argument rather than a setting because the setting
-            does not hold: the client writes back the mode it actually ran with,
-            so a declared one survives until the next session and no further.
-
-            Null leaves the mode to the client. An explicit `--permission-mode`
-            on the command line still wins over this.
-          '';
-        };
-
         provisionPackages = mkOption {
           type = types.bool;
           default = false;
@@ -793,62 +760,6 @@ let
         ${lib.concatMapStringsSep "\n" (path: ''rm -f "$out/tree/${path}"'') withheld}
       '';
 
-  # How a client takes a permission mode for one session. This is contract
-  # knowledge, like providerModelField: a client that does not appear here has
-  # no such flag, and declaring a mode for it is refused rather than ignored.
-  providerPermissionFlag = {
-    "claude-code" = "--permission-mode";
-  };
-
-  # Arguments that mean the caller already decided, so nothing is injected over
-  # them. The bare flag and its `=value` form both count, as does the client's
-  # own escape hatch.
-  permissionOverrides = flag: [
-    flag
-    "${flag}=*"
-    "--dangerously-skip-permissions"
-  ];
-
-  wrapClient =
-    name: provider:
-    let
-      flag = providerPermissionFlag.${name} or null;
-      program = provider.package.meta.mainProgram or name;
-    in
-    if provider.package == null || flag == null || provider.permissionMode == null then
-      provider.package
-    else
-      pkgs.runCommandLocal "${program}-gentle-ai"
-        {
-          inherit (provider.package) meta;
-          passthru = (provider.package.passthru or { }) // {
-            unwrapped = provider.package;
-          };
-        }
-        ''
-          mkdir -p "$out/bin"
-          for entry in ${provider.package}/bin/*; do
-            ln -s "$entry" "$out/bin/$(basename "$entry")"
-          done
-          rm -f "$out/bin/${program}"
-
-          cat > "$out/bin/${program}" <<EOF
-          #!${pkgs.runtimeShell}
-          for argument in "\$@"; do
-            case "\$argument" in
-              ${lib.concatStringsSep "|" (permissionOverrides flag)})
-                exec ${provider.package}/bin/${program} "\$@"
-                ;;
-            esac
-          done
-
-          exec ${provider.package}/bin/${program} ${flag} ${provider.permissionMode} "\$@"
-          EOF
-          chmod +x "$out/bin/${program}"
-        '';
-
-  wrappedProviderPackages = lib.mapAttrs wrapClient cfg.providers;
-
   providerRoots = {
     "opencode" = ".config/opencode";
     "claude-code" = ".claude";
@@ -1310,21 +1221,6 @@ in
       readOnly = true;
       description = "The rendered tree, after extraFiles and overrideRendered.";
     };
-
-    wrappedPackages = mkOption {
-      type = types.attrsOf types.package;
-      readOnly = true;
-      description = ''
-        Each client whose `package` was given, wrapped so every session starts
-        the way this configuration declares. Install these instead of the
-        originals:
-
-        ```nix
-        programs.claude-code.package =
-          config.programs.gentle-ai.wrappedPackages.claude-code;
-        ```
-      '';
-    };
   };
 
   config = mkIf cfg.enable {
@@ -1363,10 +1259,7 @@ in
       }
     ];
 
-    programs.gentle-ai = {
-      inherit document rendered;
-      wrappedPackages = lib.filterAttrs (_: value: value != null) wrappedProviderPackages;
-    };
+    programs.gentle-ai = { inherit document rendered; };
 
     home.packages = packages;
 
