@@ -70,6 +70,16 @@ let
         extraFiles = {
           ".config/opencode/skills/check-own/SKILL.md".text = "OWN-SKILL";
           ".claude/agents/check-apply.md".text = "OVERRIDDEN";
+
+          check-registered-hook = {
+            target = ".claude/settings.json";
+            mode = "merge";
+            unionLists = [ "hooks.SessionStart" ];
+            text = builtins.toJSON {
+              hooks.SessionStart = [ { command = "check-registered-hook"; } ];
+              checkOwnKey = "OWN-SETTING";
+            };
+          };
         };
       };
     }
@@ -115,6 +125,18 @@ in
   ownContentLayersOverTheRender = treeCheck "extra-files" ''
     grep -q "OWN-SKILL" "$rendered/tree/.config/opencode/skills/check-own/SKILL.md"
     grep -q "OVERRIDDEN" "$rendered/tree/.claude/agents/check-apply.md"
+  '';
+
+  # A tool that registers itself inside a file Gentle AI also writes must arrive
+  # without either one overwriting the other, and the merged result has to be
+  # readable: the merger keeps its output private everywhere else, because
+  # everywhere else it is writing a credential.
+  registeredContentMergesIntoTheRender = treeCheck "extra-files-merge" ''
+    settings="$rendered/tree/.claude/settings.json"
+
+    grep -q "OWN-SETTING" "$settings" || { echo "the merged content did not arrive" >&2; exit 1; }
+    grep -q "outputStyle\|permissions\|hooks" "$settings" || { echo "the rendered settings were replaced" >&2; exit 1; }
+    test -r "$settings" || { echo "the merged file is unreadable" >&2; exit 1; }
   '';
 
   # A role the document declared must reach every client that expresses roles,

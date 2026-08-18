@@ -446,11 +446,22 @@ let
           default = name;
           description = "Path relative to the home directory.";
         };
+        unionLists = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = literalExpression ''[ "hooks.SessionStart" ]'';
+          description = ''
+            With `mode = "merge"`, the dotted paths to arrays that accumulate
+            instead of being replaced. Everything else follows the same rule as
+            `secrets.merge`: an array is replaced unless it is named here.
+          '';
+        };
         mode = mkOption {
           type = types.enum [
             "replace"
             "append"
             "fill"
+            "merge"
           ];
           default = "replace";
           description = ''
@@ -464,6 +475,12 @@ let
             copy of a file it also ships winning. That is what lets you keep a
             tree of extra agents or skills beside the generated ones without
             listing them, and without a stale copy shadowing the current one.
+
+            `merge` merges structured content into what Gentle AI rendered, so
+            a tool that has to register itself inside a file Gentle AI also
+            writes — a hook in a settings file — arrives without either one
+            overwriting the other. JSON and TOML only. See `unionLists` for the
+            arrays that accumulate rather than being replaced.
           '';
         };
       };
@@ -654,6 +671,20 @@ let
               mkdir -p "$(dirname "$target")"
               touch "$target"
               cat ${content} >> "$target"
+            ''
+          else if entry.mode == "merge" then
+            ''
+              target="$out/tree/${entry.target}"
+              mkdir -p "$(dirname "$target")"
+              ${lib.getExe merger} \
+                --fragment ${content} \
+                --target "$target" \
+                ${lib.concatMapStringsSep " " (path: "--union-list ${lib.escapeShellArg path}") entry.unionLists}
+
+              # The merger writes credentials elsewhere, so it keeps its output
+              # private. Here the result is a store path Gentle AI renders from,
+              # which nothing can read at mode 600.
+              chmod 644 "$target"
             ''
           else if entry.mode == "fill" then
             ''

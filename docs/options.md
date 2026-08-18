@@ -484,10 +484,16 @@ copy of a file it also ships winning\. That is what lets you keep a
 tree of extra agents or skills beside the generated ones without
 listing them, and without a stale copy shadowing the current one\.
 
+` merge ` merges structured content into what Gentle AI rendered, so
+a tool that has to register itself inside a file Gentle AI also
+writes — a hook in a settings file — arrives without either one
+overwriting the other\. JSON and TOML only\. See ` unionLists ` for the
+arrays that accumulate rather than being replaced\.
+
 
 
 *Type:*
-one of “replace”, “append”, “fill”
+one of “replace”, “append”, “fill”, “merge”
 
 
 
@@ -558,6 +564,37 @@ null or strings concatenated with “\\n”
 
 ```nix
 null
+```
+
+
+
+## programs\.gentle-ai\.extraFiles\.\<name>\.unionLists
+
+
+
+With ` mode = "merge" `, the dotted paths to arrays that accumulate
+instead of being replaced\. Everything else follows the same rule as
+` secrets.merge `: an array is replaced unless it is named here\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[ "hooks.SessionStart" ]
 ```
 
 
