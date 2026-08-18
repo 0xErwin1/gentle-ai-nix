@@ -49,7 +49,7 @@ Options are grouped the way you think about the installation. Names inside the g
 
 | Group | Purpose |
 |-------|---------|
-| `providers.<name>` | A client, with `modelPreset`, `profiles`, `skills`, `settings` and `models` for it alone. |
+| `providers.<name>` | A client, with `modelPreset`, `profiles`, `skills`, `settings`, `models` and its package provisioning for it alone. |
 | `components.<name>` | What Gentle AI configures — skills, persona, permissions, sdd, theme, engram, gga. |
 | `skills.<name>` | Naming none installs every skill Gentle AI ships. Entries only narrow that: `false` drops one, `true` restricts to the ones named. |
 | `communityTools.<name>`, `openCodePlugins.<name>` | The optional extras, same shape. |
@@ -74,6 +74,8 @@ A wrapper you cannot edit is a worse harness than the one you wrote yourself. Th
 | Add a skill, agent or command Gentle AI does not ship | `extraFiles."<path>".source` |
 | Replace a file Gentle AI does ship | `extraFiles."<path>".text` — same path, your content wins |
 | Keep a section of your own in a file Gentle AI regenerates | `extraFiles.<name> = { target; mode = "append"; text; }` |
+| Layer a tree of your own beside a generated one, without shadowing it | `extraFiles.<name> = { target; mode = "fill"; source; }` |
+| Register something inside a file Gentle AI also writes — a hook in a settings file | `extraFiles.<name> = { target; mode = "merge"; unionLists; source; }` |
 | Change a provider's own settings | `providers.<name>.settings` |
 | Reach a contract field newer than this module | `settings` — raw `selection`, merged last |
 | Anything else | `overrideRendered` — a function over the rendered derivation |
@@ -111,6 +113,24 @@ customProviders.agens = {
 };
 ```
 
+**A client whose harness is packages rather than files** — Pi installs its
+through its own tool — cannot have that part rendered at all, because installing
+it means running the client's installer against a network:
+
+```nix
+providers.pi = {
+  enable = true;
+  provisionPackages = true;
+  provisionEnvironment.SOME_INSTALLER_FLAG = "1";
+};
+```
+
+The commands come from the rendered manifest, so this module holds no copy of a
+package list that could go stale. They run once per change to that list, and skip
+with a message when the client's own binary is not on PATH. It is off by default:
+it is the one part of this module that reaches a network, and what it installs is
+not tracked by Nix.
+
 **A file that has to carry a credential** cannot be a store symlink — the store
 is world-readable and read-only. Those paths are held back from the projection
 and written at activation with the placeholder replaced:
@@ -140,6 +160,18 @@ The fragment goes in and everything it does not mention stays, comments and all.
 Merging is additive: an entry dropped from the document is not removed from the
 file, because the entry may be one the client wrote and the file is not ours to
 prune.
+
+An array is replaced, because one the harness owns has to be able to lose an
+entry: a rule taken out of the declaration has to disappear from the file. Where
+the client is the one appending — a list of installed packages it maintains —
+replacing is what destroys state, so those are named:
+
+```nix
+secrets.merge = [
+  ".claude.json"
+  { path = ".pi/agent/settings.json"; unionLists = [ "packages" ]; }
+];
+```
 
 | | `secrets.paths` | `secrets.merge` |
 |---|---|---|
@@ -180,11 +212,15 @@ Gentle AI is built per channel, selected declaratively:
 programs.gentle-ai.release = "beta";   # stable | beta | contract
 ```
 
-| Channel | Version | Has `gentle-ai config` |
-|---------|---------|------------------------|
-| `stable` | 2.3.0 | no |
-| `beta` | 2.4.0-rc.8 | no |
-| `contract` | the branch carrying it | yes |
+| Channel | What it builds |
+|---------|----------------|
+| `stable` | the newest release |
+| `beta` | the newest release candidate, or the release once its candidates are promoted |
+| `contract` | the branch carrying the declarative configuration contract |
+
+The versions each one resolves to live in
+[`packages/versions.nix`](packages/versions.nix), alongside whether that release
+has `gentle-ai config` at all.
 
 `contract` is the default, and only because the declarative configuration
 contract this flake renders through is not in a release yet. Choosing a
