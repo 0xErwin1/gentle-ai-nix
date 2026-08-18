@@ -729,6 +729,13 @@ let
     lib.filterAttrs (_: provider: provider.provisionPackages) enabledProviders
   );
 
+  # Community tools wire themselves into the clients through their own CLI. That
+  # call is local and idempotent, unlike a client's package installation, so it
+  # follows the declaration rather than needing a second opt-in.
+  provisioningTools = lib.attrNames (
+    lib.filterAttrs (_: tool: tool.enable && tool.provision) cfg.communityTools
+  );
+
   provisionEnvironmentFor =
     name:
     lib.concatMapStringsSep " " (
@@ -809,8 +816,12 @@ let
 
   engramEnabled = cfg.components ? engram && cfg.components.engram.enable;
 
+  enabledCommunityToolPackages = lib.mapAttrsToList (_: tool: tool.package) (
+    lib.filterAttrs (_: tool: tool.enable) cfg.communityTools
+  );
+
   packages = builtins.filter (package: package != null) (
-    [ cfg.package ] ++ lib.optional engramEnabled cfg.engramPackage
+    [ cfg.package ] ++ lib.optional engramEnabled cfg.engramPackage ++ enabledCommunityToolPackages
   );
 
   enableGroup =
@@ -921,7 +932,57 @@ in
       '';
     };
 
-    communityTools = enableGroup "community tool";
+    communityTools = mkOption {
+      type = types.attrsOf (
+        types.submodule (
+          { name, ... }:
+          {
+            options = {
+              enable = mkEnableOption "the ${name} community tool";
+
+              provision = mkOption {
+                type = types.bool;
+                default = true;
+                description = ''
+                  Let the tool point itself at the declared clients during
+                  activation, by running the command Gentle AI declares for it.
+
+                  Configuring a tool and never wiring it leaves prompts that
+                  describe a server nothing configured. The call is local and
+                  idempotent, so unlike a client's package installation it
+                  follows the declaration instead of asking again.
+                '';
+              };
+
+              package = mkOption {
+                type = types.nullOr types.package;
+                default = null;
+                example = literalExpression "pkgs.codegraph";
+                description = ''
+                  The tool's own binary, installed alongside the harness when
+                  this tool is enabled.
+
+                  Gentle AI would otherwise fetch it through a package manager
+                  at install time. Naming it here is the same choice the engram
+                  component takes: the binary comes from Nix, so nothing is
+                  downloaded at activation and the version is the one this
+                  configuration pins.
+
+                  Left null, the tool is configured and the binary is your
+                  business.
+                '';
+              };
+            };
+          }
+        )
+      );
+      default = { };
+      description = ''
+        The community tools to configure, keyed by Gentle AI's own id. The names
+        are deliberately not enumerated here: Gentle AI rejects one it does not
+        know rather than ignoring it, so a tool it gains works the day it ships.
+      '';
+    };
     openCodePlugins = enableGroup "OpenCode plugin";
 
     persona = mkOption {
@@ -1338,21 +1399,36 @@ in
     # Last, because it is the only step that reaches a network: everything a
     # switch can produce on its own is already in place when it runs, so a
     # registry being down costs the packages rather than the whole activation.
-    home.activation.gentleAiProvisionPackages = lib.mkIf (provisioningProviders != [ ]) (
-      lib.hm.dag.entryAfter [ "writeBoundary" ] (
-        lib.concatMapStringsSep "\n" (name: ''
-          # Home Manager activates with a PATH of its own build tools, which is
-          # not where the client lives. Without its own profile on PATH the
-          # step finds no client and skips every time, so the harness silently
-          # never arrives.
-          PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
-            ${provisionEnvironmentFor name} \
-            run ${lib.getExe provisioner} \
-              --manifest ${lib.escapeShellArg "${rendered}/manifest.json"} \
-              --agent ${lib.escapeShellArg name} \
-              --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"}
-        '') provisioningProviders
-      )
-    );
+    # Last, because it is the only step that reaches outside the store:
+    # everything a switch can produce on its own is already in place when it
+    # runs, so a registry being down costs the packages rather than the whole
+    # activation.
+    home.activation.gentleAiProvisionPackages =
+      lib.mkIf (provisioningProviders != [ ] || provisioningTools != [ ])
+        (
+          lib.hm.dag.entryAfter [ "writeBoundary" ] (
+            lib.concatStringsSep "\n" (
+              # Home Manager activates with a PATH of its own build tools, which
+              # is not where the client lives. Without its own profile on PATH
+              # the step finds nothing and skips every time, so the harness
+              # silently never arrives.
+              map (name: ''
+                PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
+                  ${provisionEnvironmentFor name} \
+                  run ${lib.getExe provisioner} \
+                    --manifest ${lib.escapeShellArg "${rendered}/manifest.json"} \
+                    --agent ${lib.escapeShellArg name} \
+                    --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"}
+              '') provisioningProviders
+              ++ map (name: ''
+                PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
+                  run ${lib.getExe provisioner} \
+                    --manifest ${lib.escapeShellArg "${rendered}/manifest.json"} \
+                    --tool ${lib.escapeShellArg name} \
+                    --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"}
+              '') provisioningTools
+            )
+          )
+        );
   };
 }

@@ -368,6 +368,23 @@ in
         gentle-ai-provision --manifest manifest.json --agent engram --stamp-dir stamps 2>/dev/null
         diff -u once "$RECORD" || { echo "a component provision ran agent commands" >&2; exit 1; }
 
+        # A community tool wires itself through the same step, and the two kinds
+        # keep separate stamps: an agent and a tool sharing a name must not read
+        # as each other's work already done.
+        cat > tool.json <<'JSON'
+        {"manifest":{"resources":[
+          {"path":"codegraph","selector":"provision","digest":"present","tool":"codegraph",
+           "commands":[["fake-pi","install","--target","claude"]]}
+        ]}}
+        JSON
+
+        gentle-ai-provision --manifest tool.json --agent codegraph --stamp-dir stamps 2>/dev/null
+        diff -u once "$RECORD" || { echo "a tool provision ran as an agent" >&2; exit 1; }
+
+        gentle-ai-provision --manifest tool.json --tool codegraph --stamp-dir stamps 2>/dev/null
+        grep -q 'install --target claude' "$RECORD" || { echo "the tool wiring did not run" >&2; exit 1; }
+        test -e stamps/tool-codegraph.provisioned || { echo "the tool run recorded no stamp of its own" >&2; exit 1; }
+
         touch "$out"
       '';
 

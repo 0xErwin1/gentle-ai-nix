@@ -121,9 +121,9 @@ null
 
 
 
-The community tools to configure, keyed by Gentle AI’s own id\. The names are
-deliberately not enumerated here: Gentle AI rejects one it does not know
-rather than ignoring it, so a community tool it gains works the day it ships\.
+The community tools to configure, keyed by Gentle AI’s own id\. The names
+are deliberately not enumerated here: Gentle AI rejects one it does not
+know rather than ignoring it, so a tool it gains works the day it ships\.
 
 
 
@@ -162,6 +162,72 @@ false
 
 
 *Example:*
+
+```nix
+true
+```
+
+
+
+## programs\.gentle-ai\.communityTools\.\<name>\.package
+
+
+
+The tool’s own binary, installed alongside the harness when
+this tool is enabled\.
+
+Gentle AI would otherwise fetch it through a package manager
+at install time\. Naming it here is the same choice the engram
+component takes: the binary comes from Nix, so nothing is
+downloaded at activation and the version is the one this
+configuration pins\.
+
+Left null, the tool is configured and the binary is your
+business\.
+
+
+
+*Type:*
+null or package
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+pkgs.codegraph
+```
+
+
+
+## programs\.gentle-ai\.communityTools\.\<name>\.provision
+
+
+
+Let the tool point itself at the declared clients during
+activation, by running the command Gentle AI declares for it\.
+
+Configuring a tool and never wiring it leaves prompts that
+describe a server nothing configured\. The call is local and
+idempotent, so unlike a client’s package installation it
+follows the declaration instead of asking again\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
 
 ```nix
 true

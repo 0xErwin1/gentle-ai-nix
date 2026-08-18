@@ -24,7 +24,9 @@ import tempfile
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True)
-    parser.add_argument("--agent", required=True)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--agent", help="client whose own tool installs its harness")
+    group.add_argument("--tool", help="community tool that wires itself into the clients")
     parser.add_argument("--stamp-dir", required=True)
     parser.add_argument(
         "--force",
@@ -34,7 +36,7 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def declared_commands(manifest_path: str, agent: str) -> list:
+def declared_commands(manifest_path: str, field: str, value: str) -> list:
     with open(manifest_path, encoding="utf-8") as handle:
         report = json.load(handle)
 
@@ -43,7 +45,7 @@ def declared_commands(manifest_path: str, agent: str) -> list:
     for resource in resources:
         if resource.get("selector") != "provision":
             continue
-        if resource.get("agent") != agent:
+        if resource.get(field) != value:
             continue
         commands.extend(resource.get("commands", []))
 
@@ -76,11 +78,14 @@ def write_stamp(path: str, digest: str) -> None:
 def main() -> int:
     arguments = parse_arguments()
 
-    commands = declared_commands(arguments.manifest, arguments.agent)
+    field = "agent" if arguments.agent else "tool"
+    name = arguments.agent or arguments.tool
+
+    commands = declared_commands(arguments.manifest, field, name)
     if not commands:
         return 0
 
-    stamp_path = os.path.join(arguments.stamp_dir, f"{arguments.agent}.provisioned")
+    stamp_path = os.path.join(arguments.stamp_dir, f"{field}-{name}.provisioned")
     digest = digest_of(commands)
     if not arguments.force and read_stamp(stamp_path) == digest:
         return 0
@@ -91,7 +96,7 @@ def main() -> int:
     tool = commands[0][0]
     if shutil.which(tool) is None:
         print(
-            f"gentle-ai: {arguments.agent} packages not installed: {tool} is not on PATH",
+            f"gentle-ai: {name} not provisioned: {tool} is not on PATH",
             file=sys.stderr,
         )
         return 0
@@ -101,7 +106,7 @@ def main() -> int:
         result = subprocess.run(command, check=False)
         if result.returncode != 0:
             print(
-                f"gentle-ai: {arguments.agent} provisioning failed: {' '.join(command)}",
+                f"gentle-ai: {name} provisioning failed: {' '.join(command)}",
                 file=sys.stderr,
             )
             return result.returncode
