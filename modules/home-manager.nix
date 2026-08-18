@@ -210,6 +210,21 @@ let
             reaches the network, and what it installs is not tracked by Nix.
           '';
         };
+
+        provisionEnvironment = mkOption {
+          type = types.attrsOf types.str;
+          default = { };
+          example = literalExpression ''{ GENTLE_PI_SKIP_GENTLE_AI_INSTALL = "1"; }'';
+          description = ''
+            Environment given to this client's provisioning commands.
+
+            A package installer is free to expect things a Nix machine does not
+            have — an FHS path, a system extractor, a writable prefix — and it
+            usually offers a variable to say so. Setting it here keeps that
+            answer with the declaration instead of in a shell profile that the
+            activation does not read anyway.
+          '';
+        };
       };
     }
   );
@@ -682,6 +697,13 @@ let
   provisioningProviders = lib.attrNames (
     lib.filterAttrs (_: provider: provider.provisionPackages) enabledProviders
   );
+
+  provisionEnvironmentFor =
+    name:
+    lib.concatMapStringsSep " " (
+      variable:
+      "${variable}=${lib.escapeShellArg enabledProviders.${name}.provisionEnvironment.${variable}}"
+    ) (lib.attrNames enabledProviders.${name}.provisionEnvironment);
 
   merger = pkgs.writers.writePython3Bin "gentle-ai-merge" {
     libraries = [ pkgs.python3Packages.tomlkit ];
@@ -1293,6 +1315,7 @@ in
           # step finds no client and skips every time, so the harness silently
           # never arrives.
           PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
+            ${provisionEnvironmentFor name} \
             run ${lib.getExe provisioner} \
               --manifest ${lib.escapeShellArg "${rendered}/manifest.json"} \
               --agent ${lib.escapeShellArg name} \

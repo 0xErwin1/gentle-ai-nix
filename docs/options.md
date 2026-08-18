@@ -1550,6 +1550,41 @@ string
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.provisionEnvironment
+
+
+
+Environment given to this client’s provisioning commands\.
+
+A package installer is free to expect things a Nix machine does not
+have — an FHS path, a system extractor, a writable prefix — and it
+usually offers a variable to say so\. Setting it here keeps that
+answer with the declaration instead of in a shell profile that the
+activation does not read anyway\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{ GENTLE_PI_SKIP_GENTLE_AI_INSTALL = "1"; }
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.provisionPackages
 
 
