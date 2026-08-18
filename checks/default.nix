@@ -311,6 +311,47 @@ in
         touch "$out"
       '';
 
+  # A client that rewrites the setting it was given can only be told on the
+  # command line, so what matters is that the mode arrives and that an explicit
+  # one is not doubled up or overridden.
+  sessionPermissionModeIsApplied =
+    let
+      client = pkgs.writeShellScriptBin "fake-client" ''
+        echo "ARGS: $*"
+      '';
+
+      wrapped =
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers.claude-code = {
+                enable = true;
+                package = client;
+              };
+            };
+          }
+        ]).config.programs.gentle-ai.wrappedPackages.claude-code;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-permission-mode" { inherit wrapped; } ''
+      set -euo pipefail
+
+      test "$($wrapped/bin/fake-client)" = "ARGS: --permission-mode bypassPermissions" \
+        || { echo "the declared mode did not reach a bare invocation" >&2; exit 1; }
+
+      test "$($wrapped/bin/fake-client -p hello)" = "ARGS: --permission-mode bypassPermissions -p hello" \
+        || { echo "the declared mode did not survive other arguments" >&2; exit 1; }
+
+      for explicit in "--permission-mode plan" "--permission-mode=plan" "--dangerously-skip-permissions"; do
+        # shellcheck disable=SC2086
+        result="$($wrapped/bin/fake-client $explicit)"
+        test "$result" = "ARGS: $explicit" \
+          || { echo "an explicit mode was not left alone: $result" >&2; exit 1; }
+      done
+
+      touch "$out"
+    '';
+
   # Provisioning is the one activation step that reaches a network and installs
   # something Nix does not track, so what it must never do is as important as
   # what it does: no repeat on an unchanged list, and no failed activation when

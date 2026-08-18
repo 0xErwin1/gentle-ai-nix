@@ -1135,6 +1135,41 @@ true
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.package
+
+
+
+This client’s own package\. Given one,
+` programs.gentle-ai.wrappedPackages.<name> ` is the copy to install:
+same client, started the way the declaration says\.
+
+Nothing else here needs it\. It exists because some settings a client
+reads are ones it also rewrites, and the only place those hold is
+the command line\.
+
+
+
+*Type:*
+null or package
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+pkgs.claude-code
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.mcpServers
 
 
@@ -1360,6 +1395,43 @@ attribute set of anything
 
 ```nix
 { sdd-apply = "opus"; }
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.permissionMode
+
+
+
+The permission mode every session of this client starts in, applied
+through ` wrappedPackage `\.
+
+It is a session argument rather than a setting because the setting
+does not hold: the client writes back the mode it actually ran with,
+so a declared one survives until the next session and no further\.
+
+Null leaves the mode to the client\. An explicit ` --permission-mode `
+on the command line still wins over this\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+"bypassPermissions" for clients that take one, null otherwise
+```
+
+
+
+*Example:*
+
+```nix
+"plan"
 ```
 
 
@@ -2326,6 +2398,34 @@ false
 
 ```nix
 true
+```
+
+
+
+## programs\.gentle-ai\.wrappedPackages
+
+
+
+Each client whose ` package ` was given, wrapped so every session starts
+the way this configuration declares\. Install these instead of the
+originals:
+
+```nix
+programs.claude-code.package =
+  config.programs.gentle-ai.wrappedPackages.claude-code;
+```
+
+
+
+*Type:*
+attribute set of package *(read only)*
+
+
+
+*Default:*
+
+```nix
+{ }
 ```
 
 
