@@ -185,9 +185,13 @@ let
           default = { };
           example = literalExpression ''{ sdd-apply = "opus"; }'';
           description = ''
-            Model assignments in this provider's own vocabulary, keyed by phase.
-            Providers express models differently — an alias, a reasoning effort,
-            a provider/model pair — so values are passed through as written.
+            Model assignments in this provider's own vocabulary, keyed by the
+            phase or agent it routes. Providers express models differently — an
+            alias, a reasoning effort, a provider/model pair — so values are
+            passed through as written.
+
+            Where the client also offers a `modelPreset`, what is named here
+            wins over what the profile would have given that key.
           '';
         };
 
@@ -547,6 +551,7 @@ let
     "claude-code" = "claudeModelAssignments";
     "kiro-ide" = "kiroModelAssignments";
     "codex" = "codexModelAssignments";
+    "pi" = "piModelAssignments";
   };
 
   providerModels = lib.foldlAttrs (

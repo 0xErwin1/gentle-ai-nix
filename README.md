@@ -62,6 +62,8 @@ Options are grouped the way you think about the installation. Names inside the g
 
 Two different things are called a profile, and both live on the client. `providers.<name>.modelPreset` names a tier Gentle AI recommends — Codex, Claude and Kiro each offer their own, with their own vocabulary. `providers.opencode.profiles.<name>` is a model configuration *you* name, which generates its own orchestrator and phase agents so you can switch to it at runtime. OpenCode offers no recommended tier: it discovers what your subscription actually gives you access to and you assign from that.
 
+A profile and explicit assignments compose rather than exclude each other: name the profile for the shape you want, then override the phases you care about with `providers.<name>.models`, and the rest stay on the profile.
+
 Model profiles live on the client, not on the installation: `providers.codex.modelPreset = "low-cost"` alongside `providers.claude-code.modelPreset = "performance"` is a thing you can want, because subscriptions differ per client. Naming the profile rather than restating the models it resolves to is what keeps it the profile Gentle AI recommends today rather than the one it recommended when you wrote the file. A client that offers no profiles is reported rather than accepted and ignored.
 
 Engram is a component, not something to wire by hand: `components.engram.enable` is what configures the MCP server, the plugin and the protocol section in every client that takes them. Nix supplies the binary through `engramPackage` so nothing is downloaded at activation.
