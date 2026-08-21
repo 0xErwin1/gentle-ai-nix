@@ -195,6 +195,25 @@ let
           '';
         };
 
+        modelFamily = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "codex";
+          description = ''
+            The client whose model profile this one borrows, by Gentle AI's own
+            id.
+
+            A client with no catalogue of its own — Pi runs on whatever provider
+            it was pointed at — has a profile that can only assign reasoning
+            effort. Naming the provider it actually runs on takes that
+            provider's model table too, the one Gentle AI tunes, instead of
+            restating it here.
+
+            The agents that table does not name keep the profile's levels, and
+            `models` still wins over both.
+          '';
+        };
+
         provisionPackages = mkOption {
           type = types.bool;
           default = false;
@@ -624,6 +643,7 @@ let
     // whenSet "backgroundIntent" cfg.backgroundSubagents.opencode
     // whenSet "piBackgroundIntent" cfg.backgroundSubagents.pi
     // providerModels
+    // providerModelFamilies
     // whenSet "claudePhaseAssignments" cfg.models.claudePhases
     // whenSet "codexCarrilModelAssignments" cfg.models.codexCarril
     // whenSet "codexPhaseModelAssignments" cfg.models.codexPhases
@@ -771,6 +791,30 @@ let
         cp -r --no-preserve=mode,ownership ${rendered} "$out"
         ${lib.concatMapStringsSep "\n" (path: ''rm -f "$out/tree/${path}"'') withheld}
       '';
+
+  # Which contract field carries a borrowed model profile. Only one client has
+  # no catalogue of its own today, and one that is absent here is reported
+  # rather than accepted and ignored.
+  providerModelFamilyField = {
+    "pi" = "piModelFamily";
+  };
+
+  providerModelFamilies = lib.foldlAttrs (
+    acc: name: provider:
+    let
+      field = providerModelFamilyField.${name} or null;
+    in
+    if provider.modelFamily == null || field == null then
+      acc
+    else
+      acc // { ${field} = provider.modelFamily; }
+  ) { } enabledProviders;
+
+  unborrowableProviders = lib.attrNames (
+    lib.filterAttrs (
+      name: provider: provider.modelFamily != null && !(providerModelFamilyField ? ${name})
+    ) enabledProviders
+  );
 
   providerRoots = {
     "opencode" = ".config/opencode";
@@ -1302,6 +1346,10 @@ in
       {
         assertion = unknownSourceProviders == [ ];
         message = "programs.gentle-ai.customProviders.${lib.concatStringsSep ", " unknownSourceProviders} takes its harness from a client that is not enabled, or that has no known directory";
+      }
+      {
+        assertion = unborrowableProviders == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " unborrowableProviders}.modelFamily names a client that has a model catalogue of its own; assign its models directly";
       }
       {
         assertion = misplacedProfiles == [ ];

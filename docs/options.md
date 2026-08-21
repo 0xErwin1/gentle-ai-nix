@@ -1360,6 +1360,45 @@ null
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.modelFamily
+
+
+
+The client whose model profile this one borrows, by Gentle AI’s own
+id\.
+
+A client with no catalogue of its own — Pi runs on whatever provider
+it was pointed at — has a profile that can only assign reasoning
+effort\. Naming the provider it actually runs on takes that
+provider’s model table too, the one Gentle AI tunes, instead of
+restating it here\.
+
+The agents that table does not name keep the profile’s levels, and
+` models ` still wins over both\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"codex"
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.modelPreset
 
 
