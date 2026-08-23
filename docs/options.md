@@ -1822,11 +1822,13 @@ null
 
 Which Gentle AI release to build, by channel\.
 
-` stable ` and ` beta ` are the published ones\. ` contract ` is the branch
-carrying the declarative configuration contract this module renders
-through, and is the default only because no release has that contract
-yet: choosing a published channel builds fine and then fails when the
-renderer runs, because ` gentle-ai config ` does not exist there\.
+` stable ` is the newest tagged release\. ` beta ` is the tip of Gentle AI’s
+main branch, which is what ` gentle-ai upgrade --channel beta ` resolves
+to\. ` contract ` is main with the declarative configuration contract this
+module renders through on top, and is the default only because no
+upstream channel has that contract yet: choosing another one builds
+fine and then fails when the renderer runs, because ` gentle-ai config `
+does not exist there\.
 
 Setting ` package ` directly overrides this\.
 

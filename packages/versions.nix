@@ -22,15 +22,18 @@
     providesContract = false;
   };
 
-  # A release candidate is only ahead of stable while one is open. The 2.4.0
-  # candidates were promoted, so the newest build in this channel is the
-  # release itself, which is what `gentle-ai upgrade --channel beta` also
-  # resolves to. It moves ahead again with the first candidate after 2.4.0.
+  # Gentle AI's own beta channel is not a release candidate: `gentle-ai upgrade
+  # --channel beta` runs `go install .../cmd/gentle-ai@main`, so beta means the
+  # tip of main. A pin is how a flake expresses that, and refreshing it is what
+  # re-running the upgrade would have done.
+  #
+  # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
+  # build's evidence channel, so a build from here is never mistaken for stable.
   beta = {
-    version = "2.4.0";
+    version = "2.4.0-main.fdf2a76e";
     owner = "Gentleman-Programming";
-    rev = "v2.4.0";
-    hash = "sha256-53zHrrm1l/Pkh7H5HjbbIcv58ph4jZ5NaXX5KmKK714=";
+    rev = "fdf2a76e1b203d0d2521166825e5dcf3a864cf12";
+    hash = "sha256-6F3aNVE+ryA4SJlDw4GdFV/B/oST8CiO+avJwI7SFNA=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = false;
   };
@@ -40,13 +43,15 @@
   # for that reason alone: a released channel builds, and then the renderer
   # fails on `config`, which no version below has.
   #
+  # It tracks main the same way beta does, with the contract commits on top.
+  #
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.4.0-unstable-declarative-config";
+    version = "2.4.0-main.f253212e-declarative-config";
     owner = "0xErwin1";
-    rev = "b911ea310d31c61d8e53af9a2520fffdb75d3330";
-    hash = "sha256-uiXDOE0gR2fa8Zq34xfVHkyAA74yoGY22Jl+YYaHnT8=";
+    rev = "f253212e";
+    hash = "sha256-aRi0PN61RWxY013YOVc0Le4OxcsPyMwRuFBA6UZTq8w=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = true;
   };

@@ -229,8 +229,8 @@ programs.gentle-ai.release = "beta";   # stable | beta | contract
 | Channel | What it builds |
 |---------|----------------|
 | `stable` | the newest release |
-| `beta` | the newest release candidate, or the release once its candidates are promoted |
-| `contract` | the branch carrying the declarative configuration contract |
+| `beta` | the tip of Gentle AI's main branch, the same thing `gentle-ai upgrade --channel beta` installs |
+| `contract` | main, with the declarative configuration contract on top |
 
 The versions each one resolves to live in
 [`packages/versions.nix`](packages/versions.nix), alongside whether that release
@@ -238,8 +238,8 @@ has `gentle-ai config` at all.
 
 `contract` is the default, and only because the declarative configuration
 contract this flake renders through is not in a release yet. Choosing a
-published channel is rejected while the configuration is evaluated, naming the
-reason, rather than failing later inside the renderer. Setting
+channel without it is rejected while the configuration is evaluated, naming
+the reason, rather than failing later inside the renderer. Setting
 `programs.gentle-ai.package` overrides the channel entirely.
 
 The channels are also packages: `nix build .#gentle-ai-stable`,
