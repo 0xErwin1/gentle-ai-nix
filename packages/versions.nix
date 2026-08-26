@@ -30,10 +30,10 @@
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
   beta = {
-    version = "2.4.0-main.fdf2a76e";
+    version = "2.4.0-main.9d223036";
     owner = "Gentleman-Programming";
-    rev = "fdf2a76e1b203d0d2521166825e5dcf3a864cf12";
-    hash = "sha256-6F3aNVE+ryA4SJlDw4GdFV/B/oST8CiO+avJwI7SFNA=";
+    rev = "9d22303623a91e6db9a1781a7f253a847663f985";
+    hash = "sha256-Sm5jte8TB1Y+k3jURylIbukjYBHgeNu5jCuqviFMzj0=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = false;
   };
@@ -48,10 +48,10 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.4.0-main.f253212e-declarative-config";
+    version = "2.4.0-main.da4226ec-declarative-config";
     owner = "0xErwin1";
-    rev = "f253212e";
-    hash = "sha256-aRi0PN61RWxY013YOVc0Le4OxcsPyMwRuFBA6UZTq8w=";
+    rev = "da4226ec";
+    hash = "sha256-lN7B5r0BCB/ykmBK9ZgdSxIQ6n0Un8JDvmCquT/GV8k=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = true;
   };
