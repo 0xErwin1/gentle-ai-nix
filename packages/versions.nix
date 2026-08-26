@@ -29,11 +29,13 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
+  # The tip happens to be tagged v2.5.0-rc.1 right now, but the channel is main
+  # rather than that tag: it moves on with the branch, not with the candidate.
   beta = {
-    version = "2.4.0-main.9d223036";
+    version = "2.5.0-main.7afe50d1";
     owner = "Gentleman-Programming";
-    rev = "9d22303623a91e6db9a1781a7f253a847663f985";
-    hash = "sha256-Sm5jte8TB1Y+k3jURylIbukjYBHgeNu5jCuqviFMzj0=";
+    rev = "7afe50d1";
+    hash = "sha256-h39ap/cKdThC+VQ4mUuYmp6bkHWEz/2t2TTWnJM/5PQ=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = false;
   };
@@ -48,10 +50,10 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.4.0-main.da4226ec-declarative-config";
+    version = "2.5.0-main.8a305338-declarative-config";
     owner = "0xErwin1";
-    rev = "da4226ec";
-    hash = "sha256-lN7B5r0BCB/ykmBK9ZgdSxIQ6n0Un8JDvmCquT/GV8k=";
+    rev = "8a305338";
+    hash = "sha256-NqKgZxnSl0kheDwwbekltmt87bZ7ipMK9sPJYbNQpTQ=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = true;
   };
