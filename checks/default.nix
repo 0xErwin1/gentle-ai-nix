@@ -388,6 +388,96 @@ in
         touch "$out"
       '';
 
+  # A borrowed harness carries the source client's directory in its own prose,
+  # so a client reading the copy is told to open a file under the tree it was
+  # copied out of -- which is the tree it refuses to read through, for the very
+  # client the copy exists for. Both directions are asserted, because a rewriter
+  # that ran unconditionally would be as wrong as one that never ran.
+  customProviderReferencesAreRewritten =
+    let
+      borrowing = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+
+            providers.claude-code.enable = true;
+            components.skills.enable = true;
+
+            extraFiles.".claude/agents/check-reference.md".text = ''
+              Read ~/.claude/skills/_shared/check-workflow.md, then .claude/CLAUDE.md.
+            '';
+
+            customProviders = {
+              agens = {
+                root = ".config/agens";
+                from = "claude-code";
+                rewriteReferences = true;
+                assets = {
+                  "CLAUDE.md" = "AGENTS.md";
+                  agents = "agents";
+                  skills = "skills";
+                };
+              };
+
+              verbatim = {
+                root = ".config/verbatim";
+                from = "claude-code";
+                assets.agents = "agents";
+              };
+            };
+          };
+        }
+      ];
+
+      sourceFor =
+        target:
+        (lib.findSingle (entry: entry.target == target) null null (
+          lib.attrValues borrowing.config.home.file
+        )).source;
+
+      borrowed = borrowing.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-custom-provider-references"
+      {
+        rewritten = sourceFor ".config/agens/agents";
+        untouched = sourceFor ".config/verbatim/agents";
+        original = "${borrowed}/tree/.claude/agents";
+      }
+      ''
+        set -euo pipefail
+
+        reference="$rewritten/check-reference.md"
+
+        grep -qF '~/.config/agens/skills/_shared/check-workflow.md' "$reference" || {
+          echo "a reference into the source client's skills was left pointing there:" >&2
+          cat "$reference" >&2
+          exit 1
+        }
+        grep -qF '.config/agens/AGENTS.md' "$reference" || {
+          echo "a renamed asset was not referenced under the name it was renamed to:" >&2
+          cat "$reference" >&2
+          exit 1
+        }
+        grep -qF '.claude/' "$reference" && {
+          echo "a reference to the source client's directory survived:" >&2
+          cat "$reference" >&2
+          exit 1
+        }
+
+        # Without the option the assets are the rendered subtree itself, not a
+        # copy of it: the bytes have to be the same ones, and the path too.
+        ${lib.optionalString (sourceFor ".config/verbatim/agents" != "${borrowed}/tree/.claude/agents") ''
+          echo "a provider that asked for no rewriting was given a rewritten copy" >&2
+          exit 1
+        ''}
+        diff -r "$original" "$untouched" || {
+          echo "a provider that asked for no rewriting had its assets changed" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
     cp -r --no-preserve=mode,ownership ${self} source
     ${

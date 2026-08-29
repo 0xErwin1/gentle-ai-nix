@@ -403,6 +403,31 @@ let
             replaced on every activation and edits under it do not survive.
           '';
         };
+
+        rewriteReferences = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Point the assets' own cross-references at this client's directory
+            instead of the source client's.
+
+            A harness names the directory it was rendered for: an agent taken
+            from Claude Code tells the model to read
+            `~/.claude/skills/_shared/...`, which sends this client back into
+            the source tree even though the same file arrived beside it. Where
+            the assets were copied precisely because the client refuses to read
+            through a symbolic link, that reference resolves to a path it cannot
+            open at all.
+
+            The replacements come from `assets`, so the mapping is the one
+            declared above rather than a second copy of it that drifts: a path
+            named there is rewritten to what it was renamed to, and the source
+            directory covers everything it does not name. Rewriting happens at
+            build time, so what activation delivers is the store copy, and only
+            text is touched — anything that is not valid UTF-8 arrives byte for
+            byte.
+          '';
+        };
       };
     }
   );
@@ -776,6 +801,13 @@ let
     ];
   } (builtins.readFile ../lib/merge.py);
 
+  referenceRewriter = pkgs.writers.writePython3Bin "gentle-ai-rewrite" {
+    flakeIgnore = [
+      "E501"
+      "W503"
+    ];
+  } (builtins.readFile ../lib/rewrite.py);
+
   secretArguments =
     lib.concatMapStringsSep " " (path: "--env-file ${lib.escapeShellArg path}") cfg.secrets.envFiles
     + " "
@@ -834,7 +866,8 @@ let
     lib.mapAttrsToList (
       name: provider:
       let
-        source = "${rendered}/tree/${providerRoots.${provider.from}}";
+        sourceRoot = providerRoots.${provider.from};
+        source = "${rendered}/tree/${sourceRoot}";
         pairs =
           if provider.assets == { } then
             [
@@ -845,10 +878,32 @@ let
             ]
           else
             lib.mapAttrsToList (from: to: { inherit from to; }) provider.assets;
+
+        # What the assets say about themselves, derived from what they were
+        # renamed to rather than declared a second time. The source root is the
+        # last entry so it covers whatever the mapping does not name; the
+        # rewriter applies the most specific match, so a renamed file keeps its
+        # new name instead of its old one under the new root.
+        replacements =
+          map (pair: "${sourceRoot}/${pair.from}=${provider.root}/${pair.to}") (
+            builtins.filter (pair: pair.from != ".") pairs
+          )
+          ++ [ "${sourceRoot}/=${provider.root}/" ];
+
+        # Rewriting at build time keeps activation the plain copy it is, and
+        # puts the result in the store where it is reproducible.
+        rewritten = pkgs.runCommandLocal "gentle-ai-custom-provider-${name}" { } ''
+          ${lib.getExe referenceRewriter} \
+            --source ${lib.escapeShellArg source} \
+            --target "$out" \
+            ${lib.concatMapStringsSep " " (entry: "--replace ${lib.escapeShellArg entry}") replacements}
+        '';
+
+        delivered = if provider.rewriteReferences then "${rewritten}" else source;
       in
       map (pair: {
         inherit (provider) delivery;
-        source = "${source}/${pair.from}";
+        source = "${delivered}/${pair.from}";
         target = "${provider.root}/${pair.to}";
       }) pairs
     ) cfg.customProviders

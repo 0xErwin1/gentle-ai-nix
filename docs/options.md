@@ -413,6 +413,44 @@ string
 
 
 
+## programs\.gentle-ai\.customProviders\.\<name>\.rewriteReferences
+
+
+
+Point the assets’ own cross-references at this client’s directory
+instead of the source client’s\.
+
+A harness names the directory it was rendered for: an agent taken
+from Claude Code tells the model to read
+` ~/.claude/skills/_shared/... `, which sends this client back into
+the source tree even though the same file arrived beside it\. Where
+the assets were copied precisely because the client refuses to read
+through a symbolic link, that reference resolves to a path it cannot
+open at all\.
+
+The replacements come from ` assets `, so the mapping is the one
+declared above rather than a second copy of it that drifts: a path
+named there is rewritten to what it was renamed to, and the source
+directory covers everything it does not name\. Rewriting happens at
+build time, so what activation delivers is the store copy, and only
+text is touched — anything that is not valid UTF-8 arrives byte for
+byte\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
 ## programs\.gentle-ai\.customProviders\.\<name>\.root
 
 

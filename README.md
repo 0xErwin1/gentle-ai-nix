@@ -123,9 +123,17 @@ customProviders.agens = {
   root = ".config/agens";
   from = "claude-code";
   delivery = "copy";                      # for a client that refuses symlinks
+  rewriteReferences = true;               # so the prose names this client's own tree
   assets = { "CLAUDE.md" = "AGENTS.md"; agents = "agents"; skills = "skills"; };
 };
 ```
+
+A borrowed harness names the directory it was rendered for, so an agent taken
+from Claude Code still tells the model to read `~/.claude/skills/...` — back
+into the tree this client refuses to read through, which is why the assets were
+copied in the first place. `rewriteReferences` rewrites those references from
+the `assets` mapping itself, at build time, so the copy points at its own files
+and the mapping is not restated anywhere that could drift from it.
 
 **A client whose harness is packages rather than files** — Pi installs its
 through its own tool — cannot have that part rendered at all, because installing
