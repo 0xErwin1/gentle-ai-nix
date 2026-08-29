@@ -404,6 +404,32 @@ let
           '';
         };
 
+        frontmatterDefaults = mkOption {
+          type = types.attrsOf (types.attrsOf types.str);
+          default = { };
+          example = literalExpression ''
+            {
+              agents = {
+                mode = "subagent";
+              };
+            }
+          '';
+          description = ''
+            Frontmatter keys filled into the markdown files of the named asset
+            when a file does not already state them, keyed by the asset's source
+            path as declared in `assets`.
+
+            A borrowed harness speaks the source client's dialect, and this
+            client may require a field the source never writes: agens refuses an
+            agent definition without `mode:`, while Claude Code has no such
+            field. That requirement belongs to this projection rather than to
+            the source files, so it is declared here and inserted at build time.
+
+            Only a missing key is filled — a file that states the key keeps its
+            own value — and a file without a frontmatter block is left alone.
+          '';
+        };
+
         rewriteReferences = mkOption {
           type = types.bool;
           default = false;
@@ -808,6 +834,13 @@ let
     ];
   } (builtins.readFile ../lib/rewrite.py);
 
+  frontmatterFiller = pkgs.writers.writePython3Bin "gentle-ai-frontmatter" {
+    flakeIgnore = [
+      "E501"
+      "W503"
+    ];
+  } (builtins.readFile ../lib/frontmatter.py);
+
   secretArguments =
     lib.concatMapStringsSep " " (path: "--env-file ${lib.escapeShellArg path}") cfg.secrets.envFiles
     + " "
@@ -900,10 +933,31 @@ let
         '';
 
         delivered = if provider.rewriteReferences then "${rewritten}" else source;
+
+        # A required key the source dialect never writes is filled per asset,
+        # after the rewrite, so the filled copy carries this client's own
+        # references too.
+        filled =
+          pair:
+          let
+            defaults = provider.frontmatterDefaults.${pair.from};
+          in
+          pkgs.runCommandLocal "gentle-ai-custom-provider-${name}-frontmatter" { } ''
+            ${lib.getExe frontmatterFiller} \
+              --source ${lib.escapeShellArg "${delivered}/${pair.from}"} \
+              --target "$out" \
+              ${lib.concatMapStringsSep " " (
+                key: "--default ${lib.escapeShellArg "${key}=${defaults.${key}}"}"
+              ) (lib.attrNames defaults)}
+          '';
       in
       map (pair: {
         inherit (provider) delivery;
-        source = "${delivered}/${pair.from}";
+        source =
+          if provider.frontmatterDefaults ? ${pair.from} then
+            "${filled pair}"
+          else
+            "${delivered}/${pair.from}";
         target = "${provider.root}/${pair.to}";
       }) pairs
     ) cfg.customProviders

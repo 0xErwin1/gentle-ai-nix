@@ -478,6 +478,97 @@ in
         touch "$out"
       '';
 
+  # A receiving client may require a frontmatter key the source dialect never
+  # writes. The default has to appear where it was missing, must not overwrite
+  # a stated value, and must leave every provider that declared no defaults
+  # with the untouched subtree.
+  customProviderFrontmatterDefaultsAreFilled =
+    let
+      borrowing = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+
+            providers.claude-code.enable = true;
+
+            extraFiles.".claude/agents/check-missing.md".text = ''
+              ---
+              name: check-missing
+              description: An agent whose source dialect states no mode.
+              ---
+
+              Body.
+            '';
+
+            extraFiles.".claude/agents/check-stated.md".text = ''
+              ---
+              name: check-stated
+              description: An agent that already states a mode of its own.
+              mode: all
+              ---
+
+              Body.
+            '';
+
+            customProviders = {
+              agens = {
+                root = ".config/agens";
+                from = "claude-code";
+                frontmatterDefaults.agents.mode = "subagent";
+                assets.agents = "agents";
+              };
+
+              verbatim = {
+                root = ".config/verbatim";
+                from = "claude-code";
+                assets.agents = "agents";
+              };
+            };
+          };
+        }
+      ];
+
+      sourceFor =
+        target:
+        (lib.findSingle (entry: entry.target == target) null null (
+          lib.attrValues borrowing.config.home.file
+        )).source;
+
+      borrowed = borrowing.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-custom-provider-frontmatter"
+      {
+        filledTree = sourceFor ".config/agens/agents";
+        untouched = sourceFor ".config/verbatim/agents";
+        original = "${borrowed}/tree/.claude/agents";
+      }
+      ''
+        set -euo pipefail
+
+        grep -qxF 'mode: subagent' "$filledTree/check-missing.md" || {
+          echo "a missing frontmatter key was not filled with its default:" >&2
+          cat "$filledTree/check-missing.md" >&2
+          exit 1
+        }
+        grep -qxF 'mode: all' "$filledTree/check-stated.md" || {
+          echo "a stated frontmatter value did not survive the default:" >&2
+          cat "$filledTree/check-stated.md" >&2
+          exit 1
+        }
+        grep -qxF 'mode: subagent' "$filledTree/check-stated.md" && {
+          echo "a default was inserted beside a stated value:" >&2
+          cat "$filledTree/check-stated.md" >&2
+          exit 1
+        }
+
+        diff -r "$original" "$untouched" || {
+          echo "a provider that declared no defaults had its assets changed" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
     cp -r --no-preserve=mode,ownership ${self} source
     ${

@@ -413,6 +413,51 @@ string
 
 
 
+## programs\.gentle-ai\.customProviders\.\<name>\.frontmatterDefaults
+
+
+
+Frontmatter keys filled into the markdown files of the named asset
+when a file does not already state them, keyed by the asset’s source
+path as declared in ` assets `\.
+
+A borrowed harness speaks the source client’s dialect, and this
+client may require a field the source never writes: agens refuses an
+agent definition without ` mode: `, while Claude Code has no such
+field\. That requirement belongs to this projection rather than to
+the source files, so it is declared here and inserted at build time\.
+
+Only a missing key is filled — a file that states the key keeps its
+own value — and a file without a frontmatter block is left alone\.
+
+
+
+*Type:*
+attribute set of attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  agents = {
+    mode = "subagent";
+  };
+}
+
+```
+
+
+
 ## programs\.gentle-ai\.customProviders\.\<name>\.rewriteReferences
 
 
