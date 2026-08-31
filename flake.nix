@@ -31,10 +31,12 @@
         let
           pkgs = import nixpkgs { inherit system; };
           releases = import ./packages/versions.nix;
+          engramReleases = import ./packages/engram-versions.nix;
           gentleAiFor = release: pkgs.callPackage ./packages/gentle-ai.nix { inherit release; };
+          engramFor = release: pkgs.callPackage ./packages/engram.nix { inherit release; };
 
           gentle-ai = gentleAiFor releases.contract;
-          engram = pkgs.callPackage ./packages/engram.nix { };
+          engram = engramFor engramReleases.stable;
         in
         {
           inherit gentle-ai engram;
@@ -44,6 +46,11 @@
           # take any of them and `nix run` can reach them by name.
           gentle-ai-stable = gentleAiFor releases.stable;
           gentle-ai-beta = gentleAiFor releases.beta;
+
+          # Engram's candidate, selectable and never the default: its own
+          # release notes ask that a stable installation stay available rather
+          # than be replaced by it.
+          engram-rc = engramFor engramReleases.rc;
 
           # Reference documentation for every option this module declares.
           # Regenerate the committed copy with:

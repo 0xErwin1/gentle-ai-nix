@@ -68,6 +68,21 @@ Model profiles live on the client, not on the installation: `providers.codex.mod
 
 Engram is a component, not something to wire by hand: `components.engram.enable` is what configures the MCP server, the plugin and the protocol section in every client that takes them. Nix supplies the binary through `engramPackage` so nothing is downloaded at activation.
 
+Engram is built per channel too, in
+[`packages/engram-versions.nix`](packages/engram-versions.nix). `stable` is the
+default and the only one a plain `engramPackage` resolves to. The 2.0 candidate
+is available as `engram-rc`, and taking it is a decision written into the
+configuration rather than a version bump that arrives with a flake update:
+
+```nix
+programs.gentle-ai.engramPackage = gentle-ai-nix.packages.${pkgs.system}.engram-rc;
+```
+
+Its own release notes ask that a stable installation stay available rather than
+be replaced, and two of its named risk areas apply to any store with history:
+legacy sessions with blank ownership, which `engram doctor` reports, and
+Pi/OpenCode session attribution becoming fail-closed on the runtime identity.
+
 A community tool takes the same shape one level down. `communityTools.codegraph.enable` writes the guidance, `communityTools.codegraph.package` is where its binary comes from, and the CLI call that points it at the declared clients runs at activation from the commands Gentle AI put in the manifest:
 
 ```nix

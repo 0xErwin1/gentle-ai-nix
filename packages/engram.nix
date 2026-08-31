@@ -3,20 +3,22 @@
   buildGoModule,
   fetchFromGitHub,
   git,
+
+  # Which release to build. The channels live in engram-versions.nix so that
+  # adding one is a data entry rather than another copy of this expression.
+  release ? (import ./engram-versions.nix).stable,
 }:
 
-buildGoModule rec {
+buildGoModule {
   pname = "engram";
-  version = "1.20.0";
+  inherit (release) version vendorHash;
 
   src = fetchFromGitHub {
+    inherit (release) rev hash;
     owner = "Gentleman-Programming";
     repo = "engram";
-    rev = "v${version}";
-    hash = "sha256-qdKAll7N0HtJRbZYilzatVCUz1Tr+pqM217Y8O+Csjs=";
   };
 
-  vendorHash = "sha256-JBwLW62M6SFXqgYKeSdUI136B42f3h43V9ud1qUW484=";
   proxyVendor = true;
 
   subPackages = [ "cmd/engram" ];
@@ -28,7 +30,7 @@ buildGoModule rec {
   ldflags = [
     "-s"
     "-w"
-    "-X main.version=${version}"
+    "-X main.version=${release.version}"
   ];
 
   meta = {
