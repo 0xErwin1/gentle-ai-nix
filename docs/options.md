@@ -1847,6 +1847,38 @@ false
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.provisionRefresh
+
+
+
+Run this client’s provisioning commands on every activation instead
+of once per change to the command list\.
+
+The commands a client declares name packages without naming
+versions, so their text never changes while what they resolve to
+does\. Stamping them by their own text therefore means they run once
+and the packages stay at whatever the first activation installed,
+with no signal that a newer one exists\.
+
+Enabling this trades a network call on every switch for packages
+that follow their channel\. It is off by default because the cost is
+paid by every activation, including the ones that changed nothing\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.settings
 
 

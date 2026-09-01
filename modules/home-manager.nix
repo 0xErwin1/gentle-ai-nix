@@ -234,6 +234,25 @@ let
           '';
         };
 
+        provisionRefresh = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Run this client's provisioning commands on every activation instead
+            of once per change to the command list.
+
+            The commands a client declares name packages without naming
+            versions, so their text never changes while what they resolve to
+            does. Stamping them by their own text therefore means they run once
+            and the packages stay at whatever the first activation installed,
+            with no signal that a newer one exists.
+
+            Enabling this trades a network call on every switch for packages
+            that follow their channel. It is off by default because the cost is
+            paid by every activation, including the ones that changed nothing.
+          '';
+        };
+
         provisionEnvironment = mkOption {
           type = types.attrsOf types.str;
           default = { };
@@ -1582,7 +1601,9 @@ in
                   run ${lib.getExe provisioner} \
                     --manifest ${lib.escapeShellArg "${rendered}/manifest.json"} \
                     --agent ${lib.escapeShellArg name} \
-                    --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"}
+                    --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"} ${
+                      lib.optionalString cfg.providers.${name}.provisionRefresh "--force"
+                    }
               '') provisioningProviders
               ++ map (name: ''
                 PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
