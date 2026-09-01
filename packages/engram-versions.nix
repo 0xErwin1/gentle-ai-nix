@@ -14,19 +14,22 @@
     vendorHash = "sha256-JBwLW62M6SFXqgYKeSdUI136B42f3h43V9ud1qUW484=";
   };
 
-  # The 2.0 candidate is not a drop-in replacement for the stable build, and its
-  # own release notes say so: keep a stable installation available rather than
-  # replacing one with it. It stays selectable and never the default, so taking
-  # it is a decision recorded in the configuration rather than a version bump
-  # that arrives with a flake update.
+  # A 2.0 candidate, and a major version is where a store with history is at
+  # risk. It stays selectable and never the default, so taking it is a decision
+  # recorded in the configuration rather than a version bump that arrives with a
+  # flake update.
   #
-  # Two of its named risk areas apply to any store with history: legacy sessions
-  # with blank ownership, which `engram doctor` reports, and Pi/OpenCode session
-  # attribution becoming fail-closed on the runtime identity.
+  # The rc.1 notes asked outright that a stable installation stay available
+  # rather than be replaced, and named two risk areas that apply to any store
+  # with history: legacy sessions with blank ownership, which `engram doctor`
+  # reports, and Pi/OpenCode session attribution becoming fail-closed on the
+  # runtime identity. Later candidates do not restate either, so the reason this
+  # is not the default is the prerelease status itself, not a warning that has
+  # to be reprinted every time.
   rc = {
-    version = "2.0.0-rc.1";
-    rev = "v2.0.0-rc.1";
-    hash = "sha256-2H7nRNx2SmL2MOfH1sodFCLD4XC/q2aiJMNoL0HH6KA=";
+    version = "2.0.0-rc.2";
+    rev = "v2.0.0-rc.2";
+    hash = "sha256-6a9Db/InTwy8fiOvlZR/NAA41I3rbpLs2Lb5Ah5zaro=";
     vendorHash = "sha256-JBwLW62M6SFXqgYKeSdUI136B42f3h43V9ud1qUW484=";
   };
 }

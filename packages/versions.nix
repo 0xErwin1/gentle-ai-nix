@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "2.4.0";
+    version = "2.5.0";
     owner = "Gentleman-Programming";
-    rev = "v2.4.0";
-    hash = "sha256-53zHrrm1l/Pkh7H5HjbbIcv58ph4jZ5NaXX5KmKK714=";
+    rev = "v2.5.0";
+    hash = "sha256-SQqTZabmooPt+usHp3SMsoJMl1ove64lxwLzCxPsVMA=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = false;
   };
@@ -29,13 +29,14 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # The newest candidate is v2.5.0-rc.3, and main is already 20 commits past it.
-  # The channel is main rather than any tag: it moves with the branch.
+  # Main's tip is exactly where v2.5.0 was tagged, so this channel builds the
+  # release today. It is still main rather than that tag, and moves ahead again
+  # with the first commit after it.
   beta = {
-    version = "2.5.0-main.3ef1e663";
+    version = "2.5.0-main.f5dd1a6c";
     owner = "Gentleman-Programming";
-    rev = "3ef1e663";
-    hash = "sha256-YKMt7tss7Q3ixD+8UnymLMv2Ut0DHnUl+PPFn2/SCbg=";
+    rev = "f5dd1a6c";
+    hash = "sha256-SQqTZabmooPt+usHp3SMsoJMl1ove64lxwLzCxPsVMA=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = false;
   };
@@ -50,10 +51,10 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.5.0-main.1bb90c3a-declarative-config";
+    version = "2.5.0-main.f34983fb-declarative-config";
     owner = "0xErwin1";
-    rev = "1bb90c3a";
-    hash = "sha256-vpJ8RnQRpcUswbPvbCl165lqtT+22wQT6uuKhyBjsgE=";
+    rev = "f34983fb";
+    hash = "sha256-GMCDqyxkSYrhKg9+jtl1FQ+TuBQez349axJ1eCM/YKg=";
     vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
     providesContract = true;
   };
