@@ -86,13 +86,10 @@ Pi/OpenCode session attribution becoming fail-closed on the runtime identity.
 A community tool takes the same shape one level down. `communityTools.codegraph.enable` writes the guidance, `communityTools.codegraph.package` is where its binary comes from, and the CLI call that points it at the declared clients runs at activation from the commands Gentle AI put in the manifest:
 
 ```nix
-communityTools.codegraph = {
-  enable = true;
-  package = pkgs.codegraph;
-};
+communityTools.codegraph.enable = true;
 ```
 
-Without the package the tool is still configured and the binary is your business. Without `provision` — it defaults on — the guidance is written and nothing is wired, which is a configuration describing a server that was never set up.
+CodeGraph is packaged here, so `package` already points at it and the binary comes from Nix rather than the `npm install -g` Gentle AI would otherwise print. Set it yourself to pin a different one. For a tool this flake does not package the default is null, and then the tool is configured and the binary is your business. Without `provision` — it defaults on — the guidance is written and nothing is wired, which is a configuration describing a server that was never set up.
 
 ## Editing the harness
 

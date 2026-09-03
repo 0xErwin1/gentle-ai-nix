@@ -20,6 +20,7 @@
 let
   inherit (lib)
     literalExpression
+    literalMD
     mkEnableOption
     mkIf
     mkOption
@@ -37,6 +38,16 @@ let
     release = selectedRelease;
   };
   defaultEngramPackage = pkgs.callPackage ../packages/engram.nix { };
+
+  # The community tools this flake packages, keyed by Gentle AI's own tool id.
+  # Like providerRoots this is contract knowledge rather than asset knowledge:
+  # the option is generic over the tool name, so a name-keyed table is the only
+  # way a packaged tool can carry its own default without the module enumerating
+  # the tools Gentle AI knows. A tool absent from here still defaults to null and
+  # is configured with whatever binary the operator supplies.
+  communityToolPackages = {
+    "codegraph" = pkgs.callPackage ../packages/codegraph.nix { };
+  };
 
   enabledNames = group: lib.attrNames (lib.filterAttrs (_: value: value.enable) group);
   disabledNames = group: lib.attrNames (lib.filterAttrs (_: value: !value.enable) group);
@@ -1135,19 +1146,21 @@ in
 
               package = mkOption {
                 type = types.nullOr types.package;
-                default = null;
+                default = communityToolPackages.${name} or null;
+                defaultText = literalMD "the package this flake ships for the tool, when it ships one, and `null` otherwise";
                 example = literalExpression "pkgs.codegraph";
                 description = ''
                   The tool's own binary, installed alongside the harness when
                   this tool is enabled.
 
                   Gentle AI would otherwise fetch it through a package manager
-                  at install time. Naming it here is the same choice the engram
-                  component takes: the binary comes from Nix, so nothing is
-                  downloaded at activation and the version is the one this
-                  configuration pins.
+                  at install time. Taking it from Nix is the same choice the
+                  engram component makes: nothing is downloaded at activation
+                  and the version is the one this configuration pins.
 
-                  Left null, the tool is configured and the binary is your
+                  A tool this flake packages already defaults to that package,
+                  so enabling it is enough. For any other tool the default is
+                  null, and then the tool is configured and the binary is your
                   business.
                 '';
               };

@@ -177,12 +177,13 @@ The tool’s own binary, installed alongside the harness when
 this tool is enabled\.
 
 Gentle AI would otherwise fetch it through a package manager
-at install time\. Naming it here is the same choice the engram
-component takes: the binary comes from Nix, so nothing is
-downloaded at activation and the version is the one this
-configuration pins\.
+at install time\. Taking it from Nix is the same choice the
+engram component makes: nothing is downloaded at activation
+and the version is the one this configuration pins\.
 
-Left null, the tool is configured and the binary is your
+A tool this flake packages already defaults to that package,
+so enabling it is enough\. For any other tool the default is
+null, and then the tool is configured and the binary is your
 business\.
 
 
@@ -193,10 +194,7 @@ null or package
 
 
 *Default:*
-
-```nix
-null
-```
+the package this flake ships for the tool, when it ships one, and ` null ` otherwise
 
 
 

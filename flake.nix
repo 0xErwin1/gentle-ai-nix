@@ -32,14 +32,16 @@
           pkgs = import nixpkgs { inherit system; };
           releases = import ./packages/versions.nix;
           engramReleases = import ./packages/engram-versions.nix;
+          codegraphReleases = import ./packages/codegraph-versions.nix;
           gentleAiFor = release: pkgs.callPackage ./packages/gentle-ai.nix { inherit release; };
           engramFor = release: pkgs.callPackage ./packages/engram.nix { inherit release; };
 
           gentle-ai = gentleAiFor releases.contract;
           engram = engramFor engramReleases.stable;
+          codegraph = pkgs.callPackage ./packages/codegraph.nix { release = codegraphReleases.stable; };
         in
         {
-          inherit gentle-ai engram;
+          inherit gentle-ai engram codegraph;
           default = gentle-ai;
 
           # One package per release channel, so `programs.gentle-ai.package` can
