@@ -14,11 +14,11 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "2.6.0";
+    version = "2.7.0";
     owner = "Gentleman-Programming";
-    rev = "v2.6.0";
-    hash = "sha256-ETCwQerMww7ufxI9at2aB7FH0Hm3XclfCWH1ZRjv1sI=";
-    vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
+    rev = "v2.7.0";
+    hash = "sha256-xlna0OcDRp/LT9eL/K3A5vCk/91SilydWgySQ3ZjuJ0=";
+    vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
 
@@ -29,13 +29,13 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # Main is 17 commits past v2.6.0, so this channel is ahead of stable again.
+  # Main is 17 commits past v2.7.0, so this channel is ahead of stable again.
   beta = {
-    version = "2.6.0-main.20d7574f";
+    version = "2.7.0-main.3415adfb";
     owner = "Gentleman-Programming";
-    rev = "20d7574f";
-    hash = "sha256-dm7KhPt6GFEpP3r4nkHsfTEEWXKlPqeMF9DmTi7QKJI=";
-    vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
+    rev = "3415adfbccd29041ec181cdc4e87f883073c61d2";
+    hash = "sha256-gTwTKNzxJ7lt6U6U0QiLHZUZb4Vkt39oT6AiaM+Ao0s=";
+    vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
 
@@ -49,11 +49,11 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.6.0-main.560b1a15-declarative-config";
+    version = "2.7.0-main.16af6835-declarative-config";
     owner = "0xErwin1";
-    rev = "560b1a15";
-    hash = "sha256-IM5A+Z6jHC67TpUwmq1+p8bMQrXgN5mx5JqIshqKNsY=";
-    vendorHash = "sha256-qeeD+omJzlqolHGzGx2E60fEucjweb62UQY3N/0xxgs=";
+    rev = "16af68354b5239470de0a0a91fd2678d0f2caacc";
+    hash = "sha256-Z/5qwiyXl/JejWeoszwPgw00d5SXhMyExUes29Js5as=";
+    vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
 }
