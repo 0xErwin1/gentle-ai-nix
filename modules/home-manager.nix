@@ -123,7 +123,8 @@ let
           example = literalExpression ''{ share = "disabled"; }'';
           description = ''
             Provider-specific configuration the neutral contract does not model.
-            It is merged verbatim into this provider's settings and no other's.
+            It is recursively merged into this provider's settings and no other's.
+            Values from `extensions` at the same leaf override these settings.
           '';
         };
 
@@ -744,7 +745,7 @@ let
     inherit selection;
   }
   // whenSet "roles" (lib.mapAttrsToList role cfg.roles)
-  // whenSet "extensions" (providerSettings // cfg.extensions);
+  // whenSet "extensions" (lib.recursiveUpdate providerSettings cfg.extensions);
 
   documentFile = pkgs.writeText "gentle-ai-document.json" (builtins.toJSON document);
 
@@ -1331,6 +1332,10 @@ in
       description = ''
         Provider-specific configuration keyed by provider, for a provider not
         declared through `providers`. Prefer `providers.<name>.settings`.
+
+        When both options name a provider, their attribute sets merge
+        recursively. `extensions` wins at the same leaf; lists are replaced,
+        not combined.
       '';
     };
 

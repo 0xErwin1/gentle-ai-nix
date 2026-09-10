@@ -164,6 +164,68 @@ in
     grep -q '"resources"' "$rendered/manifest.json"
   '';
 
+  # Settings and extensions describe the same provider document. Their nested
+  # values must compose, while extensions remain the explicit override at a
+  # colliding leaf and lists remain replacements.
+  providerSettingsMerge =
+    let
+      providerSettingsConfiguration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers = {
+              claude-code = {
+                enable = true;
+                settings = {
+                  providerOnly = "provider-only";
+                  nested = {
+                    providerOnly = "nested-provider-only";
+                    shared = "provider";
+                    list = [ "provider-list" ];
+                  };
+                };
+              };
+              opencode = {
+                enable = true;
+                settings.providerOnly = "other-provider";
+              };
+              pi.enable = true;
+            };
+            extensions = {
+              claude-code = {
+                extensionOnly = "extension-only";
+                nested = {
+                  extensionOnly = "nested-extension-only";
+                  shared = "extension";
+                  list = [ "extension-list" ];
+                };
+              };
+              pi.extensionOnly = "one-sided-extension";
+            };
+          };
+        }
+      ];
+      document = providerSettingsConfiguration.config.programs.gentle-ai.document;
+      providerSettingsRendered = providerSettingsConfiguration.config.programs.gentle-ai.rendered;
+    in
+    assert document.extensions."claude-code".providerOnly == "provider-only";
+    assert document.extensions."claude-code".extensionOnly == "extension-only";
+    assert document.extensions."claude-code".nested.providerOnly == "nested-provider-only";
+    assert document.extensions."claude-code".nested.extensionOnly == "nested-extension-only";
+    assert document.extensions."claude-code".nested.shared == "extension";
+    assert document.extensions."claude-code".nested.list == [ "extension-list" ];
+    assert document.extensions.opencode.providerOnly == "other-provider";
+    assert document.extensions.pi.extensionOnly == "one-sided-extension";
+    treeCheck "provider-settings-merge" ''
+      settings="${providerSettingsRendered}/tree/.claude/settings.json"
+      grep -q 'provider-only' "$settings" || { echo "the provider setting was not rendered" >&2; exit 1; }
+      grep -q 'extension-only' "$settings" || { echo "the extension setting was not rendered" >&2; exit 1; }
+      grep -q 'nested-provider-only' "$settings" || { echo "the nested provider setting was not rendered" >&2; exit 1; }
+      grep -q '"shared": "extension"' "$settings" || { echo "the extension did not win the collision" >&2; exit 1; }
+      grep -q 'extension-list' "$settings" || { echo "the extension list was not rendered" >&2; exit 1; }
+      grep -q 'provider-list' "$settings" && { echo "a colliding list was concatenated" >&2; exit 1; }
+    '';
+
   # treefmt rewrites in place, so it runs against a writable copy and the check
   # is whether anything changed rather than whether it refused to run.
   # Generated reference documentation is only useful while it matches the
