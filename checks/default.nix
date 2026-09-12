@@ -359,7 +359,7 @@ in
         for want in \
           "pi install git:github.com/Gentleman-Programming/gentle-pi@6e4478c04615b0c013a017178dcfefa51579982d" \
           "pi install ${gentleEngramPiPath}" \
-          "npm exec --yes --package ${gentleEngramPiPath} -- pi-engram init"
+          "${gentleEngramPiPath}/bin/pi-engram init"
         do
           grep -qxF "$want" overridden.commands || {
             echo "the overridden configuration does not run: $want" >&2
@@ -427,6 +427,10 @@ in
       test -f "$package/cli.js" || { echo "cli.js missing from gentle-engram-pi" >&2; exit 1; }
       test -f "$package/node_modules/typebox/package.json" || {
         echo "typebox not vendored under node_modules in gentle-engram-pi" >&2
+        exit 1
+      }
+      "$package/bin/pi-engram" --help >/dev/null || {
+        echo "bin/pi-engram does not start the CLI in gentle-engram-pi" >&2
         exit 1
       }
       touch "$out"

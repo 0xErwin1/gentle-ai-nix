@@ -3,6 +3,8 @@
   stdenv,
   fetchFromGitHub,
   fetchurl,
+  makeWrapper,
+  nodejs,
 
   # Which Engram release to take the Pi plugin from. The channels live in
   # engram-versions.nix, the same table engram.nix reads: the binary and this
@@ -35,6 +37,8 @@ stdenv.mkDerivation {
 
   inherit src;
 
+  nativeBuildInputs = [ makeWrapper ];
+
   dontConfigure = true;
   dontBuild = true;
 
@@ -46,6 +50,17 @@ stdenv.mkDerivation {
 
     mkdir -p "$out/node_modules/typebox"
     tar -xzf ${typebox} -C "$out/node_modules/typebox" --strip-components=1
+
+    # gentle-engram's own init step is normally reached through
+    # `npm exec ... pi-engram init`, but npm exec always tries to chmod the
+    # spec it links into ~/.npm/_npx before running it, and a spec that is a
+    # store path resolves that chmod into the read-only store -- an EROFS a
+    # local install can never get past. Shipping this wrapper is what lets a
+    # local source run `<path>/bin/pi-engram init` directly instead, the same
+    # entry point cli.js already gives npm exec.
+    test -f "$out/cli.js" || { echo "gentle-engram's cli.js moved; the wrapper would point at nothing" >&2; exit 1; }
+    mkdir -p "$out/bin"
+    makeWrapper ${lib.getExe' nodejs "node"} "$out/bin/pi-engram" --add-flags "$out/cli.js"
 
     runHook postInstall
   '';
