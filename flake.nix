@@ -54,6 +54,13 @@
           # than be replaced by it.
           engram-rc = engramFor engramReleases.rc;
 
+          # Engram's Pi plugin, built from the same rc revision as engram-rc,
+          # for Pi to install by local path when `engramRelease` moves off
+          # stable.
+          gentle-engram-pi = pkgs.callPackage ./packages/gentle-engram-pi.nix {
+            release = engramReleases.rc;
+          };
+
           # Reference documentation for every option this module declares.
           # Regenerate the committed copy with:
           #   nix build .#options-doc && cp result docs/options.md

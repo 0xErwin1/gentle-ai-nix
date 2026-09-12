@@ -37,7 +37,47 @@ let
   defaultGentleAiPackage = pkgs.callPackage ../packages/gentle-ai.nix {
     release = selectedRelease;
   };
-  defaultEngramPackage = pkgs.callPackage ../packages/engram.nix { };
+
+  engramReleases = import ../packages/engram-versions.nix;
+
+  selectedEngramRelease = engramReleases.${cfg.engramRelease};
+
+  defaultEngramPackage = pkgs.callPackage ../packages/engram.nix {
+    release = selectedEngramRelease;
+  };
+
+  # Engram's Pi plugin, built only when it is actually wanted: Nix's laziness
+  # means this derivation is never evaluated, let alone built, unless
+  # `engramRelease` is off stable and Pi is enabled, the one case
+  # `pluginPackagesFor` below reads it in.
+  gentleEngramPiPackage = pkgs.callPackage ../packages/gentle-engram-pi.nix {
+    release = selectedEngramRelease;
+  };
+
+  gentlePiReleases = import ../packages/pi-versions.nix;
+
+  selectedGentlePiRelease = gentlePiReleases.${cfg.gentlePiRelease};
+
+  # gentle-pi is not a derivation this flake builds: Pi installs it itself
+  # from whatever source string this resolves to. `stable` already names one
+  # directly; every other channel is a revision Pi's own git installer
+  # fetches, so the source is composed from it here instead of being
+  # restated per channel in pi-versions.nix.
+  gentlePiSource =
+    release: release.source or "git:github.com/Gentleman-Programming/gentle-pi@${release.rev}";
+
+  # Pi-only install source overrides, keyed the way the contract's
+  # `providers.pi.packages` wants them: by the npm package name the adapter
+  # installs. Present only for a channel actually chosen off its default, so
+  # a default configuration emits nothing here and the document this flake
+  # has always rendered for Pi does not change shape.
+  pluginPackagesFor =
+    optionalAttrs (cfg.gentlePiRelease != "stable") {
+      gentle-pi = gentlePiSource selectedGentlePiRelease;
+    }
+    // optionalAttrs (cfg.engramRelease != "stable") {
+      gentle-engram = "${gentleEngramPiPackage}";
+    };
 
   # The community tools this flake packages, keyed by Gentle AI's own tool id.
   # Like providerRoots this is contract knowledge rather than asset knowledge:
@@ -661,7 +701,8 @@ let
     // whenSet "profileStrategy" provider.profileStrategy
     // whenSet "activeProfile" provider.activeProfile
     // whenSet "skills" provider.skills
-    // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) provider.mcpServers);
+    // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) provider.mcpServers)
+    // optionalAttrs (name == "pi") (whenSet "packages" pluginPackagesFor);
 
   # A provider enabled with nothing else set has nothing worth nesting: an
   # empty block would still be a key the renderer has to look at and find
@@ -1026,6 +1067,48 @@ in
         Engram package, installed when the engram component is enabled. The
         component is what configures the clients to use it; this only puts the
         binary on PATH, which Nix does rather than letting Gentle AI fetch it.
+
+        Defaults to `engramRelease`'s build; setting this directly overrides
+        that choice the same way `package` overrides `release`.
+      '';
+    };
+
+    gentlePiRelease = mkOption {
+      type = types.enum (lib.attrNames gentlePiReleases);
+      default = "stable";
+      description = ''
+        Which gentle-pi release Pi installs, by channel.
+
+        `stable` is npm's published release, which is what Pi already
+        installs on its own; choosing it changes nothing about how Pi's
+        packages are provisioned. `main` is the tip of gentle-pi's main
+        branch pinned to a revision, installed from git instead of npm --
+        the same "a pin is how a flake expresses a branch" argument
+        `release` above makes for Gentle AI's own beta channel.
+
+        gentle-pi is not a package this flake builds: Nix only supplies the
+        install source Pi's `pi install` uses at activation.
+      '';
+    };
+
+    engramRelease = mkOption {
+      type = types.enum (lib.attrNames engramReleases);
+      default = "stable";
+      description = ''
+        Which Engram release to build, by channel. Controls both the Engram
+        binary (`engramPackage`'s default) and, when Pi is enabled, which
+        build of Engram's Pi plugin Pi installs -- the two are one release
+        moving together, because a store with one Engram's wire format and
+        another's Pi plugin is not a configuration anyone chose on purpose.
+
+        `stable` is the newest tagged release, and Pi installs its plugin
+        from npm as it always has. `rc` is the 2.0 candidate selectable in
+        engram-versions.nix; choosing it also has Pi install the plugin
+        built from that same revision by local store path instead of npm,
+        so the harness binary and the plugin can never drift apart.
+
+        Setting `engramPackage` directly overrides the binary this resolves
+        to, but not which plugin build Pi installs.
       '';
     };
 

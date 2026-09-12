@@ -13,11 +13,7 @@ buildGoModule {
   pname = "engram";
   inherit (release) version vendorHash;
 
-  src = fetchFromGitHub {
-    inherit (release) rev hash;
-    owner = "Gentleman-Programming";
-    repo = "engram";
-  };
+  src = import ./engram-src.nix { inherit fetchFromGitHub; } release;
 
   proxyVendor = true;
 

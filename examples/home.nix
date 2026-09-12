@@ -6,6 +6,8 @@
   programs.gentle-ai = {
     enable = true;
 
+    # gentlePiRelease = "main"; # track gentle-pi's main, installed by Pi from git.
+
     # Clients, each with whatever differs for it alone.
     providers = {
       opencode = {

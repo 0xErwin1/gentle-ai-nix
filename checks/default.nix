@@ -238,6 +238,200 @@ in
     assert lib.all (key: !(document.selection ? ${key})) removedTopLevelKeys;
     pkgs.runCommandLocal "gentle-ai-check-providers-document-shape" { } ''touch "$out"'';
 
+  # `gentlePiRelease` and `engramRelease` only ever add a `packages` entry
+  # under Pi's provider block, and only for the channel actually chosen off
+  # its default: a document naming neither must render exactly as it did
+  # before either option existed, so that pairing is asserted alongside the
+  # one that carries a source, the same way providersDocumentShape pairs a
+  # field's presence with its absence.
+  piPackagesDocumentShape =
+    let
+      documentFor =
+        overrides:
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers.pi.enable = true;
+            }
+            // overrides;
+          }
+        ]).config.programs.gentle-ai.document;
+
+      defaultDocument = documentFor { };
+      overriddenDocument = documentFor {
+        gentlePiRelease = "main";
+        engramRelease = "rc";
+      };
+    in
+    # A `pi` block with nothing else set renders no `providers` key at all
+    # (providersDocumentShape's own empty-block rule), so the no-override
+    # case is asserted with a path lookup rather than through a `providers.pi`
+    # that may not exist.
+    assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
+    assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@"
+      overriddenDocument.selection.providers.pi.packages.gentle-pi;
+    assert lib.hasPrefix "/nix/store/" overriddenDocument.selection.providers.pi.packages.gentle-engram;
+    pkgs.runCommandLocal "gentle-ai-check-pi-packages-document-shape" { } ''touch "$out"'';
+
+  # piPackagesDocumentShape only proves the document carries the right
+  # sources; this proves the renderer actually substitutes them into what Pi
+  # is told to run, against the real `gentle-ai config render`, the same way
+  # rendererSurfacesUnsupportedProviderMistakes exercises the renderer rather
+  # than reconstructing its behaviour here.
+  piPackagesRenderThrough =
+    let
+      gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+
+      documentFor =
+        overrides:
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers.pi.enable = true;
+            }
+            // overrides;
+          }
+        ]).config.programs.gentle-ai.document;
+
+      defaultDocument = documentFor { };
+      overriddenDocument = documentFor {
+        gentlePiRelease = "main";
+        engramRelease = "rc";
+      };
+
+      gentleEngramPiPath = overriddenDocument.selection.providers.pi.packages.gentle-engram;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-packages-render-through"
+      {
+        nativeBuildInputs = [
+          gentleAi
+          pkgs.jq
+        ];
+        defaultDocumentFile = pkgs.writeText "gentle-ai-document-pi-default.json" (
+          builtins.toJSON defaultDocument
+        );
+        overriddenDocumentFile = pkgs.writeText "gentle-ai-document-pi-overridden.json" (
+          builtins.toJSON overriddenDocument
+        );
+      }
+      ''
+        set -euo pipefail
+
+        piCommands() {
+          # commands is [][]string per resource; flattening each command with
+          # a space is what the Go adapter's own tests compare against, so the
+          # same join is used here rather than matching raw JSON tokens.
+          jq -r '
+            .manifest.resources[]
+            | select(.selector == "provision" and .agent == "pi")
+            | .commands[]
+            | join(" ")
+          ' "$1"
+        }
+
+        render() {
+          local name="$1" doc="$2"
+          mkdir -p "$PWD/home-$name" "$PWD/stage-$name"
+          gentle-ai config render \
+            --config "$doc" \
+            --home "$PWD/home-$name" \
+            --destination "$PWD/home-$name" \
+            --stage "$PWD/stage-$name" \
+            > "$PWD/$name.manifest.json"
+        }
+
+        render default "$defaultDocumentFile"
+        render overridden "$overriddenDocumentFile"
+
+        piCommands "$PWD/default.manifest.json" > default.commands
+        piCommands "$PWD/overridden.manifest.json" > overridden.commands
+
+        for want in "pi install npm:gentle-pi" "pi install npm:gentle-engram"; do
+          grep -qxF "$want" default.commands || {
+            echo "the default configuration no longer runs: $want" >&2
+            cat default.commands >&2
+            exit 1
+          }
+        done
+
+        for want in \
+          "pi install git:github.com/Gentleman-Programming/gentle-pi@6e4478c04615b0c013a017178dcfefa51579982d" \
+          "pi install ${gentleEngramPiPath}" \
+          "npm exec --yes --package ${gentleEngramPiPath} -- pi-engram init"
+        do
+          grep -qxF "$want" overridden.commands || {
+            echo "the overridden configuration does not run: $want" >&2
+            cat overridden.commands >&2
+            exit 1
+          }
+        done
+
+        touch "$out"
+      '';
+
+  # An unknown channel is a typo the operator should see immediately, at Nix
+  # eval, rather than as a build failure once Pi tries to install a release
+  # that was never in the table.
+  piPackageChannelsRejectUnknownValues =
+    pkgs.runCommandLocal "gentle-ai-check-pi-package-channels-reject-unknown-values" { }
+      ''
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi.enable = true;
+                  gentlePiRelease = "nightly";
+                };
+              }
+            ])
+          )
+          ''
+            echo "an unknown gentlePiRelease was accepted" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi.enable = true;
+                  engramRelease = "nightly";
+                };
+              }
+            ])
+          )
+          ''
+            echo "an unknown engramRelease was accepted" >&2
+            exit 1
+          ''
+        }
+        touch "$out"
+      '';
+
+  # The Pi plugin package itself: a directory Pi can register in place,
+  # carrying the plugin's own files plus its one dependency vendored under
+  # node_modules rather than left for `npm install` to resolve.
+  gentleEngramPiPackageBuilds =
+    let
+      package = pkgs.callPackage ../packages/gentle-engram-pi.nix { };
+    in
+    pkgs.runCommandLocal "gentle-ai-check-gentle-engram-pi-package" { inherit package; } ''
+      test -f "$package/package.json" || { echo "package.json missing from gentle-engram-pi" >&2; exit 1; }
+      test -f "$package/index.ts" || { echo "index.ts missing from gentle-engram-pi" >&2; exit 1; }
+      test -f "$package/cli.js" || { echo "cli.js missing from gentle-engram-pi" >&2; exit 1; }
+      test -f "$package/node_modules/typebox/package.json" || {
+        echo "typebox not vendored under node_modules in gentle-engram-pi" >&2
+        exit 1
+      }
+      touch "$out"
+    '';
+
   # The eval-level assertions this check replaced used to reject a misplaced
   # field before it ever reached Gentle AI. `misplacedProfilesNoLongerRejectedAtEval`
   # proves half of what they proved -- that Nix now accepts the document -- and

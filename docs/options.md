@@ -544,6 +544,9 @@ Engram package, installed when the engram component is enabled\. The
 component is what configures the clients to use it; this only puts the
 binary on PATH, which Nix does rather than letting Gentle AI fetch it\.
 
+Defaults to ` engramRelease `’s build; setting this directly overrides
+that choice the same way ` package ` overrides ` release `\.
+
 
 
 *Type:*
@@ -555,6 +558,40 @@ null or package
 
 ```nix
 gentle-ai-nix.packages.${pkgs.system}.engram
+```
+
+
+
+## programs\.gentle-ai\.engramRelease
+
+
+
+Which Engram release to build, by channel\. Controls both the Engram
+binary (` engramPackage `’s default) and, when Pi is enabled, which
+build of Engram’s Pi plugin Pi installs – the two are one release
+moving together, because a store with one Engram’s wire format and
+another’s Pi plugin is not a configuration anyone chose on purpose\.
+
+` stable ` is the newest tagged release, and Pi installs its plugin
+from npm as it always has\. ` rc ` is the 2\.0 candidate selectable in
+engram-versions\.nix; choosing it also has Pi install the plugin
+built from that same revision by local store path instead of npm,
+so the harness binary and the plugin can never drift apart\.
+
+Setting ` engramPackage ` directly overrides the binary this resolves
+to, but not which plugin build Pi installs\.
+
+
+
+*Type:*
+one of “rc”, “stable”
+
+
+
+*Default:*
+
+```nix
+"stable"
 ```
 
 
@@ -746,6 +783,37 @@ list of string
 
 ```nix
 [ "hooks.SessionStart" ]
+```
+
+
+
+## programs\.gentle-ai\.gentlePiRelease
+
+
+
+Which gentle-pi release Pi installs, by channel\.
+
+` stable ` is npm’s published release, which is what Pi already
+installs on its own; choosing it changes nothing about how Pi’s
+packages are provisioned\. ` main ` is the tip of gentle-pi’s main
+branch pinned to a revision, installed from git instead of npm –
+the same “a pin is how a flake expresses a branch” argument
+` release ` above makes for Gentle AI’s own beta channel\.
+
+gentle-pi is not a package this flake builds: Nix only supplies the
+install source Pi’s ` pi install ` uses at activation\.
+
+
+
+*Type:*
+one of “main”, “stable”
+
+
+
+*Default:*
+
+```nix
+"stable"
 ```
 
 
@@ -2546,8 +2614,6 @@ attribute set of anything
 
 
 ## programs\.gentle-ai\.skills
-
-
 
 Skills, keyed by Gentle AI’s own id\. Naming none installs every skill
 Gentle AI ships, so this is only for narrowing that: an entry set to
