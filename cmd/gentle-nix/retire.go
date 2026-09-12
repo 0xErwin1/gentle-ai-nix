@@ -33,6 +33,8 @@ func (realRemover) Printf(format string, args ...any) {
 func runRetire(args []string) (int, error) {
 	fs := flag.NewFlagSet("retire", flag.ExitOnError)
 	settings := fs.String("settings", "", "Pi's settings.json")
+	declared := fs.String("declared", "", "a JSON file holding this generation's own providers.pi.packages")
+	declaredRecord := fs.String("declared-record", "", "where the previous generation's --declared content was recorded, and this run's is recorded in turn")
 	var displacedRaw []string
 	fs.Var(repeatableFlag{&displacedRaw}, "displaced", "a JSON identity rule naming entries this generation no longer wants")
 	if err := fs.Parse(args); err != nil {
@@ -53,6 +55,11 @@ func runRetire(args []string) (int, error) {
 		rules = append(rules, rule)
 	}
 
-	code, err := retire.Run(retire.Options{Settings: *settings, Rules: rules}, realRemover{})
+	code, err := retire.Run(retire.Options{
+		Settings:       *settings,
+		Rules:          rules,
+		Declared:       *declared,
+		DeclaredRecord: *declaredRecord,
+	}, realRemover{})
 	return code, err
 }

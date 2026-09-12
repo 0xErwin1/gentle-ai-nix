@@ -1154,6 +1154,101 @@ in
         touch "$out"
       '';
 
+  # A package dropped from `providers.pi.packages` entirely -- no source
+  # change, no channel switch, just the key gone -- has no displaced-package
+  # Rule to name it: every Rule above names what a still-declared package
+  # used to look like. This proves the declared-set diff `--declared` /
+  # `--declared-record` drive instead: a first run has nothing to compare
+  # against and only records; a second run against a smaller declared set
+  # retires exactly the entry that dropped out and leaves everything still
+  # declared alone, using the same fake `pi` the check above does.
+  retireDisplacedPiPackagesRetiresADroppedDeclaration =
+    let
+      retirer = pkgs.writeShellScriptBin "gentle-ai-retire" ''
+        exec ${lib.getExe self.packages.${system}.gentle-nix} retire "$@"
+      '';
+    in
+    pkgs.runCommandLocal "gentle-ai-check-retire-dropped-declared-package"
+      {
+        nativeBuildInputs = [
+          retirer
+          pkgs.jq
+        ];
+      }
+      ''
+        set -euo pipefail
+
+        mkdir -p work/.pi/agent work/bin work/state
+        cat > work/bin/pi <<'SH'
+        #!/bin/sh
+        if [ "$1" = "remove" ] && [ -n "$2" ]; then
+          echo "$2" >> "$RECORD"
+          exit 0
+        fi
+        exit 1
+        SH
+        chmod +x work/bin/pi
+
+        cat > work/.pi/agent/settings.json <<'JSON'
+        { "packages": ["npm:pi-foo", "npm:pi-bar@1.0.0"] }
+        JSON
+
+        RECORD="$PWD/work.removed"
+        touch "$RECORD"
+        export RECORD
+
+        record="$PWD/work/state/pi-declared-packages.json"
+
+        # First run: both packages are declared, and there is no previous
+        # record to diff against yet, so nothing is retired -- only the
+        # declared set itself is recorded, for the next run to diff
+        # against.
+        cat > declared-first.json <<'JSON'
+        { "pi-foo": "npm:pi-foo", "pi-bar": "npm:pi-bar@1.0.0" }
+        JSON
+        PATH="$PWD/work/bin:$PATH" gentle-ai-retire \
+          --settings "$PWD/work/.pi/agent/settings.json" \
+          --declared "$PWD/declared-first.json" \
+          --declared-record "$record"
+
+        [ -s "$RECORD" ] && {
+          echo "the first run retired something despite having no prior record" >&2
+          cat "$RECORD" >&2
+          exit 1
+        }
+        [ -f "$record" ] || {
+          echo "the first run never wrote a declared-package record" >&2
+          exit 1
+        }
+        diff -u <(jq -S . declared-first.json) <(jq -S . "$record") || {
+          echo "the record after the first run does not match what was declared" >&2
+          exit 1
+        }
+
+        # Second run: pi-bar drops out of the declared set. Pi still lists
+        # it, so it is retired; pi-foo, still declared, is left alone.
+        cat > declared-second.json <<'JSON'
+        { "pi-foo": "npm:pi-foo" }
+        JSON
+        PATH="$PWD/work/bin:$PATH" gentle-ai-retire \
+          --settings "$PWD/work/.pi/agent/settings.json" \
+          --declared "$PWD/declared-second.json" \
+          --declared-record "$record"
+
+        sort "$RECORD" > work.actual
+        printf '%s\n' "npm:pi-bar@1.0.0" > work.expected
+        diff -u work.expected work.actual || {
+          echo "the second run did not retire exactly the dropped declaration" >&2
+          exit 1
+        }
+        diff -u <(jq -S . declared-second.json) <(jq -S . "$record") || {
+          echo "the record after the second run does not match what was declared" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   # The Pi plugin package itself: a directory Pi can register in place,
   # carrying the plugin's own files plus its one dependency vendored under
   # node_modules rather than left for `npm install` to resolve.

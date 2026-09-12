@@ -1402,12 +1402,17 @@ one of Pi’s own other fixed packages (` pi-mcp-adapter `,
 overrides that package’s install source in place rather than
 adding a second entry alongside it\.
 
-Removing a package from this set does not retire its installed
-entry on its own – the module has no record of what an earlier
-generation declared, only what this one does – so that still
-needs a manual ` pi remove `\. Changing its source while the name
-stays the same is retired automatically on the next switch, the
-same way a channel change retires ` gentle-pi ` or ` gentle-engram `\.
+Removing a package from this set retires its installed entry on
+the next switch, the same way changing its source while the name
+stays the same does – both are recorded against what the
+previous switch declared, the same way a channel change retires
+` gentle-pi ` or ` gentle-engram `\. The very first switch after this
+behavior was added has no earlier declaration to compare
+against, so a package already removed before that switch still
+needs one manual ` pi remove `; every removal after it is
+automatic\. A dropped key naming one of Pi’s own other fixed
+packages goes back to that package’s harness default instead of
+being removed, since the key only ever overrode its source\.
 
 Only Pi reads this; a provider other than pi is refused for
 setting it\.

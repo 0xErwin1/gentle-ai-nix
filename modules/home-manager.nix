@@ -366,12 +366,17 @@ let
             overrides that package's install source in place rather than
             adding a second entry alongside it.
 
-            Removing a package from this set does not retire its installed
-            entry on its own -- the module has no record of what an earlier
-            generation declared, only what this one does -- so that still
-            needs a manual `pi remove`. Changing its source while the name
-            stays the same is retired automatically on the next switch, the
-            same way a channel change retires `gentle-pi` or `gentle-engram`.
+            Removing a package from this set retires its installed entry on
+            the next switch, the same way changing its source while the name
+            stays the same does -- both are recorded against what the
+            previous switch declared, the same way a channel change retires
+            `gentle-pi` or `gentle-engram`. The very first switch after this
+            behavior was added has no earlier declaration to compare
+            against, so a package already removed before that switch still
+            needs one manual `pi remove`; every removal after it is
+            automatic. A dropped key naming one of Pi's own other fixed
+            packages goes back to that package's harness default instead of
+            being removed, since the key only ever overrode its source.
 
             Only Pi reads this; a provider other than pi is refused for
             setting it.
@@ -1212,6 +1217,23 @@ let
       keep = source;
       wanted = source;
     }) (cfg.providers.pi.packages or { });
+
+  # `providers.pi.packages` exactly as this generation declares it, handed
+  # to `gentle-nix retire` alongside a record of what the previous
+  # generation declared (below) so a package dropped from the set entirely
+  # -- something no displaced-package rule above can express, since every
+  # one of them names what a still-declared package used to look like, never
+  # a package that stopped being declared at all -- is retired too, instead
+  # of needing a manual `pi remove`.
+  declaredPiPackagesFile = pkgs.writeText "gentle-ai-declared-pi-packages.json" (
+    builtins.toJSON (cfg.providers.pi.packages or { })
+  );
+
+  # Where the retirer persists the declared set it was just handed, for the
+  # next switch to diff against. Lives under the same state directory
+  # `gentle-nix provision`'s own stamps do, so both survive the same way
+  # across generations and neither is ever mistaken for a Nix store path.
+  declaredPiPackagesRecordPath = "${config.xdg.stateHome}/gentle-ai-nix/pi-declared-packages.json";
 
   # Which clients were asked to have their package harness installed. The
   # commands themselves are read from the rendered manifest at activation, so
@@ -2082,6 +2104,8 @@ in
         PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
           run ${lib.getExe retirer} \
             --settings ${lib.escapeShellArg piSettingsPath} \
+            --declared ${lib.escapeShellArg "${declaredPiPackagesFile}"} \
+            --declared-record ${lib.escapeShellArg declaredPiPackagesRecordPath} \
             ${lib.concatMapStringsSep " " (
               rule: "--displaced ${lib.escapeShellArg (builtins.toJSON rule)}"
             ) displacedPiRules}

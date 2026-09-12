@@ -61,10 +61,26 @@ type Remover interface {
 }
 
 // Options mirrors retire.py's argparse contract: --settings plus a
-// repeated --displaced, already decoded into Rule values.
+// repeated --displaced, already decoded into Rule values. Declared and
+// DeclaredRecord are gentle-nix's own addition, with no equivalent in
+// retire.py: together they let Run notice a package `providers.pi.packages`
+// no longer declares at all, which no displaced-package Rule can express
+// because a Rule always names what a still-declared package used to look
+// like, never a package that stopped being declared.
 type Options struct {
 	Settings string
 	Rules    []Rule
+	// Declared is a JSON file holding this generation's own
+	// providers.pi.packages (name -> Pi install source). Empty disables
+	// the declared-set diff below entirely, leaving Run's behavior exactly
+	// what it was before Declared and DeclaredRecord existed.
+	Declared string
+	// DeclaredRecord is where the previous generation's Declared content
+	// was persisted, and where this run's own Declared content is
+	// persisted in turn for the next one. Absent (first run) or malformed
+	// (this step cannot make sense of it) both degrade to "nothing to
+	// retire from it" rather than failing the switch.
+	DeclaredRecord string
 }
 
 // installedPackages is installed_packages: Pi's own declared packages,
@@ -264,6 +280,25 @@ func applicableRules(rules []Rule, packages []string, settingsDir string, printf
 	return applicable, nil
 }
 
+// mergeEntries appends b's entries to a, skipping any already in a, so an
+// entry a displaced-package Rule and the declared-set diff both name is
+// only ever passed to `pi remove` once.
+func mergeEntries(a, b []string) []string {
+	seen := make(map[string]bool, len(a))
+	merged := append([]string(nil), a...)
+	for _, entry := range a {
+		seen[entry] = true
+	}
+	for _, entry := range b {
+		if seen[entry] {
+			continue
+		}
+		seen[entry] = true
+		merged = append(merged, entry)
+	}
+	return merged
+}
+
 func displacedEntries(packages []string, rules []Rule, settingsDir string) ([]string, error) {
 	var displaced []string
 	for _, entry := range packages {
@@ -283,9 +318,33 @@ func displacedEntries(packages []string, rules []Rule, settingsDir string) ([]st
 
 // Run is main() from retire.py: it always returns exit code 0, exactly
 // like the Python original, whose only nonzero exit would come from
-// argparse itself rejecting the command line.
+// argparse itself rejecting the command line. Recording this run's
+// Declared content happens last, through a deferred write, so it happens
+// whether or not everything above it succeeded -- retirement is already
+// non-fatal, and a record that only updates on a clean run would compare
+// a future generation against a declared set older than the one it
+// actually had.
 func Run(opts Options, remover Remover) (int, error) {
-	if len(opts.Rules) == 0 {
+	current := readDeclaredPackages(opts.Declared, remover.Printf)
+	if opts.DeclaredRecord != "" {
+		defer func() {
+			if err := writeDeclaredRecord(opts.DeclaredRecord, current); err != nil {
+				remover.Printf("gentle-ai: cannot record declared Pi packages %s: %v", opts.DeclaredRecord, err)
+			}
+		}()
+	}
+
+	var droppedNames []string
+	if opts.DeclaredRecord != "" {
+		previous, existed := readDeclaredRecord(opts.DeclaredRecord, remover.Printf)
+		if !existed {
+			remover.Printf("gentle-ai: no declared Pi packages record yet at %s, recording the current set", opts.DeclaredRecord)
+		} else {
+			droppedNames = droppedDeclaredNames(previous, current)
+		}
+	}
+
+	if len(opts.Rules) == 0 && len(droppedNames) == 0 {
 		return 0, nil
 	}
 
@@ -309,6 +368,7 @@ func Run(opts Options, remover Remover) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	entries = mergeEntries(entries, entriesForDroppedNames(packages, droppedNames))
 	if len(entries) == 0 {
 		return 0, nil
 	}
