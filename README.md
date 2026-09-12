@@ -49,7 +49,7 @@ Options are grouped the way you think about the installation. Names inside the g
 
 | Group | Purpose |
 |-------|---------|
-| `providers.<name>` | A client, with `modelPreset`, `profiles`, `skills`, `settings`, `models` and its package provisioning for it alone. |
+| `providers.<name>` | A client, with `modelPreset`, `modelFamily`, `profiles`, `activeProfile`, `skills`, `settings`, `models`, `packages`, `mcpServers` and its package provisioning for it alone. |
 | `components.<name>` | What Gentle AI configures — skills, persona, permissions, sdd, theme, engram, gga. |
 | `skills.<name>` | Naming none installs every skill Gentle AI ships. Entries only narrow that: `false` drops one, `true` restricts to the ones named. |
 | `communityTools.<name>` | The optional extras, plus the `package` Nix supplies for one and whether it wires itself in. |
@@ -60,9 +60,9 @@ Options are grouped the way you think about the installation. Names inside the g
 | `permissions`, `mcpServers` | Rules layered over the shipped guardrails, and servers no component configures. |
 | `persona`, `preset`, `schemaVersion`, `package` | The rest. |
 
-Two different things are called a profile, and both live on the client. `providers.<name>.modelPreset` names a tier Gentle AI recommends — Codex, Claude and Kiro each offer their own, with their own vocabulary. `providers.opencode.profiles.<name>` is a model configuration *you* name, which generates its own orchestrator and phase agents so you can switch to it at runtime. OpenCode offers no recommended tier: it discovers what your subscription actually gives you access to and you assign from that.
+Two different things are called a profile, and both live on the client. `providers.<name>.modelPreset` names a tier Gentle AI recommends — Codex, Claude and Kiro each offer their own, with their own vocabulary. `providers.<name>.profiles.<name>` is a model configuration *you* name, switchable at runtime; OpenCode and Pi both take it, but materialise it differently. OpenCode generates its own orchestrator and phase agents per profile, alongside the default set — `providers.opencode.profileStrategy` says whether Gentle AI generates them itself or leaves an external profile manager to keep one active. Pi has no agents of its own to generate: its profiles live in gentle-pi's global profile store, `~/.pi/gentle-ai/profiles.json`, and `providers.pi.activeProfile` is the declarative form of running `/gentle:profiles` inside Pi — it materialises the named profile's routing into `models.json` and its orchestrator into Pi's own settings defaults, the same thing that command would do by hand.
 
-A profile and explicit assignments compose rather than exclude each other: name the profile for the shape you want, then override the phases you care about with `providers.<name>.models`, and the rest stay on the profile.
+A profile and explicit assignments compose rather than exclude each other. For OpenCode, name the profile for the shape you want, then override the phases you care about with `providers.<name>.models`, and the rest stay on the profile. For Pi, routing follows one precedence order: an explicit `providers.pi.models` entry wins, then the active profile, then `modelPreset` and `modelFamily` fill in whatever agent neither of those named.
 
 Model profiles live on the client, not on the installation: `providers.codex.modelPreset = "low-cost"` alongside `providers.claude-code.modelPreset = "performance"` is a thing you can want, because subscriptions differ per client. Naming the profile rather than restating the models it resolves to is what keeps it the profile Gentle AI recommends today rather than the one it recommended when you wrote the file. A client that offers no profiles is reported rather than accepted and ignored.
 
@@ -165,6 +165,42 @@ with a message when the client's own binary is not on PATH. It is off by default
 it is the one part of this module that reaches a network, and what it installs is
 not tracked by Nix.
 
+Two of Pi's own packages are picked by channel rather than declared directly.
+`gentlePiRelease = "stable" | "main"` chooses gentle-pi itself: `stable` is
+npm's published release, the same thing Pi already installs on its own;
+`main` pins a revision on gentle-pi's main branch and installs it from git
+instead, refreshed the same way [`packages/versions.nix`](packages/versions.nix)
+tracks Gentle AI's own beta channel — `git ls-remote` against the branch, then a
+new pin. `engramRelease = "stable" | "rc"` drives both the Engram binary and,
+when Pi is enabled, which build of Engram's Pi plugin Pi installs, so the wire
+format and the plugin can never drift apart: on `rc` the plugin is built from
+that same Engram revision and linked into the rendered tree at
+`.pi/gentle-ai/plugins/gentle-engram`, installed by path because gentle-pi's
+git installer cannot reach a subdirectory of a repository.
+
+Everything else Pi installs is `providers.pi.packages`, keyed by name with a Pi
+install source as the value — `npm:<name>[@version]`,
+`git:<host>/<user>/<repo>[@ref]`, or an absolute local path:
+
+```nix
+providers.pi.packages.pi-btw = "npm:pi-btw";
+```
+
+`gentle-pi` and `gentle-engram` are refused here at eval; the two channel
+options above own them. Naming one of Pi's other fixed packages
+(`pi-mcp-adapter`, `@juicesharp/rpiv-ask-user-question`, `pi-web-access`,
+`pi-btw`) overrides its install source in place rather than adding a second
+entry.
+
+A switch that changes a channel or a declared package's source retires the
+entry it displaces — the previous `gentle-pi` build, the previous plugin path,
+the previous source for a name that stayed the same — but only once the
+replacement is confirmed installed, so a registry or git host unreachable
+during provisioning costs a missed retirement rather than the previous,
+working install. Removing a package from `packages` entirely does not retire
+it on its own: the module has no record of what an earlier generation
+declared, only what this one does, so that still needs a manual `pi remove`.
+
 **A file that has to carry a credential** cannot be a store symlink — the store
 is world-readable and read-only. Those paths are held back from the projection
 and written at activation with the placeholder replaced:
@@ -226,9 +262,9 @@ For the fields these options produce — what each accepts, and what omitting it
 ## How it works
 
 ```
-programs.gentle-ai.settings ─┐
-programs.gentle-ai.roles ────┼─► gentle-ai.json ─► gentle-ai config render ─► store tree ─► home.file
-programs.gentle-ai.extensions┘
+programs.gentle-ai.settings ─────────────────┐
+programs.gentle-ai.roles ────────────────────┼─► gentle-ai.json ─► gentle-ai config render ─► store tree ─► home.file
+programs.gentle-ai.providers.<name>.settings ┘
 ```
 
 | Decision | Why |
