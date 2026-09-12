@@ -912,19 +912,26 @@ let
   # file, so none of them has to be a dependency here.
   withheld = cfg.secrets.paths ++ map (entry: entry.path) mergeTargets;
 
-  provisioner = pkgs.writers.writePython3Bin "gentle-ai-provision" {
-    flakeIgnore = [
-      "E501"
-      "W503"
-    ];
-  } (builtins.readFile ../lib/provision.py);
+  # gentle-nix is the one Go binary this repository builds from its own
+  # source (cmd/gentle-nix, internal/...), replacing four of the five
+  # writePython3Bin helpers that used to be wrapped here. Each is exposed
+  # under its old binary name through a one-line shell wrapper, so an
+  # activation script, a stamp file, or a check that names
+  # "gentle-ai-provision" (or -retire, -rewrite, -frontmatter) keeps
+  # working unchanged: only what runs behind that name changed.
+  #
+  # "merge" is the one helper still Python: it depends on tomlkit's
+  # comment- and ordering-preserving TOML editing, which has no dependable
+  # Go equivalent, so gentle-ai-merge stays as it was below.
+  gentleNix = pkgs.callPackage ../packages/gentle-nix.nix { };
 
-  retirer = pkgs.writers.writePython3Bin "gentle-ai-retire" {
-    flakeIgnore = [
-      "E501"
-      "W503"
-    ];
-  } (builtins.readFile ../lib/retire.py);
+  provisioner = pkgs.writeShellScriptBin "gentle-ai-provision" ''
+    exec ${lib.getExe gentleNix} provision "$@"
+  '';
+
+  retirer = pkgs.writeShellScriptBin "gentle-ai-retire" ''
+    exec ${lib.getExe gentleNix} retire "$@"
+  '';
 
   piSettingsPath = "${config.home.homeDirectory}/.pi/agent/settings.json";
 
@@ -1049,19 +1056,13 @@ let
     ];
   } (builtins.readFile ../lib/merge.py);
 
-  referenceRewriter = pkgs.writers.writePython3Bin "gentle-ai-rewrite" {
-    flakeIgnore = [
-      "E501"
-      "W503"
-    ];
-  } (builtins.readFile ../lib/rewrite.py);
+  referenceRewriter = pkgs.writeShellScriptBin "gentle-ai-rewrite" ''
+    exec ${lib.getExe gentleNix} rewrite "$@"
+  '';
 
-  frontmatterFiller = pkgs.writers.writePython3Bin "gentle-ai-frontmatter" {
-    flakeIgnore = [
-      "E501"
-      "W503"
-    ];
-  } (builtins.readFile ../lib/frontmatter.py);
+  frontmatterFiller = pkgs.writeShellScriptBin "gentle-ai-frontmatter" ''
+    exec ${lib.getExe gentleNix} frontmatter "$@"
+  '';
 
   secretArguments =
     lib.concatMapStringsSep " " (path: "--env-file ${lib.escapeShellArg path}") cfg.secrets.envFiles

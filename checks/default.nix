@@ -686,12 +686,9 @@ in
   # settings file already converged triggers no `pi remove` at all.
   retireDisplacedPiPackagesRemovesExactlyTheDisplacedEntries =
     let
-      retirer = pkgs.writers.writePython3Bin "gentle-ai-retire" {
-        flakeIgnore = [
-          "E501"
-          "W503"
-        ];
-      } (builtins.readFile ../lib/retire.py);
+      retirer = pkgs.writeShellScriptBin "gentle-ai-retire" ''
+        exec ${lib.getExe self.packages.${system}.gentle-nix} retire "$@"
+      '';
 
       # One settings.json shape covering every entry kind a channel can
       # displace: a bare npm spec, a versioned one, a pinned git source, a
@@ -1363,12 +1360,9 @@ in
     pkgs.runCommandLocal "gentle-ai-check-provision"
       {
         nativeBuildInputs = [
-          (pkgs.writers.writePython3Bin "gentle-ai-provision" {
-            flakeIgnore = [
-              "E501"
-              "W503"
-            ];
-          } (builtins.readFile ../lib/provision.py))
+          (pkgs.writeShellScriptBin "gentle-ai-provision" ''
+            exec ${lib.getExe self.packages.${system}.gentle-nix} provision "$@"
+          '')
         ];
       }
       ''

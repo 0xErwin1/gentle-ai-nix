@@ -39,9 +39,15 @@
           gentle-ai = gentleAiFor releases.contract;
           engram = engramFor engramReleases.stable;
           codegraph = pkgs.callPackage ./packages/codegraph.nix { release = codegraphReleases.stable; };
+          gentle-nix = pkgs.callPackage ./packages/gentle-nix.nix { };
         in
         {
-          inherit gentle-ai engram codegraph;
+          inherit
+            gentle-ai
+            engram
+            codegraph
+            gentle-nix
+            ;
           default = gentle-ai;
 
           # One package per release channel, so `programs.gentle-ai.package` can
