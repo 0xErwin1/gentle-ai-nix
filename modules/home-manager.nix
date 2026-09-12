@@ -159,12 +159,18 @@ let
             }
           '';
           description = ''
-            Named SDD profiles for this client, switchable at runtime. Each one
-            generates its own orchestrator and phase agents alongside the
-            default set, so a task can run on cheap models without reconfiguring
-            anything.
+            Named SDD profiles for this client, switchable at runtime.
 
-            Only OpenCode expresses these today.
+            OpenCode generates its own orchestrator and phase agents per
+            profile, alongside the default set, so a task can run on cheap
+            models without reconfiguring anything. Pi has no agents of its
+            own to generate: it keeps these in gentle-pi's global profile
+            store, `~/.pi/gentle-ai/profiles.json`, and its own `apply`
+            switches between them; see `activeProfile` for declaring which
+            one is active. A profile's name follows gentle-pi's own rule —
+            letters or digits, then letters, digits, `.`, `_` or `-`, at most
+            64 characters — because that is the name gentle-pi has to accept
+            it under, on Pi.
           '';
         };
 
@@ -177,7 +183,28 @@ let
             the default agents, or left to an external profile manager that
             keeps one active at a time. Omitted, Gentle AI detects it.
 
-            Only OpenCode expresses this today.
+            This is OpenCode's own concept: Pi's profiles live in gentle-pi's
+            profile store instead, and are switched with `activeProfile`
+            rather than a materialisation strategy.
+          '';
+        };
+
+        activeProfile = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "cheap";
+          description = ''
+            Names one of this provider's `profiles` to activate.
+
+            For Pi, the renderer writes it into gentle-pi's global profile
+            store alongside the profiles themselves and materialises that
+            profile's routing and orchestrator defaults, the same thing
+            running `/gentle:profiles` inside Pi would do. Declaring it here
+            is the declarative form of that command: the profile named wins
+            over whatever gentle-pi last had active, on the next switch.
+
+            Only Pi reads this; a profile is otherwise activated by the
+            client's own runtime.
           '';
         };
 
@@ -594,93 +621,52 @@ let
 
   enabledProviders = lib.filterAttrs (_: provider: provider.enable) cfg.providers;
 
-  providerSkills = lib.filterAttrs (_: value: value != null) (
-    lib.mapAttrs (_: provider: provider.skills) enabledProviders
-  );
-
   providerSettings = lib.filterAttrs (_: value: value != { }) (
     lib.mapAttrs (_: provider: provider.settings) enabledProviders
   );
 
-  providerServers = lib.filterAttrs (_: value: value != { }) (
-    lib.mapAttrs (_: provider: lib.mapAttrs (_: mcpServer) provider.mcpServers) enabledProviders
-  );
-
-  providerPresets = lib.filterAttrs (_: value: value != null) (
-    lib.mapAttrs (_: provider: provider.modelPreset) enabledProviders
-  );
-
+  # A profile's own shape, nested under providers.<id>.profiles.<name>. The
+  # name lives in the enclosing attribute set's key, the same way the
+  # contract keys it, so it is not restated inside the value.
   profile =
-    name: value:
-    {
-      inherit name;
-    }
-    // optionalAttrs (value.orchestrator != null) {
+    value:
+    optionalAttrs (value.orchestrator != null) {
       orchestrator = toModelAssignment value.orchestrator;
     }
     // whenSet "phaseAssignments" (lib.mapAttrs (_: toModelAssignment) value.phases);
 
-  # Profiles and their strategy are one client's concept, so they are collected
-  # from the clients that declared them rather than from an installation-wide
-  # option that could only ever mean one of them.
-  declaredProfiles = lib.concatLists (
-    lib.mapAttrsToList (_: provider: lib.mapAttrsToList profile provider.profiles) enabledProviders
-  );
+  # OpenCode is the one client whose `models` carries full provider-qualified
+  # assignments rather than a vocabulary it decodes itself; every other client
+  # takes what was declared verbatim, because the contract decodes each
+  # provider's models in that provider's own shape.
+  providerModels =
+    name: models: if name == "opencode" then lib.mapAttrs (_: toModelAssignment) models else models;
 
-  declaredProfileStrategy = lib.findFirst (value: value != null) null (
-    lib.mapAttrsToList (_: provider: provider.profileStrategy) enabledProviders
-  );
+  # One block per enabled provider, nested the way the contract nests it:
+  # a provider's own vocabulary, its profiles, and its overrides all live
+  # under its own key instead of a flat field per provider suffixed with that
+  # provider's name. What a provider does and does not accept here — whether
+  # it has a model catalogue, whether it expresses profiles, whether
+  # `activeProfile` means anything to it — is no longer this module's
+  # knowledge to duplicate: the renderer decodes each block in that
+  # provider's own shape and reports a mismatch as a diagnostic, the same way
+  # an unknown provider or skill already is.
+  providerBlock =
+    name: provider:
+    whenSet "models" (providerModels name provider.models)
+    // whenSet "modelFamily" provider.modelFamily
+    // whenSet "modelPreset" provider.modelPreset
+    // whenSet "backgroundIntent" (cfg.backgroundSubagents.${name} or null)
+    // whenSet "profiles" (lib.mapAttrs (_: profile) provider.profiles)
+    // whenSet "profileStrategy" provider.profileStrategy
+    // whenSet "activeProfile" provider.activeProfile
+    // whenSet "skills" provider.skills
+    // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) provider.mcpServers);
 
-  # Only one client expresses profiles today, so anything else declaring them is
-  # a mistake worth naming rather than configuration that quietly does nothing.
-  profileCapable = [ "opencode" ];
-
-  misplacedProfiles = lib.attrNames (
-    lib.filterAttrs (
-      name: provider:
-      (provider.profiles != { } || provider.profileStrategy != null)
-      && !(builtins.elem name profileCapable)
-    ) enabledProviders
-  );
-
-  # Providers express model assignments in their own vocabulary, so the contract
-  # keeps one field per shape rather than one field pretending they are alike.
-  # This table is the whole of the provider knowledge in this module, and it is
-  # contract knowledge — versioned and documented — not asset knowledge.
-  providerModelField = {
-    "opencode" = "modelAssignments";
-    "claude-code" = "claudeModelAssignments";
-    "kiro-ide" = "kiroModelAssignments";
-    "codex" = "codexModelAssignments";
-    "pi" = "piModelAssignments";
-  };
-
-  providerModels = lib.foldlAttrs (
-    acc: name: provider:
-    let
-      field = providerModelField.${name} or null;
-    in
-    if provider.models == { } || field == null then
-      acc
-    else
-      acc
-      // {
-        ${field} =
-          (acc.${field} or { })
-          // (
-            if field == "modelAssignments" then
-              lib.mapAttrs (_: toModelAssignment) provider.models
-            else
-              provider.models
-          );
-      }
-  ) { } enabledProviders;
-
-  unmodelledProviders = lib.attrNames (
-    lib.filterAttrs (
-      name: provider: provider.models != { } && !(providerModelField ? ${name})
-    ) enabledProviders
-  );
+  # A provider enabled with nothing else set has nothing worth nesting: an
+  # empty block would still be a key the renderer has to look at and find
+  # nothing in, so it is left out of the document instead.
+  providers = lib.filterAttrs (_: block: block != { }) (lib.mapAttrs providerBlock enabledProviders);
 
   role =
     id: value:
@@ -710,34 +696,26 @@ let
     // whenSet "components" (enabledNames cfg.components)
     // whenSet "skills" (enabledNames cfg.skills)
     // whenSet "skillExclusions" (disabledNames cfg.skills)
-    // whenSet "skillAssignments" providerSkills
     // whenSet "communityTools" (enabledNames cfg.communityTools)
     // whenSet "openCodePlugins" (enabledNames cfg.openCodePlugins)
     // whenSet "persona" cfg.persona
     // whenSet "preset" cfg.preset
     // whenSet "sddMode" cfg.sdd.mode
-    // whenSet "sddProfileStrategy" declaredProfileStrategy
     // optionalAttrs cfg.sdd.strictTdd { strictTDD = true; }
-    // whenSet "profiles" declaredProfiles
     // whenSet "scope" cfg.install.scope
     // whenSet "channel" cfg.install.channel
     // whenSet "rddMode" cfg.review.mode
-    // whenSet "backgroundIntent" cfg.backgroundSubagents.opencode
-    // whenSet "piBackgroundIntent" cfg.backgroundSubagents.pi
-    // providerModels
-    // providerModelFamilies
+    // whenSet "providers" providers
     // whenSet "claudePhaseAssignments" cfg.models.claudePhases
     // whenSet "codexCarrilModelAssignments" cfg.models.codexCarril
     // whenSet "codexPhaseModelAssignments" cfg.models.codexPhases
     // whenSet "codexOrchestrator" cfg.models.codexOrchestrator
-    // whenSet "modelPresets" providerPresets
     // whenSet "permissions" (
       whenSet "allow" cfg.permissions.allow
       // whenSet "deny" cfg.permissions.deny
       // whenSet "ask" cfg.permissions.ask
     )
     // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) cfg.mcpServers)
-    // whenSet "mcpServerAssignments" providerServers
     // cfg.settings;
 
   document = {
@@ -887,30 +865,6 @@ let
         cp -r --no-preserve=mode,ownership ${rendered} "$out"
         ${lib.concatMapStringsSep "\n" (path: ''rm -f "$out/tree/${path}"'') withheld}
       '';
-
-  # Which contract field carries a borrowed model profile. Only one client has
-  # no catalogue of its own today, and one that is absent here is reported
-  # rather than accepted and ignored.
-  providerModelFamilyField = {
-    "pi" = "piModelFamily";
-  };
-
-  providerModelFamilies = lib.foldlAttrs (
-    acc: name: provider:
-    let
-      field = providerModelFamilyField.${name} or null;
-    in
-    if provider.modelFamily == null || field == null then
-      acc
-    else
-      acc // { ${field} = provider.modelFamily; }
-  ) { } enabledProviders;
-
-  unborrowableProviders = lib.attrNames (
-    lib.filterAttrs (
-      name: provider: provider.modelFamily != null && !(providerModelFamilyField ? ${name})
-    ) enabledProviders
-  );
 
   providerRoots = {
     "opencode" = ".config/opencode";
@@ -1496,18 +1450,6 @@ in
         message = "programs.gentle-ai.customProviders.${lib.concatStringsSep ", " unknownSourceProviders} takes its harness from a client that is not enabled, or that has no known directory";
       }
       {
-        assertion = unborrowableProviders == [ ];
-        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " unborrowableProviders}.modelFamily names a client that has a model catalogue of its own; assign its models directly";
-      }
-      {
-        assertion = misplacedProfiles == [ ];
-        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " misplacedProfiles} declares profiles, which only ${lib.concatStringsSep ", " profileCapable} expresses";
-      }
-      {
-        assertion = unmodelledProviders == [ ];
-        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " unmodelledProviders}.models is set, but the contract models no assignments for that provider; move them under programs.gentle-ai.settings if a newer contract added them";
-      }
-      {
         assertion = lib.all (entry: (entry.text == null) != (entry.source == null)) (
           lib.attrValues cfg.extraFiles
         );
@@ -1518,6 +1460,16 @@ in
           lib.attrValues cfg.mcpServers
         );
         message = "each programs.gentle-ai.mcpServers entry must set exactly one of command or url";
+      }
+      {
+        # backgroundSubagents is keyed to a fixed set of clients, not to
+        # enabledProviders, so declaring it for a client this installation
+        # never enables would otherwise render nothing and say nothing.
+        assertion = lib.all (name: cfg.backgroundSubagents.${name} == null || enabledProviders ? ${name}) [
+          "opencode"
+          "pi"
+        ];
+        message = "programs.gentle-ai.backgroundSubagents declares an intent for a client this installation does not enable; enable programs.gentle-ai.providers.<name> or drop the intent";
       }
     ];
 

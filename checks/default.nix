@@ -120,6 +120,197 @@ in
     ''}
   '';
 
+  # A provider outside opencode/pi declaring profiles used to be a Nix-level
+  # mistake this module named itself. That knowledge now lives in the
+  # renderer, which reports it as a diagnostic instead, so the same document
+  # must evaluate here: whether it is accepted is the renderer's call, made
+  # against the immutable trees at render time, not this module's at eval
+  # time.
+  misplacedProfilesNoLongerRejectedAtEval =
+    pkgs.runCommandLocal "gentle-ai-check-misplaced-profiles-not-rejected-at-eval" { }
+      ''
+        set -euo pipefail
+        ${lib.optionalString
+          (
+            !(accepted [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.claude-code = {
+                    enable = true;
+                    profiles.cheap.orchestrator = {
+                      provider = "anthropic";
+                      model = "claude-haiku";
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a provider declaring profiles outside opencode/pi was rejected at Nix eval" >&2
+            exit 1
+          ''
+        }
+        touch "$out"
+      '';
+
+  # The nested providers.<id> block is the wire shape the renderer now decodes,
+  # and the fields it replaced must not still reach the document: a stale
+  # flat field surviving here would mean two documents disagree about what the
+  # contract accepts.
+  providersDocumentShape =
+    let
+      # A shared fixture applied to every client, so a stale top-level key any
+      # old emission path used to fire through is asserted absent regardless of
+      # which client used to carry it, not just the one this check happens to
+      # enable.
+      commonFields = {
+        models.orchestrator.model = "anthropic/claude-haiku";
+        modelPreset = "economy";
+        skills = [ "go-testing" ];
+        mcpServers.atlas.command = "atlas";
+      };
+      shapeConfiguration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers = lib.genAttrs [ "opencode" "claude-code" "kiro-ide" "codex" "pi" ] (
+              name:
+              {
+                enable = true;
+              }
+              // commonFields
+              // lib.optionalAttrs (name == "opencode") {
+                profiles.cheap.orchestrator = {
+                  provider = "anthropic";
+                  model = "claude-haiku";
+                };
+                profileStrategy = "generated-multi";
+                activeProfile = "cheap";
+              }
+              // lib.optionalAttrs (name == "pi") {
+                modelFamily = "codex";
+                profiles.cheap.orchestrator = {
+                  provider = "anthropic";
+                  model = "claude-haiku";
+                };
+                activeProfile = "cheap";
+              }
+            );
+            backgroundSubagents = {
+              opencode = "on";
+              pi = "on";
+            };
+          };
+        }
+      ];
+      document = shapeConfiguration.config.programs.gentle-ai.document;
+      pi = document.selection.providers.pi;
+      opencode = document.selection.providers.opencode;
+      removedTopLevelKeys = [
+        "piModelAssignments"
+        "claudeModelAssignments"
+        "kiroModelAssignments"
+        "codexModelAssignments"
+        "modelAssignments"
+        "piModelFamily"
+        "modelPresets"
+        "skillAssignments"
+        "mcpServerAssignments"
+        "sddProfileStrategy"
+        "backgroundIntent"
+        "piBackgroundIntent"
+        "profiles"
+      ];
+    in
+    assert pi.models.orchestrator.model == "anthropic/claude-haiku";
+    assert pi.profiles.cheap.orchestrator.provider == "anthropic";
+    assert pi.profiles.cheap.orchestrator.model == "claude-haiku";
+    assert pi.activeProfile == "cheap";
+    assert pi.backgroundIntent == "on";
+    assert pi.modelFamily == "codex";
+    assert pi.modelPreset == "economy";
+    assert pi.skills == [ "go-testing" ];
+    assert pi.mcpServers.atlas.command == "atlas";
+    assert opencode.profileStrategy == "generated-multi";
+    assert opencode.backgroundIntent == "on";
+    assert lib.all (key: !(document.selection ? ${key})) removedTopLevelKeys;
+    pkgs.runCommandLocal "gentle-ai-check-providers-document-shape" { } ''touch "$out"'';
+
+  # The eval-level assertions this check replaced used to reject a misplaced
+  # field before it ever reached Gentle AI. `misplacedProfilesNoLongerRejectedAtEval`
+  # proves half of what they proved -- that Nix now accepts the document -- and
+  # this proves the other half: the renderer itself still catches the mistake,
+  # at build time, against the immutable document, and names it in a
+  # diagnostic rather than staying silent.
+  rendererSurfacesUnsupportedProviderMistakes =
+    let
+      gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+      documentFor =
+        providers:
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              inherit providers;
+            };
+          }
+        ]).config.programs.gentle-ai.document;
+      cases = {
+        profiles = {
+          code = "config.provider.profiles.unsupported-provider";
+          document = documentFor {
+            claude-code.enable = true;
+            claude-code.profiles.cheap.orchestrator = {
+              provider = "anthropic";
+              model = "claude-haiku";
+            };
+          };
+        };
+        models = {
+          code = "config.provider.models.unsupported-provider";
+          document = documentFor {
+            gemini-cli = {
+              enable = true;
+              models.orchestrator.model = "gemini-pro";
+            };
+          };
+        };
+        modelFamily = {
+          code = "config.provider.model-family.unsupported-provider";
+          document = documentFor {
+            claude-code = {
+              enable = true;
+              modelFamily = "codex";
+            };
+          };
+        };
+      };
+    in
+    pkgs.runCommandLocal "gentle-ai-check-renderer-surfaces-mistakes"
+      { nativeBuildInputs = [ gentleAi ]; }
+      ''
+        set -euo pipefail
+        ${lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (name: case: ''
+            mkdir -p "$PWD/home-${name}"
+            if gentle-ai config render --config ${pkgs.writeText "gentle-ai-bad-document-${name}.json" (builtins.toJSON case.document)} --home "$PWD/home-${name}" --destination "$PWD/home-${name}" --stage "$PWD/stage-${name}" > ${name}.out 2>&1
+            then
+              echo "the renderer accepted a document naming ${name}, expected a ${case.code} diagnostic:" >&2
+              cat ${name}.out >&2
+              exit 1
+            fi
+            grep -q ${lib.escapeShellArg case.code} ${name}.out || {
+              echo "the renderer's diagnostic did not name ${case.code}:" >&2
+              cat ${name}.out >&2
+              exit 1
+            }
+          '') cases
+        )}
+        touch "$out"
+      '';
+
   # Layering is what makes the harness editable: an entry must be able to add a
   # file Gentle AI does not ship and to replace one it does.
   ownContentLayersOverTheRender = treeCheck "extra-files" ''

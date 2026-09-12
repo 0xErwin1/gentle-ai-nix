@@ -41,6 +41,19 @@
         settings.theme = "dark";
         models.sdd-apply = "opus";
       };
+
+      # Pi has no agents of its own to generate a profile into, so its
+      # profiles live in gentle-pi's own profile store instead. Declaring
+      # `activeProfile` is the declarative form of switching to it with
+      # gentle-pi's own `/gentle:profiles`.
+      pi = {
+        enable = true;
+        profiles.cheap.orchestrator = {
+          provider = "anthropic";
+          model = "claude-haiku";
+        };
+        activeProfile = "cheap";
+      };
     };
 
     # Components are what Gentle AI configures. Engram is one of them, so

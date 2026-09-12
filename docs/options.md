@@ -1286,6 +1286,45 @@ true
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.activeProfile
+
+
+
+Names one of this provider’s ` profiles ` to activate\.
+
+For Pi, the renderer writes it into gentle-pi’s global profile
+store alongside the profiles themselves and materialises that
+profile’s routing and orchestrator defaults, the same thing
+running ` /gentle:profiles ` inside Pi would do\. Declaring it here
+is the declarative form of that command: the profile named wins
+over whatever gentle-pi last had active, on the next switch\.
+
+Only Pi reads this; a profile is otherwise activated by the
+client’s own runtime\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"cheap"
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.mcpServers
 
 
@@ -1566,7 +1605,9 @@ How profiles are materialised for this client: generated alongside
 the default agents, or left to an external profile manager that
 keeps one active at a time\. Omitted, Gentle AI detects it\.
 
-Only OpenCode expresses this today\.
+This is OpenCode’s own concept: Pi’s profiles live in gentle-pi’s
+profile store instead, and are switched with ` activeProfile `
+rather than a materialisation strategy\.
 
 
 
@@ -1595,12 +1636,18 @@ null
 
 
 
-Named SDD profiles for this client, switchable at runtime\. Each one
-generates its own orchestrator and phase agents alongside the
-default set, so a task can run on cheap models without reconfiguring
-anything\.
+Named SDD profiles for this client, switchable at runtime\.
 
-Only OpenCode expresses these today\.
+OpenCode generates its own orchestrator and phase agents per
+profile, alongside the default set, so a task can run on cheap
+models without reconfiguring anything\. Pi has no agents of its
+own to generate: it keeps these in gentle-pi’s global profile
+store, ` ~/.pi/gentle-ai/profiles.json `, and its own ` apply `
+switches between them; see ` activeProfile ` for declaring which
+one is active\. A profile’s name follows gentle-pi’s own rule —
+letters or digits, then letters, digits, ` . `, ` _ ` or ` - `, at most
+64 characters — because that is the name gentle-pi has to accept
+it under, on Pi\.
 
 
 
