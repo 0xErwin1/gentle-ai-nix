@@ -54,6 +54,29 @@ let
     release = selectedEngramRelease;
   };
 
+  # Where the plugin lands inside the rendered tree, and so inside the home
+  # directory once that tree is linked in. A store path is not usable here:
+  # Pi records a local source by its path, so installing the store path
+  # directly would change identity on every rebuild and leave Pi holding two
+  # entries for what is meant to be the same plugin. Landing it at a fixed
+  # path under Pi's own Gentle AI directory instead is what keeps the
+  # identity Pi records stable across rebuilds, the store path underneath it
+  # notwithstanding.
+  gentleEngramPiPluginPath = ".pi/gentle-ai/plugins/gentle-engram";
+  gentleEngramPiHomePath = "${config.home.homeDirectory}/${gentleEngramPiPluginPath}";
+
+  piEnabled = enabledProviders ? pi;
+
+  # Only Pi reads `packages`; a non-pi provider setting it is named here so
+  # the assertion below can point at exactly the providers at fault.
+  nonPiProvidersWithPackages = lib.attrNames (
+    lib.filterAttrs (name: provider: name != "pi" && provider.packages != { }) enabledProviders
+  );
+
+  # The plugin is only worth linking into the tree for the one case it is
+  # ever installed from: Pi enabled, and `engramRelease` off the npm default.
+  embedGentleEngramPiPlugin = piEnabled && cfg.engramRelease != "stable";
+
   gentlePiReleases = import ../packages/pi-versions.nix;
 
   selectedGentlePiRelease = gentlePiReleases.${cfg.gentlePiRelease};
@@ -76,7 +99,7 @@ let
       gentle-pi = gentlePiSource selectedGentlePiRelease;
     }
     // optionalAttrs (cfg.engramRelease != "stable") {
-      gentle-engram = "${gentleEngramPiPackage}";
+      gentle-engram = gentleEngramPiHomePath;
     };
 
   # The community tools this flake packages, keyed by Gentle AI's own tool id.
@@ -164,7 +187,6 @@ let
           description = ''
             Provider-specific configuration the neutral contract does not model.
             It is recursively merged into this provider's settings and no other's.
-            Values from `extensions` at the same leaf override these settings.
           '';
         };
 
@@ -256,6 +278,37 @@ let
             that identifies itself to a server, or one an installation gives
             tools the others have no use for, is named here; the rest take the
             flat set.
+          '';
+        };
+
+        packages = mkOption {
+          type = types.attrsOf types.str;
+          default = { };
+          example = literalExpression ''{ pi-btw = "npm:pi-btw"; }'';
+          description = ''
+            Pi packages this installation adds, keyed by package name with a Pi
+            install source as the value: `npm:<name>[@version]`,
+            `git:<host>/<user>/<repo>[@ref]`, or an absolute local path. A Pi
+            extension is itself an npm (or git) package, installed the same
+            way as gentle-pi's own harness, so this is where one is declared.
+
+            `gentle-pi` and `gentle-engram` are managed by `gentlePiRelease`
+            and `engramRelease` instead, and are refused here at eval; use
+            those options to choose where those two come from. A key naming
+            one of Pi's own other fixed packages (`pi-mcp-adapter`,
+            `@juicesharp/rpiv-ask-user-question`, `pi-web-access`, `pi-btw`)
+            overrides that package's install source in place rather than
+            adding a second entry alongside it.
+
+            Removing a package from this set does not retire its installed
+            entry on its own -- the module has no record of what an earlier
+            generation declared, only what this one does -- so that still
+            needs a manual `pi remove`. Changing its source while the name
+            stays the same is retired automatically on the next switch, the
+            same way a channel change retires `gentle-pi` or `gentle-engram`.
+
+            Only Pi reads this; a provider other than pi is refused for
+            setting it.
           '';
         };
 
@@ -702,7 +755,7 @@ let
     // whenSet "activeProfile" provider.activeProfile
     // whenSet "skills" provider.skills
     // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) provider.mcpServers)
-    // optionalAttrs (name == "pi") (whenSet "packages" pluginPackagesFor);
+    // optionalAttrs (name == "pi") (whenSet "packages" (provider.packages // pluginPackagesFor));
 
   # A provider enabled with nothing else set has nothing worth nesting: an
   # empty block would still be a key the renderer has to look at and find
@@ -764,7 +817,7 @@ let
     inherit selection;
   }
   // whenSet "roles" (lib.mapAttrsToList role cfg.roles)
-  // whenSet "extensions" (lib.recursiveUpdate providerSettings cfg.extensions);
+  // whenSet "extensions" providerSettings;
 
   documentFile = pkgs.writeText "gentle-ai-document.json" (builtins.toJSON document);
 
@@ -779,12 +832,30 @@ let
   # than through a second home.file entry keeps the result one tree, which is
   # what makes overriding a generated file possible at all: two Home Manager
   # entries for one path collide instead of layering.
+  #
+  # The embedded Pi plugin travels the same tree for the same reason: landing
+  # it through a second home.file entry would fight the one below for the
+  # same directory the moment both exist, where layering onto one tree just
+  # works.
   overlaid =
-    if cfg.extraFiles == { } then
+    if cfg.extraFiles == { } && !embedGentleEngramPiPlugin then
       base
     else
       pkgs.runCommandLocal "gentle-ai-config-overlaid" { } ''
         cp -r --no-preserve=mode,ownership ${base} "$out"
+        ${lib.optionalString embedGentleEngramPiPlugin ''
+          target="$out/tree/${gentleEngramPiPluginPath}"
+          mkdir -p "$(dirname "$target")"
+          rm -rf "$target"
+          cp -r --no-preserve=mode,ownership ${gentleEngramPiPackage} "$target"
+
+          # `--no-preserve=mode` is what keeps a copied tree from carrying the
+          # store's read-only bits, but it also drops the wrapper's execute
+          # bit; that has to come back or `bin/pi-engram` stops being runnable
+          # the moment it is copied rather than symlinked.
+          chmod -R u+rwX,go+rX "$target"
+          find "$target/bin" -type f -exec chmod +x {} +
+        ''}
         ${lib.concatMapStringsSep "\n" (
           entry:
           let
@@ -848,12 +919,113 @@ let
     ];
   } (builtins.readFile ../lib/provision.py);
 
+  retirer = pkgs.writers.writePython3Bin "gentle-ai-retire" {
+    flakeIgnore = [
+      "E501"
+      "W503"
+    ];
+  } (builtins.readFile ../lib/retire.py);
+
+  piSettingsPath = "${config.home.homeDirectory}/.pi/agent/settings.json";
+
+  # A displaced entry is one Pi still lists that the channel this generation
+  # picked no longer wants: a package now installed under a different source,
+  # or a plugin build now installed by a different path. Each rule names one
+  # identity a channel choice displaces; `gentle-ai-retire` reads it back
+  # against Pi's own settings.json, never against a copy this module keeps.
+  # gentle-pi's own npm default, spelled the way the fixed sequence's own
+  # unoverridden `pi install npm:<name>` command would spell it -- the
+  # `wanted` a rule compares against when there is no channel override.
+  gentlePiNpmDefault = "npm:gentle-pi";
+  gentleEngramNpmDefault = "npm:gentle-engram";
+
+  # Every rule below carries a `wanted` spelling: the exact entry (or, for a
+  # local path, the location it resolves to) that has to already be present
+  # in Pi's freshly read package list before that rule is allowed to retire
+  # anything. Without this, retiring right after a provisioning step that
+  # failed silently -- a registry or git host unreachable, which costs only
+  # the provisioning step's own packages, never the switch -- would remove
+  # the previous, working entry and leave nothing installed at all until some
+  # later switch happens to reach the network. Requiring the replacement
+  # first is what keeps that failure costing only a missed retirement instead
+  # of the harness itself.
+  displacedPiRules =
+    lib.optional (cfg.gentlePiRelease != "stable") {
+      type = "npm";
+      name = "gentle-pi";
+      wanted = pluginPackagesFor.gentle-pi;
+    }
+    # A revision bump within the same non-stable channel is still a source
+    # change: the earlier rev's git entry is a different spelling of the same
+    # package, so it displaces the same way a user-declared package's own
+    # source change does, and is retired the same way -- by package identity,
+    # keeping only the exact source this generation declared.
+    ++ lib.optional (cfg.gentlePiRelease != "stable") {
+      type = "package";
+      keep = pluginPackagesFor.gentle-pi;
+      wanted = pluginPackagesFor.gentle-pi;
+    }
+    ++ lib.optional (cfg.gentlePiRelease == "stable") {
+      type = "git";
+      name = "gentle-pi";
+      wanted = gentlePiNpmDefault;
+    }
+    ++ lib.optional (cfg.engramRelease != "stable") {
+      type = "npm";
+      name = "gentle-engram";
+      wanted = gentleEngramPiHomePath;
+    }
+    ++ [
+      (
+        {
+          type = "local";
+          # A plugin installed by store path changes identity on every
+          # rebuild, so the versioned store path itself is always displaced,
+          # regardless of channel; a plugin installed at some earlier stable
+          # path is displaced the same way.
+          patterns = [
+            "-gentle-engram-pi-[^/]*$"
+            "/gentle-engram$"
+          ];
+        }
+        // (
+          if cfg.engramRelease != "stable" then
+            {
+              # The one local entry this generation still wants kept, off
+              # stable. On stable there is none to except: every local entry,
+              # the current plugin path included, is displaced.
+              except = gentleEngramPiHomePath;
+              wanted = gentleEngramPiHomePath;
+            }
+          else
+            {
+              wanted = gentleEngramNpmDefault;
+            }
+        )
+      )
+    ]
+    # A user-declared extension package changing its source displaces its own
+    # earlier entry the same way a channel change displaces gentle-pi's or
+    # gentle-engram's: same package, different identity. The identity is read
+    # from the source itself, never from the attribute key here -- the key is
+    # free-form and Pi has no notion of it. Dropping a package from the set
+    # entirely is not covered -- there is no record here of what an earlier
+    # generation declared, only what this one does -- so that still needs a
+    # manual `pi remove`, as `packages`'s own description says.
+    ++ lib.mapAttrsToList (_: source: {
+      type = "package";
+      keep = source;
+      wanted = source;
+    }) (cfg.providers.pi.packages or { });
+
   # Which clients were asked to have their package harness installed. The
   # commands themselves are read from the rendered manifest at activation, so
   # this module never holds a copy of a package list that could go stale.
   provisioningProviders = lib.attrNames (
     lib.filterAttrs (_: provider: provider.provisionPackages) enabledProviders
   );
+
+  piProvisionsPackages = piEnabled && enabledProviders.pi.provisionPackages;
 
   # Community tools wire themselves into the clients through their own CLI. That
   # call is local and idempotent, unlike a client's package installation, so it
@@ -1104,8 +1276,13 @@ in
         `stable` is the newest tagged release, and Pi installs its plugin
         from npm as it always has. `rc` is the 2.0 candidate selectable in
         engram-versions.nix; choosing it also has Pi install the plugin
-        built from that same revision by local store path instead of npm,
-        so the harness binary and the plugin can never drift apart.
+        built from that same revision, so the harness binary and the plugin
+        can never drift apart. The build is linked into the rendered tree at
+        `.pi/gentle-ai/plugins/gentle-engram`, a path stable across rebuilds,
+        rather than installed from its own store path directly: Pi records a
+        local source by its path, so the store path itself would change
+        identity on every rebuild and leave Pi holding two entries for what
+        is meant to be the same plugin.
 
         Setting `engramPackage` directly overrides the binary this resolves
         to, but not which plugin build Pi installs.
@@ -1363,19 +1540,6 @@ in
       };
     };
 
-    extensions = mkOption {
-      type = types.attrsOf types.anything;
-      default = { };
-      description = ''
-        Provider-specific configuration keyed by provider, for a provider not
-        declared through `providers`. Prefer `providers.<name>.settings`.
-
-        When both options name a provider, their attribute sets merge
-        recursively. `extensions` wins at the same leaf; lists are replaced,
-        not combined.
-      '';
-    };
-
     settings = mkOption {
       type = types.attrsOf types.anything;
       default = { };
@@ -1554,6 +1718,28 @@ in
         ];
         message = "programs.gentle-ai.backgroundSubagents declares an intent for a client this installation does not enable; enable programs.gentle-ai.providers.<name> or drop the intent";
       }
+      {
+        # gentle-pi and gentle-engram are the two entries gentlePiRelease and
+        # engramRelease already manage; accepting them here too would let a
+        # channel choice and a hand-written source silently disagree about
+        # which one Pi actually installs.
+        assertion =
+          !(lib.any (
+            name:
+            lib.elem name [
+              "gentle-pi"
+              "gentle-engram"
+            ]
+          ) (lib.attrNames (cfg.providers.pi.packages or { })));
+        message = "programs.gentle-ai.providers.pi.packages must not name gentle-pi or gentle-engram; use programs.gentle-ai.gentlePiRelease and programs.gentle-ai.engramRelease to choose where those come from";
+      }
+      {
+        # Pi is what reads this; a provider other than pi setting it is a
+        # mistake worth naming at eval rather than a `packages` block the
+        # document carries for a client that will never look at it.
+        assertion = nonPiProvidersWithPackages == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithPackages}.packages is refused: only providers.pi reads packages";
+      }
     ];
 
     programs.gentle-ai = { inherit document rendered; };
@@ -1630,6 +1816,27 @@ in
           run chmod -R u+w ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
         '') copiedTargets
       )
+    );
+
+    # After Pi has installed whatever this generation's channels want, it is
+    # asked to drop what they displaced -- running after, rather than before,
+    # provisioning is necessary but not sufficient on its own: provisioning
+    # degrades a failed install to a logged line and exit 0, so this step
+    # still runs even when the replacement never arrived. Each rule's own
+    # `wanted` spelling is what actually prevents that from costing the
+    # harness: the retirer checks it is already present in Pi's freshly read
+    # packages before retiring anything for that rule, so a replacement that
+    # failed to install leaves the previous, working entry in place instead
+    # of removing it into nothing.
+    home.activation.gentleAiRetireDisplacedPiPackages = lib.mkIf piProvisionsPackages (
+      lib.hm.dag.entryAfter [ "writeBoundary" "gentleAiProvisionPackages" ] ''
+        PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
+          run ${lib.getExe retirer} \
+            --settings ${lib.escapeShellArg piSettingsPath} \
+            ${lib.concatMapStringsSep " " (
+              rule: "--displaced ${lib.escapeShellArg (builtins.toJSON rule)}"
+            ) displacedPiRules}
+      ''
     );
 
     # Last, because it is the only step that reaches a network: everything a

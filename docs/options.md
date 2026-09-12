@@ -575,8 +575,13 @@ another’s Pi plugin is not a configuration anyone chose on purpose\.
 ` stable ` is the newest tagged release, and Pi installs its plugin
 from npm as it always has\. ` rc ` is the 2\.0 candidate selectable in
 engram-versions\.nix; choosing it also has Pi install the plugin
-built from that same revision by local store path instead of npm,
-so the harness binary and the plugin can never drift apart\.
+built from that same revision, so the harness binary and the plugin
+can never drift apart\. The build is linked into the rendered tree at
+` .pi/gentle-ai/plugins/gentle-engram `, a path stable across rebuilds,
+rather than installed from its own store path directly: Pi records a
+local source by its path, so the store path itself would change
+identity on every rebuild and leave Pi holding two entries for what
+is meant to be the same plugin\.
 
 Setting ` engramPackage ` directly overrides the binary this resolves
 to, but not which plugin build Pi installs\.
@@ -592,32 +597,6 @@ one of “rc”, “stable”
 
 ```nix
 "stable"
-```
-
-
-
-## programs\.gentle-ai\.extensions
-
-
-
-Provider-specific configuration keyed by provider, for a provider not
-declared through ` providers `\. Prefer ` providers.<name>.settings `\.
-
-When both options name a provider, their attribute sets merge
-recursively\. ` extensions ` wins at the same leaf; lists are replaced,
-not combined\.
-
-
-
-*Type:*
-attribute set of anything
-
-
-
-*Default:*
-
-```nix
-{ }
 ```
 
 
@@ -1354,6 +1333,57 @@ true
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.packages
+
+
+
+Pi packages this installation adds, keyed by package name with a Pi
+install source as the value: ` npm:<name>[@version] `,
+` git:<host>/<user>/<repo>[@ref] `, or an absolute local path\. A Pi
+extension is itself an npm (or git) package, installed the same
+way as gentle-pi’s own harness, so this is where one is declared\.
+
+` gentle-pi ` and ` gentle-engram ` are managed by ` gentlePiRelease `
+and ` engramRelease ` instead, and are refused here at eval; use
+those options to choose where those two come from\. A key naming
+one of Pi’s own other fixed packages (` pi-mcp-adapter `,
+` @juicesharp/rpiv-ask-user-question `, ` pi-web-access `, ` pi-btw `)
+overrides that package’s install source in place rather than
+adding a second entry alongside it\.
+
+Removing a package from this set does not retire its installed
+entry on its own – the module has no record of what an earlier
+generation declared, only what this one does – so that still
+needs a manual ` pi remove `\. Changing its source while the name
+stays the same is retired automatically on the next switch, the
+same way a channel change retires ` gentle-pi ` or ` gentle-engram `\.
+
+Only Pi reads this; a provider other than pi is refused for
+setting it\.
+
+
+
+*Type:*
+attribute set of string
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{ pi-btw = "npm:pi-btw"; }
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.activeProfile
 
 
@@ -2002,7 +2032,6 @@ false
 
 Provider-specific configuration the neutral contract does not model\.
 It is recursively merged into this provider’s settings and no other’s\.
-Values from ` extensions ` at the same leaf override these settings\.
 
 
 

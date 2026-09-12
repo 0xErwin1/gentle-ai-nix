@@ -271,7 +271,13 @@ in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@"
       overriddenDocument.selection.providers.pi.packages.gentle-pi;
-    assert lib.hasPrefix "/nix/store/" overriddenDocument.selection.providers.pi.packages.gentle-engram;
+    # A store path here would change identity on every rebuild and leave Pi
+    # holding two entries for the same plugin, so the source Pi is given is
+    # the stable path the plugin is linked into the home directory at, never
+    # the store path underneath it.
+    assert
+      overriddenDocument.selection.providers.pi.packages.gentle-engram
+      == "/home/test-user/.pi/gentle-ai/plugins/gentle-engram";
     pkgs.runCommandLocal "gentle-ai-check-pi-packages-document-shape" { } ''touch "$out"'';
 
   # piPackagesDocumentShape only proves the document carries the right
@@ -371,6 +377,265 @@ in
         touch "$out"
       '';
 
+  # The stable path piPackagesDocumentShape asserts Pi is given only means
+  # something if a plugin actually lives there once the tree is projected
+  # onto the home directory -- this builds the real rendered tree, the same
+  # way ownContentLayersOverTheRender does for extraFiles, and checks the
+  # plugin's own entry point landed at that exact path.
+  piPluginEmbeddedInRenderedTree =
+    let
+      rendered =
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers.pi.enable = true;
+              engramRelease = "rc";
+            };
+          }
+        ]).config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-plugin-embedded" { inherit rendered; } ''
+      test -x "$rendered/tree/.pi/gentle-ai/plugins/gentle-engram/bin/pi-engram" || {
+        echo "the gentle-engram Pi plugin was not embedded at its stable path" >&2
+        exit 1
+      }
+      touch "$out"
+    '';
+
+  # A Pi extension is itself an npm (or git) package, so `providers.pi.packages`
+  # is where one is declared. This proves a user-declared entry reaches the
+  # document alongside whatever the channel options themselves add, under the
+  # same key the channel-managed packages use.
+  piExtraPackageDocumentShape =
+    let
+      document =
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              gentlePiRelease = "main";
+              providers.pi = {
+                enable = true;
+                packages.my-plugin = "git:github.com/x/y@rev";
+              };
+            };
+          }
+        ]).config.programs.gentle-ai.document;
+      packages = document.selection.providers.pi.packages;
+    in
+    assert packages.my-plugin == "git:github.com/x/y@rev";
+    assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@" packages.gentle-pi;
+    pkgs.runCommandLocal "gentle-ai-check-pi-extra-package-document-shape" { } ''touch "$out"'';
+
+  # piExtraPackageDocumentShape only proves the document carries the extra
+  # entry; this proves the renderer installs it, after Pi's own fixed
+  # sequence and without disturbing their order or count -- against the real
+  # `gentle-ai config render`, the same way piPackagesRenderThrough does for
+  # the channel-managed entries.
+  piExtraPackageRendersAfterFixedSequence =
+    let
+      gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+
+      document =
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers.pi = {
+                enable = true;
+                packages.my-plugin = "git:github.com/x/y@rev";
+              };
+            };
+          }
+        ]).config.programs.gentle-ai.document;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-extra-package-render-through"
+      {
+        nativeBuildInputs = [
+          gentleAi
+          pkgs.jq
+        ];
+        documentFile = pkgs.writeText "gentle-ai-document-pi-extra-package.json" (builtins.toJSON document);
+      }
+      ''
+        set -euo pipefail
+
+        mkdir -p home stage
+        gentle-ai config render \
+          --config "$documentFile" \
+          --home "$PWD/home" \
+          --destination "$PWD/home" \
+          --stage "$PWD/stage" \
+          > manifest.json
+
+        jq -r '
+          .manifest.resources[]
+          | select(.selector == "provision" and .agent == "pi")
+          | .commands[]
+          | join(" ")
+        ' manifest.json > commands
+
+        count=$(wc -l < commands)
+        [ "$count" -eq 8 ] || {
+          echo "expected the fixed 7-command sequence plus 1 extra, got $count:" >&2
+          cat commands >&2
+          exit 1
+        }
+
+        tail -n1 commands | grep -qxF "pi install git:github.com/x/y@rev" || {
+          echo "the extra package did not render as the last command:" >&2
+          cat commands >&2
+          exit 1
+        }
+
+        for want in "pi install npm:gentle-pi" "pi install npm:gentle-engram" "pi install npm:pi-mcp-adapter" "npm exec --yes --package gentle-engram@latest -- pi-engram init" "pi install npm:@juicesharp/rpiv-ask-user-question" "pi install npm:pi-web-access" "pi install npm:pi-btw"; do
+          grep -qxF "$want" commands || {
+            echo "the fixed sequence did not run: $want" >&2
+            cat commands >&2
+            exit 1
+          }
+        done
+
+        touch "$out"
+      '';
+
+  # A key naming one of Pi's other fixed packages overrides that package's
+  # own command in place: the fixed sequence never installs the bare spec
+  # alongside the pinned one, so the "package" retirement rule that retires
+  # a bare leftover for the same name is correct rather than fighting the
+  # fixed sequence's own reinstall on every switch.
+  piPinnedFixedPackageOverridesInPlace =
+    let
+      gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+
+      document =
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers.pi = {
+                enable = true;
+                packages.pi-btw = "npm:pi-btw@1.2.3";
+              };
+            };
+          }
+        ]).config.programs.gentle-ai.document;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-pinned-fixed-package"
+      {
+        nativeBuildInputs = [
+          gentleAi
+          pkgs.jq
+        ];
+        documentFile = pkgs.writeText "gentle-ai-document-pi-pinned-fixed.json" (builtins.toJSON document);
+      }
+      ''
+        set -euo pipefail
+
+        mkdir -p home stage
+        gentle-ai config render \
+          --config "$documentFile" \
+          --home "$PWD/home" \
+          --destination "$PWD/home" \
+          --stage "$PWD/stage" \
+          > manifest.json
+
+        jq -r '
+          .manifest.resources[]
+          | select(.selector == "provision" and .agent == "pi")
+          | .commands[]
+          | join(" ")
+        ' manifest.json > commands
+
+        count=$(wc -l < commands)
+        [ "$count" -eq 7 ] || {
+          echo "pinning a fixed package changed the command count to $count:" >&2
+          cat commands >&2
+          exit 1
+        }
+
+        grep -qxF "pi install npm:pi-btw@1.2.3" commands || {
+          echo "the pinned source did not replace the fixed command:" >&2
+          cat commands >&2
+          exit 1
+        }
+        grep -qxF "pi install npm:pi-btw" commands && {
+          echo "the bare fixed command still ran alongside the pinned one:" >&2
+          cat commands >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
+  # gentle-pi and gentle-engram are gentlePiRelease's and engramRelease's own
+  # entries; accepting them here too would let a channel choice and a
+  # hand-written source silently disagree about which one Pi actually
+  # installs, so both are refused at eval rather than left to collide later.
+  piPackagesRejectManagedKeysAtEval =
+    pkgs.runCommandLocal "gentle-ai-check-pi-packages-reject-managed-keys" { }
+      ''
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi = {
+                    enable = true;
+                    packages.gentle-pi = "npm:gentle-pi@9.9.9";
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a providers.pi.packages.gentle-pi entry was accepted" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi = {
+                    enable = true;
+                    packages.gentle-engram = "npm:gentle-engram@9.9.9";
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a providers.pi.packages.gentle-engram entry was accepted" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.claude-code = {
+                    enable = true;
+                    packages.my-plugin = "npm:my-plugin";
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-pi provider's packages entry was accepted" >&2
+            exit 1
+          ''
+        }
+        touch "$out"
+      '';
+
   # An unknown channel is a typo the operator should see immediately, at Nix
   # eval, rather than as a build failure once Pi tries to install a release
   # that was never in the table.
@@ -411,6 +676,351 @@ in
             exit 1
           ''
         }
+        touch "$out"
+      '';
+
+  # A displaced entry left in Pi's settings.json is what let two copies of the
+  # gentle-engram plugin load at once until Pi refused to start. This proves
+  # the retirement helper removes exactly the entries a channel displaces --
+  # never the one still wanted, never an unrelated package -- and that a
+  # settings file already converged triggers no `pi remove` at all.
+  retireDisplacedPiPackagesRemovesExactlyTheDisplacedEntries =
+    let
+      retirer = pkgs.writers.writePython3Bin "gentle-ai-retire" {
+        flakeIgnore = [
+          "E501"
+          "W503"
+        ];
+      } (builtins.readFile ../lib/retire.py);
+
+      # One settings.json shape covering every entry kind a channel can
+      # displace: a bare npm spec, a versioned one, a pinned git source, a
+      # local entry Pi resolves relative to its own settings directory the
+      # way the module's own doc comment on `except` describes, and an
+      # unrelated package no rule should ever touch.
+      displacedFixture = {
+        packages = [
+          "npm:gentle-pi"
+          "npm:gentle-pi@2.4.0"
+          "git:github.com/Gentleman-Programming/gentle-pi@abc123"
+          "npm:gentle-engram"
+          "npm:gentle-engram@0.1.12"
+          "../../../../nix/store/xyz-gentle-engram-pi-2.0.0-rc.9"
+          "../gentle-ai/plugins/gentle-engram"
+          "npm:pi-mcp-adapter"
+        ];
+      };
+
+      # The same fixture after a "main" channel's own rules have already
+      # converged it once: every entry a rerun of those rules would displace
+      # is already gone, so a rerun must remove nothing.
+      convergedFixture = {
+        packages = [
+          "git:github.com/Gentleman-Programming/gentle-pi@abc123"
+          "../gentle-ai/plugins/gentle-engram"
+          "npm:pi-mcp-adapter"
+        ];
+      };
+
+      # An extension declared under a key that names nothing about its
+      # source: the source's own repository name ("y") is what a "package"
+      # rule must match on, never the attribute key ("my-plugin").
+      packageRuleFixture = {
+        packages = [
+          "git:github.com/x/y@rev1"
+          "git:github.com/x/y@rev2"
+          "npm:unrelated"
+        ];
+      };
+      packageRuleKeepingRev2 = builtins.toJSON {
+        type = "package";
+        keep = "git:github.com/x/y@rev2";
+      };
+
+      # gentle-pi off stable is a pinned git revision too: a rev bump is a
+      # source change for the same package, retired the same way a
+      # user-declared package's source change is -- by identity, keeping
+      # only the current rev's exact spelling.
+      packageRuleKeepingCurrentGentlePi = builtins.toJSON {
+        type = "package";
+        keep = "git:github.com/Gentleman-Programming/gentle-pi@def456";
+      };
+      packageRuleKeepingConvergedGentlePi = builtins.toJSON {
+        type = "package";
+        keep = "git:github.com/Gentleman-Programming/gentle-pi@abc123";
+      };
+
+      # Pinning one of Pi's own fixed packages (here pi-btw) retires the bare
+      # entry the fixed sequence used to install, keeping only the pinned
+      # spelling the same sequence now installs in its place -- proving the
+      # "package" rule does not fight the fixed sequence's own reinstall.
+      pinnedFixedPackageFixture = {
+        packages = [
+          "npm:pi-btw"
+          "npm:pi-btw@1.2.3"
+        ];
+      };
+      packageRuleKeepingPinnedPiBtw = builtins.toJSON {
+        type = "package";
+        keep = "npm:pi-btw@1.2.3";
+      };
+
+      npmGentlePi = builtins.toJSON {
+        type = "npm";
+        name = "gentle-pi";
+      };
+      gitGentlePi = builtins.toJSON {
+        type = "git";
+        name = "gentle-pi";
+      };
+      npmGentleEngram = builtins.toJSON {
+        type = "npm";
+        name = "gentle-engram";
+      };
+      localPatterns = [
+        "-gentle-engram-pi-[^/]*$"
+        "/gentle-engram$"
+      ];
+      localWithNoException = builtins.toJSON {
+        type = "local";
+        patterns = localPatterns;
+      };
+
+      localPatternsJSON = builtins.toJSON localPatterns;
+
+      # A run against `settingsFile`, with `rules` as repeated `--displaced`
+      # arguments, asserting the fake `pi remove` calls it made are exactly
+      # `expected` -- no more, no fewer. `keepCurrentPlugin`, when true, adds
+      # one more rule excepting this scenario's own plugin path -- built at
+      # shell runtime, since only the sandbox knows what `$PWD` resolves to,
+      # never baked in as a Nix string the way the other, path-free rules are.
+      scenario = name: settingsFile: rules: keepCurrentPlugin: expected: ''
+        mkdir -p ${name}/.pi/agent ${name}/bin
+        cp ${settingsFile} ${name}/.pi/agent/settings.json
+        cat > ${name}/bin/pi <<'SH'
+        #!/bin/sh
+        if [ "$1" = "remove" ] && [ -n "$2" ]; then
+          echo "$2" >> "$RECORD"
+          exit 0
+        fi
+        exit 1
+        SH
+        chmod +x ${name}/bin/pi
+
+        RECORD="$PWD/${name}.removed"
+        touch "$RECORD"
+        export RECORD
+
+        displaced_args=(${
+          lib.concatMapStringsSep " " (rule: "--displaced ${lib.escapeShellArg rule}") rules
+        })
+        ${lib.optionalString keepCurrentPlugin ''
+          current_plugin_path="$PWD/${name}/.pi/gentle-ai/plugins/gentle-engram"
+          local_rule=$(jq -n --argjson patterns ${lib.escapeShellArg localPatternsJSON} \
+            --arg except "$current_plugin_path" \
+            '{type: "local", patterns: $patterns, except: $except}')
+          displaced_args+=(--displaced "$local_rule")
+        ''}
+
+        PATH="$PWD/${name}/bin:$PATH" gentle-ai-retire \
+          --settings "$PWD/${name}/.pi/agent/settings.json" \
+          "''${displaced_args[@]}"
+
+        sort "$RECORD" > ${name}.actual
+        : > ${name}.expected
+        ${lib.concatMapStringsSep "\n" (
+          entry: "echo ${lib.escapeShellArg entry} >> ${name}.expected"
+        ) expected}
+        sort -o ${name}.expected ${name}.expected
+        diff -u ${name}.expected ${name}.actual || {
+          echo "${name}: removed the wrong set of entries" >&2
+          exit 1
+        }
+      '';
+    in
+    pkgs.runCommandLocal "gentle-ai-check-retire-displaced-pi-packages"
+      {
+        nativeBuildInputs = [
+          retirer
+          pkgs.jq
+        ];
+        displacedFixtureFile = pkgs.writeText "gentle-ai-pi-settings-displaced.json" (
+          builtins.toJSON displacedFixture
+        );
+        convergedFixtureFile = pkgs.writeText "gentle-ai-pi-settings-converged.json" (
+          builtins.toJSON convergedFixture
+        );
+        packageRuleFixtureFile = pkgs.writeText "gentle-ai-pi-settings-package-rule.json" (
+          builtins.toJSON packageRuleFixture
+        );
+        pinnedFixedPackageFixtureFile = pkgs.writeText "gentle-ai-pi-settings-pinned-fixed.json" (
+          builtins.toJSON pinnedFixedPackageFixture
+        );
+        partialFailureFixtureFile = pkgs.writeText "gentle-ai-pi-settings-partial-failure.json" (
+          builtins.toJSON {
+            packages = [
+              "npm:gentle-pi@2.4.0"
+              "npm:gentle-pi"
+            ];
+          }
+        );
+      }
+      ''
+        set -euo pipefail
+
+        # A channel off stable: gentle-pi installs from git, so every npm
+        # gentle-pi entry is displaced; gentle-engram installs from npm, so
+        # every local gentle-engram entry is displaced except the plugin path
+        # this generation still wants.
+        ${scenario "main" "$displacedFixtureFile"
+          [
+            npmGentlePi
+            npmGentleEngram
+            packageRuleKeepingCurrentGentlePi
+          ]
+          true
+          [
+            "npm:gentle-pi"
+            "npm:gentle-pi@2.4.0"
+            "git:github.com/Gentleman-Programming/gentle-pi@abc123"
+            "npm:gentle-engram"
+            "npm:gentle-engram@0.1.12"
+            "../../../../nix/store/xyz-gentle-engram-pi-2.0.0-rc.9"
+          ]
+        }
+
+        # The stable channel: gentle-pi installs from npm, so every git
+        # gentle-pi entry is displaced; gentle-engram installs from npm too,
+        # so every local entry is displaced, the current plugin path included
+        # -- stable has no local plugin left to except.
+        ${scenario "stable" "$displacedFixtureFile"
+          [
+            gitGentlePi
+            localWithNoException
+          ]
+          false
+          [
+            "git:github.com/Gentleman-Programming/gentle-pi@abc123"
+            "../../../../nix/store/xyz-gentle-engram-pi-2.0.0-rc.9"
+            "../gentle-ai/plugins/gentle-engram"
+          ]
+        }
+
+        # Re-running the "main" channel's own rules against a settings file
+        # they already converged must remove nothing.
+        ${scenario "converged" "$convergedFixtureFile" [
+          npmGentlePi
+          npmGentleEngram
+          packageRuleKeepingConvergedGentlePi
+        ] true [ ]}
+
+        # A "package" rule matches the source's own package name, not the
+        # attribute key the document declared it under: the stale rev1 entry
+        # is retired, and the already-current rev2 entry is left alone.
+        ${scenario "package-rule" "$packageRuleFixtureFile" [
+          packageRuleKeepingRev2
+        ] false [ "git:github.com/x/y@rev1" ]}
+
+        # Pinning pi-btw retires the fixed sequence's own bare entry and
+        # keeps the pinned one -- the fixed sequence installs the pinned
+        # spelling in its place, so nothing reinstalls the bare entry.
+        ${scenario "pinned-fixed-package" "$pinnedFixedPackageFixtureFile" [
+          packageRuleKeepingPinnedPiBtw
+        ] false [ "npm:pi-btw" ]}
+
+        # A settings.json this step cannot parse degrades to "nothing
+        # installed" rather than failing the switch over a file it does not
+        # own.
+        for shape in '{ invalid json' '[]'; do
+          mkdir -p malformed/.pi/agent
+          printf '%s' "$shape" > malformed/.pi/agent/settings.json
+          set +e
+          gentle-ai-retire --settings "$PWD/malformed/.pi/agent/settings.json" \
+            --displaced ${lib.escapeShellArg npmGentlePi}
+          rc=$?
+          set -e
+          [ "$rc" -eq 0 ] || { echo "retire exited $rc on unparsable settings: $shape" >&2; exit 1; }
+        done
+
+        # A `pi remove` failure retires everything else and still exits 0 --
+        # the same policy the provisioner already follows for a step that can
+        # fail for reasons outside the switch.
+        mkdir -p partial/.pi/agent partial/bin
+        cp "$partialFailureFixtureFile" partial/.pi/agent/settings.json
+        cat > partial/bin/pi <<'SH'
+        #!/bin/sh
+        if [ "$1" = "remove" ] && [ "$2" = "npm:gentle-pi@2.4.0" ]; then
+          exit 1
+        fi
+        if [ "$1" = "remove" ] && [ -n "$2" ]; then
+          echo "$2" >> "$RECORD"
+          exit 0
+        fi
+        exit 1
+        SH
+        chmod +x partial/bin/pi
+        RECORD="$PWD/partial.removed"
+        touch "$RECORD"
+        export RECORD
+        set +e
+        PATH="$PWD/partial/bin:$PATH" gentle-ai-retire \
+          --settings "$PWD/partial/.pi/agent/settings.json" \
+          --displaced ${lib.escapeShellArg npmGentlePi}
+        rc=$?
+        set -e
+        [ "$rc" -eq 0 ] || { echo "retire exited $rc after one failed pi remove" >&2; exit 1; }
+        grep -qxF "npm:gentle-pi" "$RECORD" || {
+          echo "the entry after the failed one was never attempted" >&2
+          exit 1
+        }
+
+        # A rule only retires when its own `wanted` replacement is already
+        # installed: absent, nothing is touched and a "kept" line explains
+        # why; present, the displaced entry is retired exactly as before.
+        for case in absent present; do
+          mkdir -p "wanted-$case/.pi/agent" "wanted-$case/bin"
+          if [ "$case" = absent ]; then
+            packages='["npm:gentle-pi"]'
+          else
+            packages='["npm:gentle-pi","git:github.com/Gentleman-Programming/gentle-pi@newrev"]'
+          fi
+          printf '{"packages": %s}' "$packages" > "wanted-$case/.pi/agent/settings.json"
+          cat > "wanted-$case/bin/pi" <<'SH'
+        #!/bin/sh
+        if [ "$1" = "remove" ] && [ -n "$2" ]; then
+          echo "$2" >> "$RECORD"
+          exit 0
+        fi
+        exit 1
+        SH
+          chmod +x "wanted-$case/bin/pi"
+          RECORD="$PWD/wanted-$case.removed"
+          touch "$RECORD"
+          export RECORD
+          rule=$(jq -n '{type: "npm", name: "gentle-pi", wanted: "git:github.com/Gentleman-Programming/gentle-pi@newrev"}')
+          PATH="$PWD/wanted-$case/bin:$PATH" gentle-ai-retire \
+            --settings "$PWD/wanted-$case/.pi/agent/settings.json" \
+            --displaced "$rule" 2> "wanted-$case.log"
+
+          if [ "$case" = absent ]; then
+            [ -s "$RECORD" ] && {
+              echo "retired an entry without its replacement present:" >&2
+              cat "$RECORD" >&2
+              exit 1
+            }
+            grep -qF "kept npm:gentle-pi: replacement git:github.com/Gentleman-Programming/gentle-pi@newrev is not installed" "wanted-$case.log" || {
+              echo "no 'kept' line was logged:" >&2
+              cat "wanted-$case.log" >&2
+              exit 1
+            }
+          else
+            grep -qxF "npm:gentle-pi" "$RECORD" || {
+              echo "the displaced entry was not retired once its replacement was present" >&2
+              exit 1
+            }
+          fi
+        done
+
         touch "$out"
       '';
 
@@ -553,9 +1163,9 @@ in
     grep -q '"resources"' "$rendered/manifest.json"
   '';
 
-  # Settings and extensions describe the same provider document. Their nested
-  # values must compose, while extensions remain the explicit override at a
-  # colliding leaf and lists remain replacements.
+  # A provider's own `settings` is what reaches the document's top-level
+  # `extensions` field, nested values and all, with a list carried through as
+  # a replacement rather than something the render step could concatenate.
   providerSettingsMerge =
     let
       providerSettingsConfiguration = evaluate [
@@ -578,18 +1188,6 @@ in
                 enable = true;
                 settings.providerOnly = "other-provider";
               };
-              pi.enable = true;
-            };
-            extensions = {
-              claude-code = {
-                extensionOnly = "extension-only";
-                nested = {
-                  extensionOnly = "nested-extension-only";
-                  shared = "extension";
-                  list = [ "extension-list" ];
-                };
-              };
-              pi.extensionOnly = "one-sided-extension";
             };
           };
         }
@@ -598,21 +1196,16 @@ in
       providerSettingsRendered = providerSettingsConfiguration.config.programs.gentle-ai.rendered;
     in
     assert document.extensions."claude-code".providerOnly == "provider-only";
-    assert document.extensions."claude-code".extensionOnly == "extension-only";
     assert document.extensions."claude-code".nested.providerOnly == "nested-provider-only";
-    assert document.extensions."claude-code".nested.extensionOnly == "nested-extension-only";
-    assert document.extensions."claude-code".nested.shared == "extension";
-    assert document.extensions."claude-code".nested.list == [ "extension-list" ];
+    assert document.extensions."claude-code".nested.shared == "provider";
+    assert document.extensions."claude-code".nested.list == [ "provider-list" ];
     assert document.extensions.opencode.providerOnly == "other-provider";
-    assert document.extensions.pi.extensionOnly == "one-sided-extension";
     treeCheck "provider-settings-merge" ''
       settings="${providerSettingsRendered}/tree/.claude/settings.json"
       grep -q 'provider-only' "$settings" || { echo "the provider setting was not rendered" >&2; exit 1; }
-      grep -q 'extension-only' "$settings" || { echo "the extension setting was not rendered" >&2; exit 1; }
       grep -q 'nested-provider-only' "$settings" || { echo "the nested provider setting was not rendered" >&2; exit 1; }
-      grep -q '"shared": "extension"' "$settings" || { echo "the extension did not win the collision" >&2; exit 1; }
-      grep -q 'extension-list' "$settings" || { echo "the extension list was not rendered" >&2; exit 1; }
-      grep -q 'provider-list' "$settings" && { echo "a colliding list was concatenated" >&2; exit 1; }
+      grep -q '"shared": "provider"' "$settings" || { echo "the nested shared setting was not rendered" >&2; exit 1; }
+      grep -q 'provider-list' "$settings" || { echo "the provider list was not rendered" >&2; exit 1; }
     '';
 
   # treefmt rewrites in place, so it runs against a writable copy and the check
