@@ -184,3 +184,14 @@ func TestParseOverrideArgument(t *testing.T) {
 		t.Fatal("expected an error for an argument with no '='")
 	}
 }
+
+func TestParseOverrideArgumentRejectsAnUnsupportedSourceShape(t *testing.T) {
+	_, _, err := ParseOverrideArgument("@gtrabanco/pi-nan-provider=@gtrabanco/pi-nan-provider")
+	if err == nil {
+		t.Fatal("expected an error for a bare package name missing its npm: prefix")
+	}
+	want := `unsupported Pi package source "@gtrabanco/pi-nan-provider": use npm:<name>[@version], git:<host>/<user>/<repo>[@ref], an https:// or ssh:// URL, or an absolute path`
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}

@@ -520,6 +520,67 @@ in
         touch "$out"
       '';
 
+  # An `--extra` source missing its scheme is exactly the mistake
+  # piPackagesRejectUnsupportedSourceAtEval catches for the module's own
+  # `providers.pi.packages`; this proves `gentle-nix provision` itself
+  # refuses the same shape when it is handed one directly, before it could
+  # ever be appended after Pi's fixed sequence.
+  gentleNixProvisionRejectsUnsupportedExtraSource =
+    let
+      gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+      gentleNixPackage = self.packages.${system}.gentle-nix;
+
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi.enable = true;
+          };
+        }
+      ];
+      document = configuration.config.programs.gentle-ai.document;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-gentle-nix-provision-rejects-unsupported-extra-source"
+      {
+        nativeBuildInputs = [
+          gentleAi
+          gentleNixPackage
+          pkgs.jq
+        ];
+        documentFile = pkgs.writeText "gentle-ai-document-pi-invalid-extra.json" (builtins.toJSON document);
+      }
+      ''
+        set -euo pipefail
+
+        mkdir -p home stage
+        gentle-ai config render \
+          --config "$documentFile" \
+          --home "$PWD/home" \
+          --destination "$PWD/home" \
+          --stage "$PWD/stage" \
+          > manifest.json
+
+        set +e
+        gentle-nix provision --manifest manifest.json --agent pi \
+          --stamp-dir "$PWD/stamps" --print --extra '@scope/name' > output 2> error
+        status=$?
+        set -e
+
+        [ "$status" -eq 2 ] || {
+          echo "expected exit 2 for an unsupported --extra source, got $status:" >&2
+          cat output error >&2
+          exit 1
+        }
+
+        grep -q 'unsupported Pi package source "@scope/name"' error || {
+          echo "the error did not name the offending value and accepted shapes:" >&2
+          cat error >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   # A key naming one of Pi's other fixed packages overrides that package's
   # own command in place: the fixed sequence never installs the bare spec
   # alongside the pinned one, so the "package" retirement rule that retires
@@ -653,6 +714,35 @@ in
           )
           ''
             echo "a non-pi provider's packages entry was accepted" >&2
+            exit 1
+          ''
+        }
+        touch "$out"
+      '';
+
+  # A bare package name (missing its `npm:` prefix, say) would otherwise
+  # reach `pi install` unchanged and only fail once Pi tries to run it at
+  # activation; this proves the mistake surfaces at eval instead, mirroring
+  # gentle-nix provision's own ValidSource (internal/provision/source.go).
+  piPackagesRejectUnsupportedSourceAtEval =
+    pkgs.runCommandLocal "gentle-ai-check-pi-packages-reject-unsupported-source" { }
+      ''
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi = {
+                    enable = true;
+                    packages."@gtrabanco/pi-nan-provider" = "@gtrabanco/pi-nan-provider";
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a providers.pi.packages entry missing its npm:/git:/https://ssh:// scheme was accepted" >&2
             exit 1
           ''
         }

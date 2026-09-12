@@ -85,6 +85,13 @@ func runProvision(args []string) (int, error) {
 		overrides[overrideName] = source
 	}
 
+	for _, source := range extra {
+		if !provision.ValidSource(source) {
+			fmt.Fprintf(os.Stderr, "gentle-nix provision: %v\n", provision.InvalidSourceError(source))
+			return 2, nil
+		}
+	}
+
 	if *print {
 		commands, err := provision.DeclaredCommands(*manifest, field, name)
 		if err != nil {

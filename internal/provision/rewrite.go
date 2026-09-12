@@ -17,13 +17,21 @@ var defaultGentleEngramInit = []string{"npm", "exec", "--yes", "--package", "gen
 
 // ParseOverrideArgument splits a "--override name=source" argument into its
 // name and source, the way gentle-nix provision's flag parsing does before
-// handing the accumulated map to RewriteCommands.
+// handing the accumulated map to RewriteCommands. The source is validated
+// against ValidSource here, at the earliest point gentle-nix sees it, so a
+// mistyped source (a bare package name missing its "npm:" prefix, for
+// instance) is refused before it can reach a rewritten command Pi's
+// installer would only fail on later.
 func ParseOverrideArgument(raw string) (name, source string, err error) {
 	i := strings.Index(raw, "=")
 	if i < 0 {
 		return "", "", fmt.Errorf("--override: expected name=source, got %q", raw)
 	}
-	return raw[:i], raw[i+1:], nil
+	name, source = raw[:i], raw[i+1:]
+	if !ValidSource(source) {
+		return "", "", InvalidSourceError(source)
+	}
+	return name, source, nil
 }
 
 // RewriteCommands rewrites a declared command list the same way the pinned

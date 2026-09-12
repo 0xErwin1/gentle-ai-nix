@@ -73,6 +73,34 @@ let
     lib.filterAttrs (name: provider: name != "pi" && provider.packages != { }) enabledProviders
   );
 
+  # Mirrors gentle-nix provision's own ValidSource
+  # (internal/provision/source.go): a Pi install source is only an
+  # `npm:`, `git:`, `https://`, or `ssh://` reference with a non-empty
+  # payload, or an absolute local path with at least one non-empty
+  # component after the leading "/". A value padded with leading or
+  # trailing whitespace is never valid either. A providers.pi.packages
+  # entry missing its scheme (a bare package name copied from npm without
+  # its `npm:` prefix, say) would otherwise reach `pi install` unchanged
+  # and only fail once Pi tries to run it at activation.
+  piPackageSourceIsValid =
+    source:
+    let
+      hasNonEmptyPayload = prefix: lib.hasPrefix prefix source && source != prefix;
+    in
+    lib.trim source == source
+    && source != ""
+    && (
+      hasNonEmptyPayload "npm:"
+      || hasNonEmptyPayload "git:"
+      || hasNonEmptyPayload "https://"
+      || hasNonEmptyPayload "ssh://"
+      || (lib.hasPrefix "/" source && lib.any (part: part != "") (lib.splitString "/" source))
+    );
+
+  piPackagesWithInvalidSources = lib.attrNames (
+    lib.filterAttrs (_: source: !(piPackageSourceIsValid source)) (cfg.providers.pi.packages or { })
+  );
+
   # The plugin is only worth linking into the tree for the one case it is
   # ever installed from: Pi enabled, and `engramRelease` off the npm default.
   embedGentleEngramPiPlugin = piEnabled && cfg.engramRelease != "stable";
@@ -324,9 +352,11 @@ let
           description = ''
             Pi packages this installation adds, keyed by package name with a Pi
             install source as the value: `npm:<name>[@version]`,
-            `git:<host>/<user>/<repo>[@ref]`, or an absolute local path. A Pi
-            extension is itself an npm (or git) package, installed the same
-            way as gentle-pi's own harness, so this is where one is declared.
+            `git:<host>/<user>/<repo>[@ref]`, an `https://` or `ssh://` URL, or
+            an absolute local path -- any other shape, such as a bare package
+            name missing its `npm:` prefix, is refused at eval. A Pi extension
+            is itself an npm (or git) package, installed the same way as
+            gentle-pi's own harness, so this is where one is declared.
 
             `gentle-pi` and `gentle-engram` are managed by `gentlePiRelease`
             and `engramRelease` instead, and are refused here at eval; use
@@ -1869,6 +1899,10 @@ in
         # document carries for a client that will never look at it.
         assertion = nonPiProvidersWithPackages == [ ];
         message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithPackages}.packages is refused: only providers.pi reads packages";
+      }
+      {
+        assertion = piPackagesWithInvalidSources == [ ];
+        message = "programs.gentle-ai.providers.pi.packages.${lib.concatStringsSep ", " piPackagesWithInvalidSources} uses an unsupported Pi package source: use npm:<name>[@version], git:<host>/<user>/<repo>[@ref], an https:// or ssh:// URL, or an absolute path";
       }
     ];
 

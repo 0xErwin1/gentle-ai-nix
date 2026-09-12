@@ -1388,9 +1388,11 @@ true
 
 Pi packages this installation adds, keyed by package name with a Pi
 install source as the value: ` npm:<name>[@version] `,
-` git:<host>/<user>/<repo>[@ref] `, or an absolute local path\. A Pi
-extension is itself an npm (or git) package, installed the same
-way as gentle-pi’s own harness, so this is where one is declared\.
+` git:<host>/<user>/<repo>[@ref] `, an ` https:// ` or ` ssh:// ` URL, or
+an absolute local path – any other shape, such as a bare package
+name missing its ` npm: ` prefix, is refused at eval\. A Pi extension
+is itself an npm (or git) package, installed the same way as
+gentle-pi’s own harness, so this is where one is declared\.
 
 ` gentle-pi ` and ` gentle-engram ` are managed by ` gentlePiRelease `
 and ` engramRelease ` instead, and are refused here at eval; use
