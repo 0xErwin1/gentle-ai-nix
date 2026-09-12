@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/0xErwin1/gentle-ai-nix/internal/provision"
 )
@@ -49,6 +50,11 @@ func runProvision(args []string) (int, error) {
 	tool := fs.String("tool", "", "community tool that wires itself into the clients")
 	stampDir := fs.String("stamp-dir", "", "directory holding the content-addressed stamp files")
 	force := fs.Bool("force", false, "run the commands even when the stamp already records them")
+	var overrideRaw []string
+	fs.Var(repeatableFlag{&overrideRaw}, "override", "name=source: rewrite one declared package's install source in place; repeatable")
+	var extra []string
+	fs.Var(repeatableFlag{&extra}, "extra", "an additional package source to install after the declared sequence; repeatable")
+	print := fs.Bool("print", false, "write the final, rewritten command list to stdout, one per line, and exit without running or stamping anything")
 	if err := fs.Parse(args); err != nil {
 		return 2, nil
 	}
@@ -69,12 +75,40 @@ func runProvision(args []string) (int, error) {
 		field, name = "agent", *agent
 	}
 
+	overrides := make(map[string]string, len(overrideRaw))
+	for _, raw := range overrideRaw {
+		overrideName, source, err := provision.ParseOverrideArgument(raw)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "gentle-nix provision: %v\n", err)
+			return 2, nil
+		}
+		overrides[overrideName] = source
+	}
+
+	if *print {
+		commands, err := provision.DeclaredCommands(*manifest, field, name)
+		if err != nil {
+			return 0, err
+		}
+		rewritten, err := provision.RewriteCommands(commands, overrides, extra)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "gentle-nix provision: %v\n", err)
+			return 2, nil
+		}
+		for _, command := range rewritten {
+			fmt.Println(strings.Join(command, " "))
+		}
+		return 0, nil
+	}
+
 	code, err := provision.Run(provision.Options{
-		Manifest: *manifest,
-		Field:    field,
-		Name:     name,
-		StampDir: *stampDir,
-		Force:    *force,
+		Manifest:  *manifest,
+		Field:     field,
+		Name:      name,
+		StampDir:  *stampDir,
+		Force:     *force,
+		Overrides: overrides,
+		Extra:     extra,
 	}, realRunner{})
 	return code, err
 }

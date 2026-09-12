@@ -47,6 +47,14 @@ type Options struct {
 	Name     string
 	StampDir string
 	Force    bool
+	// Overrides and Extra are gentle-nix's own replacement for the
+	// document's former providers.pi.packages: they rewrite the declared
+	// commands via RewriteCommands before they are hashed or executed, the
+	// same way the pinned fork's Pi adapter used to rewrite them from the
+	// document. Both are empty for every field/name Run is never asked to
+	// override, which leaves the declared commands untouched.
+	Overrides map[string]string
+	Extra     []string
 }
 
 type manifestDocument struct {
@@ -165,6 +173,12 @@ func Run(opts Options, runner Runner) (int, error) {
 	}
 	if len(commands) == 0 {
 		return 0, nil
+	}
+
+	commands, err = RewriteCommands(commands, opts.Overrides, opts.Extra)
+	if err != nil {
+		runner.Printf("gentle-nix provision: %v", err)
+		return 2, nil
 	}
 
 	stampPath := filepath.Join(opts.StampDir, fmt.Sprintf("%s-%s.provisioned", opts.Field, opts.Name))

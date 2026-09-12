@@ -250,3 +250,79 @@ func TestRunWithNoDeclaredCommandsIsANoop(t *testing.T) {
 		t.Fatalf("a component with no declared agent commands ran something: code=%d ran=%v", code, runner.ran)
 	}
 }
+
+func TestRunAppliesOverridesBeforeExecutingAndStamping(t *testing.T) {
+	dir := t.TempDir()
+	manifest := writeManifest(t, dir, manifestFixture)
+	stampDir := filepath.Join(dir, "stamps")
+
+	runner := &fakeRunner{which: map[string]bool{"fake-pi": true}}
+	code, err := Run(Options{
+		Manifest:  manifest,
+		Field:     "agent",
+		Name:      "pi",
+		StampDir:  stampDir,
+		Overrides: map[string]string{"gentle-pi": "git:github.com/x/y@rev"},
+	}, runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Fatalf("code = %d, want 0", code)
+	}
+	if len(runner.ran) != 2 || strings.Join(runner.ran[0], " ") != "fake-pi install git:github.com/x/y@rev" {
+		t.Fatalf("the override was not applied before executing: %v", runner.ran)
+	}
+
+	// A second run with the SAME override still matches the stamp: the
+	// digest was computed over the rewritten list, so nothing reruns.
+	runner.ran = nil
+	code, err = Run(Options{
+		Manifest:  manifest,
+		Field:     "agent",
+		Name:      "pi",
+		StampDir:  stampDir,
+		Overrides: map[string]string{"gentle-pi": "git:github.com/x/y@rev"},
+	}, runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 || len(runner.ran) != 0 {
+		t.Fatalf("an unchanged overridden command list ran again: code=%d ran=%v", code, runner.ran)
+	}
+
+	// Dropping the override changes the digest, so it runs again with the
+	// plain declared command.
+	runner.ran = nil
+	code, err = Run(Options{Manifest: manifest, Field: "agent", Name: "pi", StampDir: stampDir}, runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 || len(runner.ran) != 2 || strings.Join(runner.ran[0], " ") != "fake-pi install npm:gentle-pi" {
+		t.Fatalf("changing the override did not invalidate the stamp: code=%d ran=%v", code, runner.ran)
+	}
+}
+
+func TestRunRejectsAnUnsupportedGentleEngramOverride(t *testing.T) {
+	dir := t.TempDir()
+	manifest := writeManifest(t, dir, manifestFixture)
+	stampDir := filepath.Join(dir, "stamps")
+
+	runner := &fakeRunner{which: map[string]bool{"fake-pi": true}}
+	code, err := Run(Options{
+		Manifest:  manifest,
+		Field:     "agent",
+		Name:      "pi",
+		StampDir:  stampDir,
+		Overrides: map[string]string{"gentle-engram": "git:github.com/x/gentle-engram@rev"},
+	}, runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 2 {
+		t.Fatalf("code = %d, want 2", code)
+	}
+	if len(runner.ran) != 0 {
+		t.Fatalf("commands ran despite the rejected override: %v", runner.ran)
+	}
+}

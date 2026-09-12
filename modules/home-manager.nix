@@ -102,6 +102,42 @@ let
       gentle-engram = gentleEngramPiHomePath;
     };
 
+  # The npm package names `gentle-nix provision`'s Pi adapter always installs
+  # -- a name naming one of these overrides that package's install source in
+  # place; any other name is an additional package appended after the fixed
+  # sequence. Mirrored from fixedPiPackageNames in the pinned fork's Pi
+  # adapter (internal/agents/pi/adapter.go), because the split between
+  # `--override` and `--extra` gentle-nix provision needs has to agree with
+  # exactly the same set the fork itself used to read out of the document.
+  fixedPiPackageNames = [
+    "gentle-pi"
+    "gentle-engram"
+    "pi-mcp-adapter"
+    "@juicesharp/rpiv-ask-user-question"
+    "pi-web-access"
+    "pi-btw"
+  ];
+
+  # Channel-managed sources and `providers.pi.packages` combined the same
+  # way `providerBlock` used to combine them for the document's `packages`
+  # field -- now split instead into what `gentle-nix provision` rewrites in
+  # place (`--override`) and what it appends after the fixed sequence
+  # (`--extra`), since neither travels through the document any more.
+  piCombinedPackages = (cfg.providers.pi.packages or { }) // pluginPackagesFor;
+
+  piProvisionOverrides = lib.filterAttrs (
+    name: _: lib.elem name fixedPiPackageNames
+  ) piCombinedPackages;
+
+  # lib.attrNames/mapAttrsToList always iterate in sorted-key order, so this
+  # already lists extras by package name the same way the fork's
+  # sortedExtraPiPackageNames did -- gentle-nix provision only sees the
+  # sources, never the names, but the order it receives them in is already
+  # exactly that sort.
+  piProvisionExtra = lib.mapAttrsToList (_: source: source) (
+    lib.filterAttrs (name: _: !(lib.elem name fixedPiPackageNames)) piCombinedPackages
+  );
+
   # The community tools this flake packages, keyed by Gentle AI's own tool id.
   # Like providerRoots this is contract knowledge rather than asset knowledge:
   # the option is generic over the tool name, so a name-keyed table is the only
@@ -718,6 +754,42 @@ let
     lib.mapAttrs (_: provider: provider.settings) enabledProviders
   );
 
+  # providers.<name>.settings no longer travels through the document as
+  # `extensions` for the fork to merge (internal/cli/config_stager.go's
+  # stageDeclaredExtensions/mergeExtensionBlock, in the pinned Gentle AI
+  # fork); gentle-nix does the merge itself, in the overlay derivation
+  # below, at exactly the same per-client files those adapters used.
+  #
+  # Codex and Kimi keep their own settings in TOML rather than JSON, so
+  # their block is routed through the existing Python gentle-ai-merge
+  # (lib/merge.py) instead of gentle-nix settings (JSON-only, deliberately:
+  # see internal/settings' package doc) -- the same tool `extraFiles`'
+  # `merge` mode already uses for a TOML target. `pkgs.formats.toml`
+  # renders the declared attrset into fragment TOML text for it, so this
+  # module never has to implement a TOML writer of its own.
+  tomlSettingsProviders = [
+    "codex"
+    "kimi"
+  ];
+
+  jsonProviderSettings = lib.filterAttrs (
+    name: _: !(lib.elem name tomlSettingsProviders)
+  ) providerSettings;
+  tomlProviderSettings = lib.filterAttrs (
+    name: _: lib.elem name tomlSettingsProviders
+  ) providerSettings;
+
+  # Mirrors the pinned fork's own Codex/Kimi adapters (MCPConfigPath /
+  # SettingsPath in internal/agents/codex and internal/agents/kimi),
+  # relative to the tree root, the same way internal/settings' own
+  # settingsPaths mirrors every JSON one.
+  tomlSettingsPaths = {
+    codex = ".codex/config.toml";
+    kimi = ".kimi/config.toml";
+  };
+
+  tomlSettingsFormat = pkgs.formats.toml { };
+
   # A profile's own shape, nested under providers.<id>.profiles.<name>. The
   # name lives in the enclosing attribute set's key, the same way the
   # contract keys it, so it is not restated inside the value.
@@ -754,8 +826,7 @@ let
     // whenSet "profileStrategy" provider.profileStrategy
     // whenSet "activeProfile" provider.activeProfile
     // whenSet "skills" provider.skills
-    // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) provider.mcpServers)
-    // optionalAttrs (name == "pi") (whenSet "packages" (provider.packages // pluginPackagesFor));
+    // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) provider.mcpServers);
 
   # A provider enabled with nothing else set has nothing worth nesting: an
   # empty block would still be a key the renderer has to look at and find
@@ -816,8 +887,7 @@ let
     version = cfg.schemaVersion;
     inherit selection;
   }
-  // whenSet "roles" (lib.mapAttrsToList role cfg.roles)
-  // whenSet "extensions" providerSettings;
+  // whenSet "roles" (lib.mapAttrsToList role cfg.roles);
 
   documentFile = pkgs.writeText "gentle-ai-document.json" (builtins.toJSON document);
 
@@ -838,7 +908,7 @@ let
   # same directory the moment both exist, where layering onto one tree just
   # works.
   overlaid =
-    if cfg.extraFiles == { } && !embedGentleEngramPiPlugin then
+    if cfg.extraFiles == { } && !embedGentleEngramPiPlugin && providerSettings == { } then
       base
     else
       pkgs.runCommandLocal "gentle-ai-config-overlaid" { } ''
@@ -856,6 +926,25 @@ let
           chmod -R u+rwX,go+rX "$target"
           find "$target/bin" -type f -exec chmod +x {} +
         ''}
+        ${lib.concatMapStringsSep "\n" (name: ''
+          ${lib.getExe gentleNix} settings \
+            --tree "$out/tree" \
+            --provider ${lib.escapeShellArg "${name}=${pkgs.writeText "gentle-ai-provider-settings-${name}.json" (builtins.toJSON jsonProviderSettings.${name})}"}
+        '') (lib.attrNames jsonProviderSettings)}
+        ${lib.concatMapStringsSep "\n" (name: ''
+          target="$out/tree/${tomlSettingsPaths.${name}}"
+          mkdir -p "$(dirname "$target")"
+          ${lib.getExe merger} \
+            --fragment ${
+              tomlSettingsFormat.generate "gentle-ai-provider-settings-${name}.toml" tomlProviderSettings.${name}
+            } \
+            --target "$target"
+
+          # The merger writes credentials elsewhere, so it keeps its output
+          # private; here the result is a store path Gentle AI renders
+          # from, which nothing can read at mode 600.
+          chmod 644 "$target"
+        '') (lib.attrNames tomlProviderSettings)}
         ${lib.concatMapStringsSep "\n" (
           entry:
           let
@@ -1681,6 +1770,29 @@ in
       readOnly = true;
       description = "The rendered tree, after extraFiles and overrideRendered.";
     };
+
+    piProvisionOverrides = mkOption {
+      type = types.attrsOf types.str;
+      readOnly = true;
+      description = ''
+        `--override name=source` arguments `gentle-nix provision` needs to
+        rewrite Pi's fixed install sequence back to what
+        `providers.pi.packages` and the plugin channels declare, now that
+        neither is in the rendered document. Keyed the same way
+        `providers.pi.packages` is: by the npm package name a fixed Pi
+        package installs as.
+      '';
+    };
+
+    piProvisionExtra = mkOption {
+      type = types.listOf types.str;
+      readOnly = true;
+      description = ''
+        `--extra <source>` arguments for the Pi packages `providers.pi.packages`
+        declares that name none of Pi's fixed packages, in the same order
+        `gentle-nix provision --print` would sort them.
+      '';
+    };
   };
 
   config = mkIf cfg.enable {
@@ -1692,6 +1804,23 @@ in
       {
         assertion = enabledNames cfg.providers != [ ];
         message = "programs.gentle-ai.providers must enable at least one client to configure";
+      }
+      {
+        # gentlePiRelease's and engramRelease's own `types.enum` already
+        # refuses an unknown channel the moment something reads the option
+        # -- but now that pluginPackagesFor (and so selectedGentlePiRelease
+        # / selectedEngramRelease) is only read from gentle-nix provision's
+        # own --override/--extra arguments, gated behind
+        # providers.pi.provisionPackages, a Pi installation that never
+        # provisions would otherwise never force that read at all. These
+        # two force it unconditionally, the way embedding `packages` in the
+        # document unconditionally used to.
+        assertion = lib.elem cfg.gentlePiRelease (lib.attrNames gentlePiReleases);
+        message = "programs.gentle-ai.gentlePiRelease = \"${cfg.gentlePiRelease}\" is not a known channel";
+      }
+      {
+        assertion = lib.elem cfg.engramRelease (lib.attrNames engramReleases);
+        message = "programs.gentle-ai.engramRelease = \"${cfg.engramRelease}\" is not a known channel";
       }
       {
         assertion = unknownSourceProviders == [ ];
@@ -1743,7 +1872,10 @@ in
       }
     ];
 
-    programs.gentle-ai = { inherit document rendered; };
+    programs.gentle-ai = {
+      inherit document rendered;
+      inherit piProvisionOverrides piProvisionExtra;
+    };
 
     home.packages = packages;
 
@@ -1864,6 +1996,18 @@ in
                     --agent ${lib.escapeShellArg name} \
                     --stamp-dir ${lib.escapeShellArg "${config.xdg.stateHome}/gentle-ai-nix"} ${
                       lib.optionalString cfg.providers.${name}.provisionRefresh "--force"
+                    } ${
+                      # Only Pi ever has overrides/extras: piCombinedPackages
+                      # is empty for every other provider, so this is a no-op
+                      # everywhere else.
+                      lib.optionalString (name == "pi") (
+                        lib.concatMapStringsSep " " (
+                          packageName:
+                          "--override ${lib.escapeShellArg "${packageName}=${piProvisionOverrides.${packageName}}"}"
+                        ) (lib.attrNames piProvisionOverrides)
+                        + lib.optionalString (piProvisionExtra != [ ]) " "
+                        + lib.concatMapStringsSep " " (source: "--extra ${lib.escapeShellArg source}") piProvisionExtra
+                      )
                     }
               '') provisioningProviders
               ++ map (name: ''

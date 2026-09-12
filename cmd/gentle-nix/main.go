@@ -10,6 +10,13 @@
 // Go equivalent (see internal/merge's absence, and the phase report, for
 // why), so lib/merge.py stays wired as gentle-ai-merge until that gap is
 // closed.
+//
+// "settings" is not a port: it is new in this module's next phase, moving
+// two things that used to travel through Gentle AI's own desired-state
+// document -- providers.pi.packages (via provision's own --override/--extra
+// flags) and providers.<name>.settings (via this subcommand) -- into
+// gentle-nix itself, so gentle-ai-nix stays a superset of Gentle AI instead
+// of asking the document to carry fields only this flake needs.
 package main
 
 import (
@@ -23,7 +30,7 @@ var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|retire|rewrite|frontmatter> [flags]")
+		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|settings|retire|rewrite|frontmatter> [flags]")
 		os.Exit(2)
 	}
 
@@ -35,6 +42,8 @@ func main() {
 	switch os.Args[1] {
 	case "provision":
 		code, err = runProvision(os.Args[2:])
+	case "settings":
+		code, err = runSettings(os.Args[2:])
 	case "retire":
 		code, err = runRetire(os.Args[2:])
 	case "rewrite":

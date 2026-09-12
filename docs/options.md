@@ -1246,6 +1246,55 @@ null
 
 
 
+## programs\.gentle-ai\.piProvisionExtra
+
+
+
+` --extra <source> ` arguments for the Pi packages ` providers.pi.packages `
+declares that name none of Pi’s fixed packages, in the same order
+` gentle-nix provision --print ` would sort them\.
+
+
+
+*Type:*
+list of string *(read only)*
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+## programs\.gentle-ai\.piProvisionOverrides
+
+
+
+` --override name=source ` arguments ` gentle-nix provision ` needs to
+rewrite Pi’s fixed install sequence back to what
+` providers.pi.packages ` and the plugin channels declare, now that
+neither is in the rendered document\. Keyed the same way
+` providers.pi.packages ` is: by the npm package name a fixed Pi
+package installs as\.
+
+
+
+*Type:*
+attribute set of string *(read only)*
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
 ## programs\.gentle-ai\.preset
 
 
@@ -2582,8 +2631,6 @@ list of string
 
 ## programs\.gentle-ai\.secrets\.placeholders
 
-
-
 Maps a placeholder name to a file holding its value, read at
 activation\. ` ATLAS_TOKEN ` replaces every ` @ATLAS_TOKEN@ ` in the paths
 above\. A sops-nix or agenix secret exposes exactly such a path\.
@@ -2643,6 +2690,8 @@ attribute set of anything
 
 
 ## programs\.gentle-ai\.skills
+
+
 
 Skills, keyed by Gentle AI’s own id\. Naming none installs every skill
 Gentle AI ships, so this is only for narrowing that: an entry set to

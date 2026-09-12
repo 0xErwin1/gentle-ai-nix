@@ -244,11 +244,18 @@ in
   # before either option existed, so that pairing is asserted alongside the
   # one that carries a source, the same way providersDocumentShape pairs a
   # field's presence with its absence.
+  # `providers.pi.packages` and the plugin channels no longer travel through
+  # the document at all -- they are gentle-nix's own `--override`/`--extra`
+  # arguments to `gentle-nix provision` (see piCombinedPackages,
+  # piProvisionOverrides, piProvisionExtra in modules/home-manager.nix) -- so
+  # this asserts the document never carries `packages` under any provider,
+  # and that the module still computes the right overrides for
+  # `gentle-nix provision` to rewrite Pi's fixed sequence with.
   piPackagesDocumentShape =
     let
-      documentFor =
+      configurationFor =
         overrides:
-        (evaluate [
+        evaluate [
           {
             programs.gentle-ai = {
               enable = true;
@@ -256,28 +263,27 @@ in
             }
             // overrides;
           }
-        ]).config.programs.gentle-ai.document;
+        ];
 
-      defaultDocument = documentFor { };
-      overriddenDocument = documentFor {
+      defaultConfiguration = configurationFor { };
+      overriddenConfiguration = configurationFor {
         gentlePiRelease = "main";
         engramRelease = "rc";
       };
+
+      defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
+      overriddenDocument = overriddenConfiguration.config.programs.gentle-ai.document;
+      overriddenOverrides = overriddenConfiguration.config.programs.gentle-ai.piProvisionOverrides;
     in
-    # A `pi` block with nothing else set renders no `providers` key at all
-    # (providersDocumentShape's own empty-block rule), so the no-override
-    # case is asserted with a path lookup rather than through a `providers.pi`
-    # that may not exist.
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
+    assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
     assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@"
-      overriddenDocument.selection.providers.pi.packages.gentle-pi;
+      overriddenOverrides.gentle-pi;
     # A store path here would change identity on every rebuild and leave Pi
     # holding two entries for the same plugin, so the source Pi is given is
     # the stable path the plugin is linked into the home directory at, never
     # the store path underneath it.
-    assert
-      overriddenDocument.selection.providers.pi.packages.gentle-engram
-      == "/home/test-user/.pi/gentle-ai/plugins/gentle-engram";
+    assert overriddenOverrides.gentle-engram == "/home/test-user/.pi/gentle-ai/plugins/gentle-engram";
     pkgs.runCommandLocal "gentle-ai-check-pi-packages-document-shape" { } ''touch "$out"'';
 
   # piPackagesDocumentShape only proves the document carries the right
@@ -285,13 +291,20 @@ in
   # is told to run, against the real `gentle-ai config render`, the same way
   # rendererSurfacesUnsupportedProviderMistakes exercises the renderer rather
   # than reconstructing its behaviour here.
+  # Renders the document (now without `packages`) through the real
+  # `gentle-ai config render`, then runs the module-computed
+  # `--override`/`--extra` arguments through the real `gentle-nix provision
+  # --print` against that manifest, and checks the exact same final command
+  # lines piPackagesRenderThrough always has -- proving the split between
+  # "in the document" and "in gentle-nix" produces an identical result.
   piPackagesRenderThrough =
     let
       gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+      gentleNixPackage = self.packages.${system}.gentle-nix;
 
-      documentFor =
+      configurationFor =
         overrides:
-        (evaluate [
+        evaluate [
           {
             programs.gentle-ai = {
               enable = true;
@@ -299,20 +312,29 @@ in
             }
             // overrides;
           }
-        ]).config.programs.gentle-ai.document;
+        ];
 
-      defaultDocument = documentFor { };
-      overriddenDocument = documentFor {
+      defaultConfiguration = configurationFor { };
+      overriddenConfiguration = configurationFor {
         gentlePiRelease = "main";
         engramRelease = "rc";
       };
 
-      gentleEngramPiPath = overriddenDocument.selection.providers.pi.packages.gentle-engram;
+      defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
+      overriddenDocument = overriddenConfiguration.config.programs.gentle-ai.document;
+      overriddenOverrides = overriddenConfiguration.config.programs.gentle-ai.piProvisionOverrides;
+
+      gentleEngramPiPath = overriddenOverrides.gentle-engram;
+
+      overrideArguments = lib.concatMapStringsSep " " (
+        name: "--override ${lib.escapeShellArg "${name}=${overriddenOverrides.${name}}"}"
+      ) (lib.attrNames overriddenOverrides);
     in
     pkgs.runCommandLocal "gentle-ai-check-pi-packages-render-through"
       {
         nativeBuildInputs = [
           gentleAi
+          gentleNixPackage
           pkgs.jq
         ];
         defaultDocumentFile = pkgs.writeText "gentle-ai-document-pi-default.json" (
@@ -324,18 +346,6 @@ in
       }
       ''
         set -euo pipefail
-
-        piCommands() {
-          # commands is [][]string per resource; flattening each command with
-          # a space is what the Go adapter's own tests compare against, so the
-          # same join is used here rather than matching raw JSON tokens.
-          jq -r '
-            .manifest.resources[]
-            | select(.selector == "provision" and .agent == "pi")
-            | .commands[]
-            | join(" ")
-          ' "$1"
-        }
 
         render() {
           local name="$1" doc="$2"
@@ -351,8 +361,11 @@ in
         render default "$defaultDocumentFile"
         render overridden "$overriddenDocumentFile"
 
-        piCommands "$PWD/default.manifest.json" > default.commands
-        piCommands "$PWD/overridden.manifest.json" > overridden.commands
+        gentle-nix provision --manifest "$PWD/default.manifest.json" --agent pi \
+          --stamp-dir "$PWD/stamps" --print > default.commands
+
+        gentle-nix provision --manifest "$PWD/overridden.manifest.json" --agent pi \
+          --stamp-dir "$PWD/stamps" --print ${overrideArguments} > overridden.commands
 
         for want in "pi install npm:gentle-pi" "pi install npm:gentle-engram"; do
           grep -qxF "$want" default.commands || {
@@ -404,56 +417,67 @@ in
     '';
 
   # A Pi extension is itself an npm (or git) package, so `providers.pi.packages`
-  # is where one is declared. This proves a user-declared entry reaches the
-  # document alongside whatever the channel options themselves add, under the
-  # same key the channel-managed packages use.
+  # is where one is declared. Now that neither the channel-managed sources
+  # nor a user-declared extension travel through the document, this proves a
+  # user-declared entry reaches gentle-nix's own `piProvisionOverrides`/
+  # `piProvisionExtra` split instead: `my-plugin` names none of Pi's fixed
+  # packages, so it is an extra; `gentle-pi` is still one of them, so
+  # `gentlePiRelease` still surfaces as an override.
   piExtraPackageDocumentShape =
     let
-      document =
-        (evaluate [
-          {
-            programs.gentle-ai = {
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            gentlePiRelease = "main";
+            providers.pi = {
               enable = true;
-              gentlePiRelease = "main";
-              providers.pi = {
-                enable = true;
-                packages.my-plugin = "git:github.com/x/y@rev";
-              };
+              packages.my-plugin = "git:github.com/x/y@rev";
             };
-          }
-        ]).config.programs.gentle-ai.document;
-      packages = document.selection.providers.pi.packages;
+          };
+        }
+      ];
+      document = configuration.config.programs.gentle-ai.document;
+      overrides = configuration.config.programs.gentle-ai.piProvisionOverrides;
+      extra = configuration.config.programs.gentle-ai.piProvisionExtra;
     in
-    assert packages.my-plugin == "git:github.com/x/y@rev";
-    assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@" packages.gentle-pi;
+    assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] document.selection);
+    assert extra == [ "git:github.com/x/y@rev" ];
+    assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@" overrides.gentle-pi;
     pkgs.runCommandLocal "gentle-ai-check-pi-extra-package-document-shape" { } ''touch "$out"'';
 
-  # piExtraPackageDocumentShape only proves the document carries the extra
-  # entry; this proves the renderer installs it, after Pi's own fixed
-  # sequence and without disturbing their order or count -- against the real
-  # `gentle-ai config render`, the same way piPackagesRenderThrough does for
-  # the channel-managed entries.
+  # piExtraPackageDocumentShape only proves the module computes the right
+  # split; this proves `gentle-nix provision --print` installs the extra
+  # after Pi's own fixed sequence and without disturbing their order or
+  # count -- against the real `gentle-ai config render` and the real
+  # `gentle-nix provision`, the same way piPackagesRenderThrough does for the
+  # channel-managed entries.
   piExtraPackageRendersAfterFixedSequence =
     let
       gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+      gentleNixPackage = self.packages.${system}.gentle-nix;
 
-      document =
-        (evaluate [
-          {
-            programs.gentle-ai = {
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
               enable = true;
-              providers.pi = {
-                enable = true;
-                packages.my-plugin = "git:github.com/x/y@rev";
-              };
+              packages.my-plugin = "git:github.com/x/y@rev";
             };
-          }
-        ]).config.programs.gentle-ai.document;
+          };
+        }
+      ];
+      document = configuration.config.programs.gentle-ai.document;
+      extra = configuration.config.programs.gentle-ai.piProvisionExtra;
+
+      extraArguments = lib.concatMapStringsSep " " (source: "--extra ${lib.escapeShellArg source}") extra;
     in
     pkgs.runCommandLocal "gentle-ai-check-pi-extra-package-render-through"
       {
         nativeBuildInputs = [
           gentleAi
+          gentleNixPackage
           pkgs.jq
         ];
         documentFile = pkgs.writeText "gentle-ai-document-pi-extra-package.json" (builtins.toJSON document);
@@ -469,12 +493,8 @@ in
           --stage "$PWD/stage" \
           > manifest.json
 
-        jq -r '
-          .manifest.resources[]
-          | select(.selector == "provision" and .agent == "pi")
-          | .commands[]
-          | join(" ")
-        ' manifest.json > commands
+        gentle-nix provision --manifest manifest.json --agent pi \
+          --stamp-dir "$PWD/stamps" --print ${extraArguments} > commands
 
         count=$(wc -l < commands)
         [ "$count" -eq 8 ] || {
@@ -508,24 +528,31 @@ in
   piPinnedFixedPackageOverridesInPlace =
     let
       gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+      gentleNixPackage = self.packages.${system}.gentle-nix;
 
-      document =
-        (evaluate [
-          {
-            programs.gentle-ai = {
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
               enable = true;
-              providers.pi = {
-                enable = true;
-                packages.pi-btw = "npm:pi-btw@1.2.3";
-              };
+              packages.pi-btw = "npm:pi-btw@1.2.3";
             };
-          }
-        ]).config.programs.gentle-ai.document;
+          };
+        }
+      ];
+      document = configuration.config.programs.gentle-ai.document;
+      overrides = configuration.config.programs.gentle-ai.piProvisionOverrides;
+
+      overrideArguments = lib.concatMapStringsSep " " (
+        name: "--override ${lib.escapeShellArg "${name}=${overrides.${name}}"}"
+      ) (lib.attrNames overrides);
     in
     pkgs.runCommandLocal "gentle-ai-check-pi-pinned-fixed-package"
       {
         nativeBuildInputs = [
           gentleAi
+          gentleNixPackage
           pkgs.jq
         ];
         documentFile = pkgs.writeText "gentle-ai-document-pi-pinned-fixed.json" (builtins.toJSON document);
@@ -541,12 +568,8 @@ in
           --stage "$PWD/stage" \
           > manifest.json
 
-        jq -r '
-          .manifest.resources[]
-          | select(.selector == "provision" and .agent == "pi")
-          | .commands[]
-          | join(" ")
-        ' manifest.json > commands
+        gentle-nix provision --manifest manifest.json --agent pi \
+          --stamp-dir "$PWD/stamps" --print ${overrideArguments} > commands
 
         count=$(wc -l < commands)
         [ "$count" -eq 7 ] || {
@@ -1160,9 +1183,15 @@ in
     grep -q '"resources"' "$rendered/manifest.json"
   '';
 
-  # A provider's own `settings` is what reaches the document's top-level
-  # `extensions` field, nested values and all, with a list carried through as
-  # a replacement rather than something the render step could concatenate.
+  # A provider's own `settings` used to reach the document's top-level
+  # `extensions` field for the pinned fork to merge; it no longer travels
+  # through the document at all -- gentle-nix merges it itself, via
+  # `gentle-nix settings`, in the overlay derivation (see providerSettings,
+  # jsonProviderSettings and `overlaid` in modules/home-manager.nix). This
+  # proves the document carries neither `extensions` nor a `packages`-style
+  # leak for it, and that the real rendered tree still ends up with the same
+  # nested values and all, a list carried through as a replacement rather
+  # than something the merge could concatenate.
   providerSettingsMerge =
     let
       providerSettingsConfiguration = evaluate [
@@ -1192,17 +1221,16 @@ in
       document = providerSettingsConfiguration.config.programs.gentle-ai.document;
       providerSettingsRendered = providerSettingsConfiguration.config.programs.gentle-ai.rendered;
     in
-    assert document.extensions."claude-code".providerOnly == "provider-only";
-    assert document.extensions."claude-code".nested.providerOnly == "nested-provider-only";
-    assert document.extensions."claude-code".nested.shared == "provider";
-    assert document.extensions."claude-code".nested.list == [ "provider-list" ];
-    assert document.extensions.opencode.providerOnly == "other-provider";
+    assert !(document ? extensions);
     treeCheck "provider-settings-merge" ''
       settings="${providerSettingsRendered}/tree/.claude/settings.json"
       grep -q 'provider-only' "$settings" || { echo "the provider setting was not rendered" >&2; exit 1; }
       grep -q 'nested-provider-only' "$settings" || { echo "the nested provider setting was not rendered" >&2; exit 1; }
       grep -q '"shared": "provider"' "$settings" || { echo "the nested shared setting was not rendered" >&2; exit 1; }
       grep -q 'provider-list' "$settings" || { echo "the provider list was not rendered" >&2; exit 1; }
+
+      opencodeSettings="${providerSettingsRendered}/tree/.config/opencode/opencode.json"
+      grep -q 'other-provider' "$opencodeSettings" || { echo "the other provider's own setting was not rendered" >&2; exit 1; }
     '';
 
   # treefmt rewrites in place, so it runs against a writable copy and the check
