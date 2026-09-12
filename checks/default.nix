@@ -1375,6 +1375,51 @@ in
     grep -q "check-apply" "$rendered/tree/.config/opencode/opencode.json"
   '';
 
+  # Renaming or defining roles is not something Gentle AI does imperatively,
+  # so a declared role must never reach the document at all: `gentle-nix
+  # roles` renders it as post-processing of the tree `gentle-ai config
+  # render` already produced instead (see internal/roles and the
+  # `gentle-nix roles` invocation in modules/home-manager.nix's `overlaid`).
+  # `declaredRoleReachesEveryAdapter` above proves the rendered bytes did
+  # not change; this proves the path they take there did.
+  rolesNeverReachTheDocument =
+    pkgs.runCommandLocal "gentle-ai-check-roles-not-in-document"
+      { document = builtins.toJSON configured.config.programs.gentle-ai.document; }
+      ''
+        if grep -q '"roles"' <<<"$document"; then
+          echo "the document still carries a \"roles\" field:" >&2
+          echo "$document" >&2
+          exit 1
+        fi
+        touch "$out"
+      '';
+
+  # Mirrors the pinned fork's own `config.role.unsupported-adapter` refusal:
+  # a role gentle-nix cannot express for every enabled client is a mistake
+  # worth naming at eval time, the same way `programs.gentle-ai.roles`'s own
+  # assertion in modules/home-manager.nix does.
+  rolesWithAnUnsupportedAdapterAreRejected =
+    let
+      withRolesAndGeminiCli = {
+        programs.gentle-ai = {
+          enable = true;
+          providers = {
+            opencode.enable = true;
+            gemini-cli.enable = true;
+          };
+          roles.orchestrator = { };
+        };
+      };
+    in
+    pkgs.runCommandLocal "gentle-ai-check-roles-unsupported-adapter-rejected" { } ''
+      set -euo pipefail
+      ${lib.optionalString (accepted [ withRolesAndGeminiCli ]) ''
+        echo "a role declared alongside gemini-cli was accepted, expected an eval refusal naming it" >&2
+        exit 1
+      ''}
+      touch "$out"
+    '';
+
   # Rendered content records absolute paths to its own files. They have to name
   # the home directory the configuration is built for, never the build sandbox.
   contentNamesTheHomeDirectory = treeCheck "no-sandbox-paths" ''

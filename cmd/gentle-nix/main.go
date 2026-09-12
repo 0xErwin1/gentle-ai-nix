@@ -23,6 +23,14 @@
 // providers.pi.{models,profiles,activeProfile,modelFamily,modelPreset} out of
 // the document too, and writes .pi/gentle-ai/{models,profiles}.json and Pi's
 // settings defaults directly -- see internal/pirouting.
+//
+// "roles" moves one more thing out of the document: renaming or defining
+// roles is not something Gentle AI does imperatively, so
+// programs.gentle-ai.roles no longer travels through the document as
+// "roles" either. This subcommand post-processes the tree "gentle-ai config
+// render" already produced instead, reproducing exactly what the pinned
+// fork's own role renderer wrote for the five adapters that can express a
+// role at all -- see internal/roles.
 package main
 
 import (
@@ -36,7 +44,7 @@ var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|settings|pi|retire|rewrite|frontmatter> [flags]")
+		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|settings|pi|roles|retire|rewrite|frontmatter> [flags]")
 		os.Exit(2)
 	}
 
@@ -52,6 +60,8 @@ func main() {
 		code, err = runSettings(os.Args[2:])
 	case "pi":
 		code, err = runPi(os.Args[2:])
+	case "roles":
+		code, err = runRoles(os.Args[2:])
 	case "retire":
 		code, err = runRetire(os.Args[2:])
 	case "rewrite":

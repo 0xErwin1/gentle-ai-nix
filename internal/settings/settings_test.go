@@ -234,6 +234,68 @@ func TestRunMergesEachDeclaredProviderIntoItsOwnFile(t *testing.T) {
 	}
 }
 
+func TestMergeIntoReplaceSentinelReplacesNestedObjectWholesale(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "settings.json")
+	writeFile(t, target, `{"agent":{"worker":{"tools":{"bash":true},"kept":"value"}}}`)
+
+	err := MergeInto(target, []byte(`{"agent":{"worker":{"tools":{"__replace__":{"read":true}}}}}`))
+	if err != nil {
+		t.Fatalf("MergeInto: %v", err)
+	}
+
+	raw, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("merged file is not valid JSON: %v\n%s", err, raw)
+	}
+
+	worker := got["agent"].(map[string]any)["worker"].(map[string]any)
+	if worker["kept"] != "value" {
+		t.Fatalf("the merge dropped an untouched sibling key: %v", worker)
+	}
+	tools, ok := worker["tools"].(map[string]any)
+	if !ok {
+		t.Fatalf("tools was not written: %v", worker)
+	}
+	if _, stale := tools["bash"]; stale {
+		t.Fatalf("tools = %v, want the stale entry replaced rather than merged", tools)
+	}
+	if tools["read"] != true {
+		t.Fatalf("tools = %v, want the declared entry present", tools)
+	}
+	if _, sentinelLeaked := tools[ReplaceSentinel]; sentinelLeaked {
+		t.Fatalf("tools = %v, want the sentinel unwrapped rather than written verbatim", tools)
+	}
+}
+
+func TestMergeIntoReplaceSentinelWorksWithNoBaseValue(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "settings.json")
+	writeFile(t, target, `{}`)
+
+	err := MergeInto(target, []byte(`{"agent":{"worker":{"tools":{"__replace__":{"read":true}}}}}`))
+	if err != nil {
+		t.Fatalf("MergeInto: %v", err)
+	}
+
+	raw, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("merged file is not valid JSON: %v\n%s", err, raw)
+	}
+	tools := got["agent"].(map[string]any)["worker"].(map[string]any)["tools"].(map[string]any)
+	if tools["read"] != true {
+		t.Fatalf("tools = %v, want the declared entry present", tools)
+	}
+}
+
 func TestRunRejectsAnUnknownProvider(t *testing.T) {
 	tree := t.TempDir()
 	blockPath := filepath.Join(t.TempDir(), "block.json")

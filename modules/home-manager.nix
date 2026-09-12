@@ -912,12 +912,16 @@ let
   # nothing in, so it is left out of the document instead.
   providers = lib.filterAttrs (_: block: block != { }) (lib.mapAttrs providerBlock enabledProviders);
 
-  role =
-    id: value:
-    {
-      inherit id;
-    }
-    // whenSet "renderedName" value.renderedName
+  # Renaming or defining roles is not something Gentle AI does imperatively,
+  # so a role is no longer part of the document at all: `roleSpecEntry`
+  # feeds `gentle-nix roles` instead (see rolesSpecBody, rolesNeeded and the
+  # `gentle-nix roles` invocation in `overlaid` below), which renders it as
+  # post-processing of the tree `gentle-ai config render` already produced.
+  # The id travels as the map key there, not as a field, so this keeps
+  # exactly the fields a role's own file or settings entry carries.
+  roleSpecEntry =
+    value:
+    whenSet "renderedName" value.renderedName
     // whenSet "references" value.references
     // whenSet "description" value.description
     // whenSet "prompt" value.prompt
@@ -925,6 +929,32 @@ let
     // whenSet "mode" value.mode
     // optionalAttrs (value.model != null) { model = toModelAssignment value.model; }
     // optionalAttrs (value.hidden != null) { inherit (value) hidden; };
+
+  # The five adapters `internal/roles` (gentle-nix's own role renderer)
+  # knows how to write a role for: the four that keep every role as its own
+  # frontmatter file, plus opencode, whose roles live inside its own
+  # settings file. Every other adapter has no notion of a role at all,
+  # mirrored from the pinned fork's own render.ProviderFor.
+  roleCapableProviders = [
+    "claude-code"
+    "cursor"
+    "kimi"
+    "kiro-ide"
+    "opencode"
+  ];
+
+  rolesUnsupportedAdapters = lib.filter (name: !(lib.elem name roleCapableProviders)) (
+    lib.attrNames enabledProviders
+  );
+
+  rolesNeeded = cfg.roles != { };
+
+  rolesSpecBody = {
+    agents = enabledNames cfg.providers;
+    roles = lib.mapAttrs (_: roleSpecEntry) cfg.roles;
+  };
+
+  rolesSpecFile = pkgs.writeText "gentle-ai-roles-spec.json" (builtins.toJSON rolesSpecBody);
 
   mcpServer =
     value:
@@ -965,8 +995,7 @@ let
   document = {
     version = cfg.schemaVersion;
     inherit selection;
-  }
-  // whenSet "roles" (lib.mapAttrsToList role cfg.roles);
+  };
 
   documentFile = pkgs.writeText "gentle-ai-document.json" (builtins.toJSON document);
 
@@ -988,7 +1017,11 @@ let
   # works.
   overlaid =
     if
-      cfg.extraFiles == { } && !embedGentleEngramPiPlugin && providerSettings == { } && !piRoutingNeeded
+      cfg.extraFiles == { }
+      && !embedGentleEngramPiPlugin
+      && providerSettings == { }
+      && !piRoutingNeeded
+      && !rolesNeeded
     then
       base
     else
@@ -1029,6 +1062,20 @@ let
           ${lib.getExe gentleNix} pi routing \
             --tree "$out/tree" \
             --spec ${piRoutingSpecFile}
+        ''}
+        ${lib.optionalString rolesNeeded ''
+          # gentle-nix roles renders every declared programs.gentle-ai.roles
+          # entry onto the tree, the same post-processing step pi routing
+          # is above. It runs before the `gentle-nix settings` loop below
+          # for the same reason: a rendered role is only ever a fallback
+          # shape for whatever an operator's own `providers.opencode.settings`
+          # decides at the same key (e.g. that role's own entry under
+          # `agent.<name>`), and the settings loop's overlay always wins at
+          # a shared leaf -- so the role has to be the base and the
+          # operator's own setting the overlay, not the other way around.
+          ${lib.getExe gentleNix} roles \
+            --tree "$out/tree" \
+            --spec ${rolesSpecFile}
         ''}
         ${lib.concatMapStringsSep "\n" (name: ''
           ${lib.getExe gentleNix} settings \
@@ -2007,6 +2054,20 @@ in
       {
         assertion = piPackagesWithInvalidSources == [ ];
         message = "programs.gentle-ai.providers.pi.packages.${lib.concatStringsSep ", " piPackagesWithInvalidSources} uses an unsupported Pi package source: use npm:<name>[@version], git:<host>/<user>/<repo>[@ref], an https:// or ssh:// URL, or an absolute path";
+      }
+      {
+        # Mirrors the pinned fork's own `config.role.unsupported-adapter`
+        # refusal at eval time, the same way this flake already mirrors
+        # other Gentle AI refusals as assertions: a declared role is only
+        # rendered by `internal/roles`, which knows how to write one for
+        # claude-code, cursor, kimi, kiro-ide and opencode and nothing
+        # else, so an installation naming a role alongside any other
+        # client would otherwise fail silently -- `gentle-nix roles` also
+        # refuses this itself as a second layer (see internal/roles'
+        # Validate), but naming it here catches the mistake before a build
+        # even reaches that command.
+        assertion = cfg.roles == { } || rolesUnsupportedAdapters == [ ];
+        message = "programs.gentle-ai.roles declares roles, but programs.gentle-ai.providers.${lib.concatStringsSep ", " rolesUnsupportedAdapters} expresses no agent roles; remove the roles or drop that client";
       }
     ];
 

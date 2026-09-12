@@ -66,6 +66,27 @@ func ResolvePath(tree, provider string) (string, bool) {
 	return filepath.Join(tree, rel), true
 }
 
+// ReplaceSentinel is the fork's own filemerge replace directive, ported: a
+// nested overlay object whose only key is "__replace__" replaces its
+// counterpart in the base wholesale instead of being deep-merged into it,
+// e.g. {"agent":{"worker":{"tools":{"__replace__":{"read":true}}}}}. A
+// caller that wants a declared list-shaped value (a toolset, a delegation
+// table) to win outright, rather than accumulate stale entries the
+// declaration no longer names, wraps it in this sentinel -- gentle-nix
+// roles is the first caller (see internal/roles' OpenCode rendering).
+const ReplaceSentinel = "__replace__"
+
+// asReplacement reports whether v is a map with exactly one key,
+// ReplaceSentinel, and returns the value it wraps.
+func asReplacement(v any) (any, bool) {
+	m, ok := v.(map[string]any)
+	if !ok || len(m) != 1 {
+		return nil, false
+	}
+	replacement, ok := m[ReplaceSentinel]
+	return replacement, ok
+}
+
 // mergeObjects is mergeObjects/mergeObjectScope from the fork's
 // internal/components/filemerge/json_merge.go, minus the permission-scalar
 // protection that package also carries -- irrelevant here, since a plain
@@ -76,6 +97,11 @@ func mergeObjects(base, overlay map[string]any) map[string]any {
 		result[key] = value
 	}
 	for key, overlayValue := range overlay {
+		if replacement, isSentinel := asReplacement(overlayValue); isSentinel {
+			result[key] = replacement
+			continue
+		}
+
 		baseValue, exists := result[key]
 		if exists {
 			if baseMap, baseIsMap := baseValue.(map[string]any); baseIsMap {
@@ -84,6 +110,13 @@ func mergeObjects(base, overlay map[string]any) map[string]any {
 					continue
 				}
 			}
+		} else if overlayMap, isMap := overlayValue.(map[string]any); isMap {
+			// Even with no base value, recurse into the overlay map so a
+			// nested __replace__ sentinel is unwrapped before it reaches
+			// the output -- otherwise it would be written verbatim as a
+			// literal "__replace__" key.
+			result[key] = mergeObjects(map[string]any{}, overlayMap)
+			continue
 		}
 		result[key] = overlayValue
 	}

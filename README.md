@@ -263,9 +263,15 @@ For the fields these options produce — what each accepts, and what omitting it
 
 ```
 programs.gentle-ai.settings ─────────────────┐
-programs.gentle-ai.roles ────────────────────┼─► gentle-ai.json ─► gentle-ai config render ─► store tree ─► home.file
-programs.gentle-ai.providers.<name>.settings ┘
+programs.gentle-ai.providers.<name>.settings ┘─► gentle-ai.json ─► gentle-ai config render ─► store tree ┐
+                                                                                                          ├─► home.file
+programs.gentle-ai.roles ────────────────────────────────────────────────► gentle-nix roles ─────────────┘
 ```
+
+Renaming or defining roles is not something Gentle AI does imperatively, so
+`roles` never reaches `gentle-ai.json`: `gentle-nix roles` renders them as
+post-processing of the store tree `gentle-ai config render` already
+produced, for the five clients that can express a role at all.
 
 | Decision | Why |
 |----------|-----|
