@@ -1194,8 +1194,13 @@ let
     if withheld == [ ] then
       rendered
     else
+      # Modes are kept: the tree carries executables such as the Pi engram
+      # plugin's entry point, and a copy that drops the execute bit is what a
+      # `permission denied` at activation looks like. Ownership is not ours to
+      # keep, and the copy is made writable so the withheld paths can go.
       pkgs.runCommandLocal "gentle-ai-config-projected" { } ''
-        cp -r --no-preserve=mode,ownership ${rendered} "$out"
+        cp -r --no-preserve=ownership ${rendered} "$out"
+        chmod -R u+w "$out"
         ${lib.concatMapStringsSep "\n" (path: ''rm -f "$out/tree/${path}"'') withheld}
       '';
 

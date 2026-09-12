@@ -395,22 +395,27 @@ in
   # onto the home directory -- this builds the real rendered tree, the same
   # way ownContentLayersOverTheRender does for extraFiles, and checks the
   # plugin's own entry point landed at that exact path.
+  # The tree is checked where the home actually takes it from -- the delivered
+  # `home.file` source -- with a merged secret in play, so the projection that
+  # removes withheld paths is the copy under test: it once dropped the execute
+  # bit on the way and the activation died with `permission denied`.
   piPluginEmbeddedInRenderedTree =
     let
-      rendered =
+      delivered =
         (evaluate [
           {
             programs.gentle-ai = {
               enable = true;
               providers.pi.enable = true;
               engramRelease = "rc";
+              secrets.merge = [ ".pi/agent/settings.json" ];
             };
           }
-        ]).config.programs.gentle-ai.rendered;
+        ]).config.home.file.gentle-ai.source;
     in
-    pkgs.runCommandLocal "gentle-ai-check-pi-plugin-embedded" { inherit rendered; } ''
-      test -x "$rendered/tree/.pi/gentle-ai/plugins/gentle-engram/bin/pi-engram" || {
-        echo "the gentle-engram Pi plugin was not embedded at its stable path" >&2
+    pkgs.runCommandLocal "gentle-ai-check-pi-plugin-embedded" { inherit delivered; } ''
+      test -x "$delivered/.pi/gentle-ai/plugins/gentle-engram/bin/pi-engram" || {
+        echo "the gentle-engram Pi plugin is not executable at its stable path in the delivered tree" >&2
         exit 1
       }
       touch "$out"
