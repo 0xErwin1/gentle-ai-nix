@@ -396,9 +396,10 @@ in
   # way ownContentLayersOverTheRender does for extraFiles, and checks the
   # plugin's own entry point landed at that exact path.
   # The tree is checked where the home actually takes it from -- the delivered
-  # `home.file` source -- with a merged secret in play, so the projection that
-  # removes withheld paths is the copy under test: it once dropped the execute
-  # bit on the way and the activation died with `permission denied`.
+  # `home.file` source -- with a merged secret in play and an `overrideRendered`
+  # that copies the way most do, dropping modes. Both once cost the entry point
+  # its execute bit and the activation died with `permission denied`; the
+  # projection has to put it back whatever happened upstream.
   piPluginEmbeddedInRenderedTree =
     let
       delivered =
@@ -409,6 +410,11 @@ in
               providers.pi.enable = true;
               engramRelease = "rc";
               secrets.merge = [ ".pi/agent/settings.json" ];
+              overrideRendered =
+                tree:
+                pkgs.runCommandLocal "gentle-ai-config-mode-dropping-override" { } ''
+                  cp -r --no-preserve=mode,ownership ${tree} "$out"
+                '';
             };
           }
         ]).config.home.file.gentle-ai.source;

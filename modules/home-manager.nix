@@ -1190,18 +1190,26 @@ let
       name: "--secret ${lib.escapeShellArg "${name}=${cfg.secrets.placeholders.${name}}"}"
     ) (lib.attrNames cfg.secrets.placeholders);
 
+  # The plugin's entry point must reach the home executable. An
+  # `overrideRendered` sits between the overlay that set the bit and this
+  # projection, and a copy in there that drops modes -- the usual
+  # `--no-preserve=mode` idiom -- is what a `permission denied` at activation
+  # looks like, so the bit is put back here rather than trusted to survive.
+  restoreExecutables = lib.optionalString embedGentleEngramPiPlugin ''
+    find "$out/tree/${gentleEngramPiPluginPath}/bin" -type f -exec chmod +x {} +
+  '';
+
   projected =
-    if withheld == [ ] then
+    if withheld == [ ] && !embedGentleEngramPiPlugin then
       rendered
     else
-      # Modes are kept: the tree carries executables such as the Pi engram
-      # plugin's entry point, and a copy that drops the execute bit is what a
-      # `permission denied` at activation looks like. Ownership is not ours to
-      # keep, and the copy is made writable so the withheld paths can go.
+      # Modes are kept on the way through; ownership is not ours to keep, and
+      # the copy is made writable so the withheld paths can go.
       pkgs.runCommandLocal "gentle-ai-config-projected" { } ''
         cp -r --no-preserve=ownership ${rendered} "$out"
         chmod -R u+w "$out"
         ${lib.concatMapStringsSep "\n" (path: ''rm -f "$out/tree/${path}"'') withheld}
+        ${restoreExecutables}
       '';
 
   providerRoots = {
