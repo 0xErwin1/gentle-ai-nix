@@ -846,17 +846,61 @@ let
   # knowledge to duplicate: the renderer decodes each block in that
   # provider's own shape and reports a mismatch as a diagnostic, the same way
   # an unknown provider or skill already is.
+  #
+  # Pi is the one exception: `models`, `profiles`, `activeProfile`,
+  # `modelFamily` and `modelPreset` are gentle-pi's own routing and profile
+  # store, not a Gentle AI feature, so they no longer reach the document for
+  # pi at all -- `gentle-nix pi routing` writes them straight into the
+  # rendered tree instead (see piRoutingSpecBody and the `overlaid`
+  # derivation below). Every other provider keeps sending them through the
+  # document unchanged.
   providerBlock =
     name: provider:
-    whenSet "models" (providerModels name provider.models)
-    // whenSet "modelFamily" provider.modelFamily
-    // whenSet "modelPreset" provider.modelPreset
+    optionalAttrs (name != "pi") (
+      whenSet "models" (providerModels name provider.models)
+      // whenSet "modelFamily" provider.modelFamily
+      // whenSet "modelPreset" provider.modelPreset
+      // whenSet "profiles" (lib.mapAttrs (_: profile) provider.profiles)
+      // whenSet "activeProfile" provider.activeProfile
+    )
     // whenSet "backgroundIntent" (cfg.backgroundSubagents.${name} or null)
-    // whenSet "profiles" (lib.mapAttrs (_: profile) provider.profiles)
     // whenSet "profileStrategy" provider.profileStrategy
-    // whenSet "activeProfile" provider.activeProfile
     // whenSet "skills" provider.skills
     // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) provider.mcpServers);
+
+  # gentle-nix pi routing's own input, built from the raw
+  # providers.pi.{models,profiles,activeProfile,modelFamily,modelPreset}
+  # options rather than from `providers` above, since providerBlock no
+  # longer carries them for pi. Empty when pi is not enabled or none of
+  # these were declared, in which case nothing invokes the subcommand at
+  # all -- see piRoutingNeeded.
+  piRoutingSpecBody =
+    if !piEnabled then
+      { }
+    else
+      let
+        piProvider = cfg.providers.pi;
+      in
+      whenSet "models" (providerModels "pi" piProvider.models)
+      // whenSet "profiles" (lib.mapAttrs (_: profile) piProvider.profiles)
+      // whenSet "activeProfile" piProvider.activeProfile
+      // whenSet "modelFamily" piProvider.modelFamily
+      // whenSet "modelPreset" piProvider.modelPreset
+      // optionalAttrs (piProvider.modelFamily != null && piProvider.modelPreset != null) {
+        # A relative path: `gentle-nix pi routing` reads it from its own
+        # working directory, which is this derivation's build directory --
+        # see the `overlaid` derivation, which writes the presets document
+        # at exactly this name before invoking the subcommand.
+        presets = piPresetsRelPath;
+      };
+
+  piPresetsRelPath = "gentle-ai-pi-presets.json";
+
+  piRoutingNeeded = piRoutingSpecBody != { };
+
+  piRoutingSpecFile = pkgs.writeText "gentle-ai-pi-routing-spec.json" (
+    builtins.toJSON piRoutingSpecBody
+  );
 
   # A provider enabled with nothing else set has nothing worth nesting: an
   # empty block would still be a key the renderer has to look at and find
@@ -938,7 +982,9 @@ let
   # same directory the moment both exist, where layering onto one tree just
   # works.
   overlaid =
-    if cfg.extraFiles == { } && !embedGentleEngramPiPlugin && providerSettings == { } then
+    if
+      cfg.extraFiles == { } && !embedGentleEngramPiPlugin && providerSettings == { } && !piRoutingNeeded
+    then
       base
     else
       pkgs.runCommandLocal "gentle-ai-config-overlaid" { } ''
@@ -955,6 +1001,29 @@ let
           # the moment it is copied rather than symlinked.
           chmod -R u+rwX,go+rX "$target"
           find "$target/bin" -type f -exec chmod +x {} +
+        ''}
+        ${lib.optionalString piRoutingNeeded ''
+          # gentle-nix pi routing writes gentle-pi's own routing and profile
+          # store, and the orchestrator defaults it merges into
+          # .pi/agent/settings.json. It has to run before the
+          # `gentle-nix settings` loop below: an operator's own
+          # `providers.pi.settings` is a decision, a profile's orchestrator
+          # default is only a fallback, and the settings loop's overlay
+          # always wins at a shared leaf (see internal/settings'
+          # mergeObjects) -- so the fallback has to be the base and the
+          # decision the overlay, not the other way around.
+          ${lib.optionalString (piRoutingSpecBody ? presets) ''
+            # The verb is probed by running it: `--help` exits non-zero by
+            # design of the flag parser, so only the real call says whether
+            # this build has it.
+            ${lib.getExe cfg.package} config presets --provider ${lib.escapeShellArg piRoutingSpecBody.modelFamily} --json > ${lib.escapeShellArg piPresetsRelPath} || {
+              echo "gentle-ai config presets: not supported by the pinned gentle-ai build (${cfg.package}); cannot fill providers.pi.modelPreset ${lib.escapeShellArg piRoutingSpecBody.modelPreset} for modelFamily ${lib.escapeShellArg piRoutingSpecBody.modelFamily}" >&2
+              exit 1
+            }
+          ''}
+          ${lib.getExe gentleNix} pi routing \
+            --tree "$out/tree" \
+            --spec ${piRoutingSpecFile}
         ''}
         ${lib.concatMapStringsSep "\n" (name: ''
           ${lib.getExe gentleNix} settings \

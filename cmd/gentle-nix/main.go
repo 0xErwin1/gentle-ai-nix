@@ -17,6 +17,12 @@
 // flags) and providers.<name>.settings (via this subcommand) -- into
 // gentle-nix itself, so gentle-ai-nix stays a superset of Gentle AI instead
 // of asking the document to carry fields only this flake needs.
+//
+// "pi routing" continues that move: Pi's model routing and gentle-pi's own
+// agent profile store are not Gentle AI features either, so this phase moves
+// providers.pi.{models,profiles,activeProfile,modelFamily,modelPreset} out of
+// the document too, and writes .pi/gentle-ai/{models,profiles}.json and Pi's
+// settings defaults directly -- see internal/pirouting.
 package main
 
 import (
@@ -30,7 +36,7 @@ var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|settings|retire|rewrite|frontmatter> [flags]")
+		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|settings|pi|retire|rewrite|frontmatter> [flags]")
 		os.Exit(2)
 	}
 
@@ -44,6 +50,8 @@ func main() {
 		code, err = runProvision(os.Args[2:])
 	case "settings":
 		code, err = runSettings(os.Args[2:])
+	case "pi":
+		code, err = runPi(os.Args[2:])
 	case "retire":
 		code, err = runRetire(os.Args[2:])
 	case "rewrite":

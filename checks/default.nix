@@ -223,16 +223,25 @@ in
         "piBackgroundIntent"
         "profiles"
       ];
+      # `models`, `profiles`, `activeProfile`, `modelFamily` and
+      # `modelPreset` are gentle-pi's own routing and profile store, not a
+      # Gentle AI feature, so `gentle-nix pi routing` writes them straight
+      # into the rendered tree instead of the document -- see
+      # piRoutingSpecBody in modules/home-manager.nix. A stale one of these
+      # still reaching selection.providers.pi would mean the document is
+      # carrying a field only gentle-nix reads now.
+      removedPiKeys = [
+        "models"
+        "profiles"
+        "activeProfile"
+        "modelFamily"
+        "modelPreset"
+      ];
     in
-    assert pi.models.orchestrator.model == "anthropic/claude-haiku";
-    assert pi.profiles.cheap.orchestrator.provider == "anthropic";
-    assert pi.profiles.cheap.orchestrator.model == "claude-haiku";
-    assert pi.activeProfile == "cheap";
     assert pi.backgroundIntent == "on";
-    assert pi.modelFamily == "codex";
-    assert pi.modelPreset == "economy";
     assert pi.skills == [ "go-testing" ];
     assert pi.mcpServers.atlas.command == "atlas";
+    assert lib.all (key: !(pi ? ${key})) removedPiKeys;
     assert opencode.profileStrategy == "generated-multi";
     assert opencode.backgroundIntent == "on";
     assert lib.all (key: !(document.selection ? ${key})) removedTopLevelKeys;
@@ -1206,8 +1215,11 @@ in
             };
           };
         };
+        # modelFamily left the contract altogether when Pi's routing moved
+        # into gentle-nix, so a document that still carries it is an unknown
+        # field rather than an unsupported provider.
         modelFamily = {
-          code = "config.provider.model-family.unsupported-provider";
+          code = "config.document.unknown-field";
           document = documentFor {
             claude-code = {
               enable = true;
@@ -1333,6 +1345,155 @@ in
       opencodeSettings="${providerSettingsRendered}/tree/.config/opencode/opencode.json"
       grep -q 'other-provider' "$opencodeSettings" || { echo "the other provider's own setting was not rendered" >&2; exit 1; }
     '';
+
+  # `gentle-nix pi routing` now writes gentle-pi's own routing and profile
+  # store instead of the pinned fork rendering it from the document (see
+  # piRoutingSpecBody in modules/home-manager.nix); this proves the full
+  # pipeline -- Home Manager evaluation through the `overlaid` derivation --
+  # still produces the same three things an operator's declared
+  # `providers.pi.{models,profiles,activeProfile}` used to render: the
+  # profile store, the model routing, and the orchestrator defaults merged
+  # into Pi's own settings.json.
+  piRoutingRendersIntoTree =
+    let
+      piRoutingConfiguration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
+              enable = true;
+              activeProfile = "cheap";
+              profiles.cheap = {
+                orchestrator = {
+                  provider = "anthropic";
+                  model = "claude-haiku";
+                  effort = "low";
+                };
+                phases.sdd-apply = {
+                  provider = "anthropic";
+                  model = "claude-sonnet-5";
+                  effort = "medium";
+                };
+              };
+              models.sdd-verify.thinking = "high";
+            };
+          };
+        }
+      ];
+      piRoutingDocument = piRoutingConfiguration.config.programs.gentle-ai.document;
+      piRoutingRendered = piRoutingConfiguration.config.programs.gentle-ai.rendered;
+    in
+    # The whole point of this move: none of what was just declared reaches
+    # the document any more for pi -- in this configuration pi declares
+    # nothing else, so its block is empty enough to drop from `providers`
+    # entirely -- only the rendered tree gentle-nix wrote to directly.
+    assert !((piRoutingDocument.selection.providers or { }) ? pi);
+    pkgs.runCommandLocal "gentle-ai-check-pi-routing-render-through" { inherit piRoutingRendered; } ''
+      set -euo pipefail
+      profiles="$piRoutingRendered/tree/.pi/gentle-ai/profiles.json"
+      models="$piRoutingRendered/tree/.pi/gentle-ai/models.json"
+      settings="$piRoutingRendered/tree/.pi/agent/settings.json"
+
+      test -f "$profiles" || { echo "profiles.json was not rendered" >&2; exit 1; }
+      grep -q '"kind": "gentle-pi.agent_model_profiles"' "$profiles" || { echo "profiles.json has the wrong kind" >&2; exit 1; }
+      grep -q '"active": "cheap"' "$profiles" || { echo "the active profile was not written" >&2; exit 1; }
+      grep -q '"anthropic/claude-haiku"' "$profiles" || { echo "the orchestrator model was not written" >&2; exit 1; }
+      grep -q '"anthropic/claude-sonnet-5"' "$profiles" || { echo "the phase assignment was not written" >&2; exit 1; }
+
+      test -f "$models" || { echo "models.json was not rendered" >&2; exit 1; }
+      grep -q '"sdd-verify"' "$models" || { echo "the explicit model assignment was not rendered" >&2; exit 1; }
+      grep -q '"orchestrator"' "$models" || { echo "the active profile's orchestrator entry was not rendered into models.json" >&2; exit 1; }
+
+      test -f "$settings" || { echo "Pi settings.json was not rendered" >&2; exit 1; }
+      grep -q '"defaultProvider": "anthropic"' "$settings" || { echo "the orchestrator default was not merged into Pi settings" >&2; exit 1; }
+      grep -q '"defaultModel": "claude-haiku"' "$settings" || { echo "the orchestrator model default was not merged into Pi settings" >&2; exit 1; }
+
+      touch "$out"
+    '';
+
+  # `gentle-nix pi routing` has to run before `gentle-nix settings` so a
+  # declared `providers.pi.settings` value -- an operator's own decision --
+  # keeps winning over a routing default at the same key, which is only a
+  # fallback. This proves the ordering, not just each step in isolation.
+  piRoutingOrchestratorDefaultsLoseToDeclaredSettings =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
+              enable = true;
+              activeProfile = "cheap";
+              profiles.cheap.orchestrator = {
+                provider = "anthropic";
+                model = "claude-haiku";
+                effort = "low";
+              };
+              settings.defaultProvider = "declared-by-provider-settings";
+            };
+          };
+        }
+      ];
+      rendered = configuration.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-routing-settings-precedence" { inherit rendered; } ''
+      set -euo pipefail
+      settings="$rendered/tree/.pi/agent/settings.json"
+      grep -q '"defaultProvider": "declared-by-provider-settings"' "$settings" || {
+        echo "an explicit providers.pi.settings value did not win over the routing default" >&2
+        exit 1
+      }
+      grep -q '"defaultModel": "claude-haiku"' "$settings" || {
+        echo "the routing default for a key providers.pi.settings never mentioned was dropped" >&2
+        exit 1
+      }
+      touch "$out"
+    '';
+
+  # providers.pi.modelFamily/modelPreset fill Pi's routing from the pinned
+  # gentle-ai build's own preset table via `gentle-ai config presets --json`
+  # (see familyPresetFill in internal/pirouting). The pinned build has the
+  # verb, so a pin that loses it fails here rather than at someone's
+  # activation; the fill is also checked for the agents it must and must
+  # not produce.
+  piRoutingPresetFillAgainstPinnedGentleAi =
+    let
+      gentleAi = (evaluate [ minimal ]).config.programs.gentle-ai.package;
+      gentleNixPackage = self.packages.${system}.gentle-nix;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-routing-preset-fill"
+      {
+        nativeBuildInputs = [
+          gentleAi
+          gentleNixPackage
+        ];
+      }
+      ''
+        set -euo pipefail
+        gentle-ai config presets --provider codex --json > presets.json || {
+          echo "the pinned gentle-ai build has no 'config presets' verb; Pi's preset fill needs it" >&2
+          exit 1
+        }
+        cat > spec.json <<JSON
+        { "modelFamily": "codex", "modelPreset": "recommended", "presets": "$PWD/presets.json" }
+        JSON
+        mkdir -p tree
+        gentle-nix pi routing --tree "$PWD/tree" --spec spec.json
+        test -s tree/.pi/gentle-ai/models.json || {
+          echo "models.json was not written from the pinned build's own preset table" >&2
+          exit 1
+        }
+        ${lib.getExe pkgs.jq} -e '
+          has("sdd-apply") and has("sdd-proposal")
+          and (has("default") | not) and (has("orchestrator") | not)
+          and (.["sdd-apply"].model | startswith("openai-codex/"))
+        ' tree/.pi/gentle-ai/models.json >/dev/null || {
+          echo "the preset fill did not produce the expected Pi agents" >&2
+          cat tree/.pi/gentle-ai/models.json >&2
+          exit 1
+        }
+        touch "$out"
+      '';
 
   # treefmt rewrites in place, so it runs against a writable copy and the check
   # is whether anything changed rather than whether it refused to run.
