@@ -230,21 +230,30 @@ in
       # piRoutingSpecBody in modules/home-manager.nix. A stale one of these
       # still reaching selection.providers.pi would mean the document is
       # carrying a field only gentle-nix reads now.
+      # `mcpServers` is added to every removed set below: wiring a
+      # user-declared MCP server is not something Gentle AI does
+      # imperatively either, so `gentle-nix mcp` writes it straight into
+      # the rendered tree instead of the document -- see mcpSpecBody in
+      # modules/home-manager.nix. A stale `mcpServers` still reaching the
+      # document, at the top level or under any provider, would mean the
+      # document is carrying a field only gentle-nix reads now.
       removedPiKeys = [
         "models"
         "profiles"
         "activeProfile"
         "modelFamily"
         "modelPreset"
+        "mcpServers"
       ];
     in
     assert pi.backgroundIntent == "on";
     assert pi.skills == [ "go-testing" ];
-    assert pi.mcpServers.atlas.command == "atlas";
     assert lib.all (key: !(pi ? ${key})) removedPiKeys;
     assert opencode.profileStrategy == "generated-multi";
     assert opencode.backgroundIntent == "on";
+    assert !(opencode ? mcpServers);
     assert lib.all (key: !(document.selection ? ${key})) removedTopLevelKeys;
+    assert !(document.selection ? mcpServers);
     pkgs.runCommandLocal "gentle-ai-check-providers-document-shape" { } ''touch "$out"'';
 
   # `gentlePiRelease` and `engramRelease` only ever add a `packages` entry
@@ -1415,6 +1424,107 @@ in
       set -euo pipefail
       ${lib.optionalString (accepted [ withRolesAndGeminiCli ]) ''
         echo "a role declared alongside gemini-cli was accepted, expected an eval refusal naming it" >&2
+        exit 1
+      ''}
+      touch "$out"
+    '';
+
+  # Wiring a user-declared MCP server is not something Gentle AI does
+  # imperatively either, so it must never reach the document at all:
+  # `gentle-nix mcp` (and, for codex, the module's own TOML merger) render it
+  # as post-processing of the tree `gentle-ai config render` already
+  # produced instead -- see internal/mcp, mcpSpecBody, codexMcpServers and
+  # the `gentle-nix mcp` / codex TOML invocations in
+  # modules/home-manager.nix's `overlaid`. This proves every adapter's own
+  # shape lands with the right bytes, that a provider's own `mcpServers`
+  # block fully replaces the flat set for that provider only, and that
+  # codex -- the one adapter excluded from `gentle-nix mcp` -- still gets
+  # its servers through the TOML merger.
+  mcpRendersIntoTree =
+    let
+      mcpConfiguration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            mcpServers.atlas = {
+              command = "atlas-mcp";
+              args = [ "--flag" ];
+            };
+            providers = {
+              claude-code.enable = true;
+              opencode.enable = true;
+              pi.enable = true;
+              codex.enable = true;
+              cursor = {
+                enable = true;
+                mcpServers.only-cursor.command = "cursor-tool";
+              };
+            };
+          };
+        }
+      ];
+      mcpDocument = mcpConfiguration.config.programs.gentle-ai.document;
+      mcpRendered = mcpConfiguration.config.programs.gentle-ai.rendered;
+    in
+    assert !(mcpDocument.selection ? mcpServers);
+    assert lib.all (name: !((mcpDocument.selection.providers or { }).${name} or { } ? mcpServers)) (
+      lib.attrNames (mcpDocument.selection.providers or { })
+    );
+    pkgs.runCommandLocal "gentle-ai-check-mcp-render-through" { inherit mcpRendered; } ''
+      set -euo pipefail
+
+      claude="$mcpRendered/tree/.claude/mcp/atlas.json"
+      test -f "$claude" || { echo "claude-code's own MCP file was not rendered" >&2; exit 1; }
+      grep -q '"command": "atlas-mcp"' "$claude" || { echo "claude-code did not get the flat server" >&2; exit 1; }
+      grep -q '"enabled"' "$claude" && { echo "a plain adapter must never carry an enabled field" >&2; exit 1; }
+
+      opencode="$mcpRendered/tree/.config/opencode/opencode.json"
+      test -f "$opencode" || { echo "opencode's settings file was not rendered" >&2; exit 1; }
+      grep -q '"atlas"' "$opencode" || { echo "opencode did not get the flat server" >&2; exit 1; }
+      grep -q '"type": "local"' "$opencode" || { echo "opencode's entry is not OpenCode-shaped" >&2; exit 1; }
+      grep -q '"enabled": true' "$opencode" || { echo "opencode's entry must always carry enabled" >&2; exit 1; }
+
+      pi="$mcpRendered/tree/.pi/agent/mcp.json"
+      test -f "$pi" || { echo "Pi's MCP file was not rendered" >&2; exit 1; }
+      grep -q '"atlas"' "$pi" || { echo "Pi did not get the flat server" >&2; exit 1; }
+
+      codex="$mcpRendered/tree/.codex/config.toml"
+      test -f "$codex" || { echo "Codex's config.toml was not rendered" >&2; exit 1; }
+      grep -q 'mcp_servers.atlas' "$codex" || { echo "Codex did not get the flat server" >&2; exit 1; }
+      grep -q 'atlas-mcp' "$codex" || { echo "Codex's server command was not written" >&2; exit 1; }
+
+      cursor="$mcpRendered/tree/.cursor/mcp.json"
+      test -f "$cursor" || { echo "cursor's own MCP file was not rendered" >&2; exit 1; }
+      grep -q '"only-cursor"' "$cursor" || { echo "cursor's own server is missing" >&2; exit 1; }
+      grep -q '"atlas"' "$cursor" && {
+        echo "cursor's own mcpServers block should fully replace the flat set" >&2
+        exit 1
+      }
+
+      touch "$out"
+    '';
+
+  # Mirrors the pinned fork's own set of MCP-capable adapters: a server
+  # gentle-nix cannot express for every enabled client is a mistake worth
+  # naming at eval time, the same way `programs.gentle-ai.roles`'s own
+  # assertion does.
+  mcpWithAnUnsupportedAdapterIsRejected =
+    let
+      withMcpAndHermes = {
+        programs.gentle-ai = {
+          enable = true;
+          mcpServers.atlas.command = "atlas-mcp";
+          providers = {
+            opencode.enable = true;
+            hermes.enable = true;
+          };
+        };
+      };
+    in
+    pkgs.runCommandLocal "gentle-ai-check-mcp-unsupported-adapter-rejected" { } ''
+      set -euo pipefail
+      ${lib.optionalString (accepted [ withMcpAndHermes ]) ''
+        echo "an MCP server declared alongside hermes was accepted, expected an eval refusal naming it" >&2
         exit 1
       ''}
       touch "$out"

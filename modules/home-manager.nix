@@ -342,6 +342,10 @@ let
             that identifies itself to a server, or one an installation gives
             tools the others have no use for, is named here; the rest take the
             flat set.
+
+            Rendered by `gentle-nix mcp` the same way the top-level
+            `programs.gentle-ai.mcpServers` is; see that option for which
+            clients can express one.
           '';
         };
 
@@ -870,8 +874,12 @@ let
     )
     // whenSet "backgroundIntent" (cfg.backgroundSubagents.${name} or null)
     // whenSet "profileStrategy" provider.profileStrategy
-    // whenSet "skills" provider.skills
-    // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) provider.mcpServers);
+    // whenSet "skills" provider.skills;
+  # `mcpServers` no longer travels through the document for any provider:
+  # wiring a user-declared MCP server is not something Gentle AI does
+  # imperatively, so `gentle-nix mcp` writes it straight into the rendered
+  # tree instead -- see mcpSpecBody and the `gentle-nix mcp` invocation in
+  # `overlaid` below.
 
   # gentle-nix pi routing's own input, built from the raw
   # providers.pi.{models,profiles,activeProfile,modelFamily,modelPreset}
@@ -956,6 +964,9 @@ let
 
   rolesSpecFile = pkgs.writeText "gentle-ai-roles-spec.json" (builtins.toJSON rolesSpecBody);
 
+  # A declared MCP server's own JSON shape, in the same fields
+  # `internal/mcp.Server` decodes: this is `gentle-nix mcp`'s own input
+  # contract, not the document's -- see mcpSpecBody below.
   mcpServer =
     value:
     whenSet "command" value.command
@@ -964,6 +975,84 @@ let
     // whenSet "url" value.url
     // whenSet "headers" value.headers
     // optionalAttrs (value.enable != null) { enabled = value.enable; };
+
+  # Wiring a user-declared MCP server is not something Gentle AI does
+  # imperatively either -- it only wires its own fixed servers, such as
+  # Context7 -- so `mcpServers` and every `providers.<id>.mcpServers` no
+  # longer travel through the document at all. `gentle-nix mcp` writes them
+  # straight into the rendered tree instead, the same post-processing step
+  # roles and Pi routing already are -- see internal/mcp for the exact
+  # per-adapter formats. Codex is the one exception: its config lives in
+  # TOML, so it is resolved separately below (codexMcpServers) and routed
+  # through the existing TOML merger instead of this subcommand.
+  mcpSpecBody = {
+    agents = enabledNames cfg.providers;
+    servers = lib.mapAttrs (_: mcpServer) cfg.mcpServers;
+    assignments = lib.mapAttrs (_: provider: lib.mapAttrs (_: mcpServer) provider.mcpServers) (
+      lib.filterAttrs (_: provider: provider.mcpServers != { }) cfg.providers
+    );
+  };
+
+  # The adapters `internal/mcp` (gentle-nix's own MCP renderer) knows how to
+  # write a server for, plus codex (handled separately by this module's own
+  # TOML path below) -- mirrors the pinned fork's own set of adapters whose
+  # MCPStrategy is not "unsupported". hermes and the OS-variant IDE clients
+  # (windsurf, trae-ide, vscode-copilot, antigravity) have none.
+  mcpCapableProviders = [
+    "claude-code"
+    "cursor"
+    "kimi"
+    "kiro-ide"
+    "pi"
+    "gemini-cli"
+    "qwen-code"
+    "openclaw"
+    "opencode"
+    "kilocode"
+    "codex"
+  ];
+
+  mcpUnsupportedAdapters = lib.filter (name: !(lib.elem name mcpCapableProviders)) (
+    lib.attrNames enabledProviders
+  );
+
+  mcpNeeded = mcpSpecBody.servers != { } || mcpSpecBody.assignments != { };
+
+  mcpSpecFile = pkgs.writeText "gentle-ai-mcp-spec.json" (builtins.toJSON mcpSpecBody);
+
+  # Codex keeps its MCP config in config.toml, so `gentle-nix mcp` never
+  # writes it: resolving Codex's own declared set here, the same
+  # flat-set-or-full-replace rule `internal/mcp.declaredFor` applies for
+  # every other adapter, is what lets the module hand it to the existing
+  # TOML merger below instead. Env is dropped, and there is no "enabled"
+  # field, because the pinned fork's own Codex TOML writer
+  # (filemerge.UpsertCodexMCPServerBlock / UpsertCodexRemoteMCPServerBlock)
+  # never wrote either for an MCP server -- matching that, not "fixing" it,
+  # is what keeps the bytes gentle-nix writes the ones the fork already did.
+  codexMcpServers =
+    if !(enabledProviders ? codex) then
+      { }
+    else if cfg.providers.codex.mcpServers != { } then
+      cfg.providers.codex.mcpServers
+    else
+      cfg.mcpServers;
+
+  codexMcpTomlEntry =
+    value:
+    if value.url != null then
+      { url = value.url; } // optionalAttrs (value.headers != { }) { headers = value.headers; }
+    else
+      {
+        command = value.command;
+        # The fork's own Codex writer always emits `args = [...]`, even when
+        # empty, rather than omitting it -- mcpServerType's own default ([ ])
+        # already matches that, so no whenSet is needed here.
+        inherit (value) args;
+      };
+
+  codexMcpToml = tomlSettingsFormat.generate "gentle-ai-codex-mcp-servers.toml" {
+    mcp_servers = lib.mapAttrs (_: codexMcpTomlEntry) codexMcpServers;
+  };
 
   selection =
     whenSet "agents" (enabledNames cfg.providers)
@@ -989,8 +1078,9 @@ let
       // whenSet "deny" cfg.permissions.deny
       // whenSet "ask" cfg.permissions.ask
     )
-    // whenSet "mcpServers" (lib.mapAttrs (_: mcpServer) cfg.mcpServers)
     // cfg.settings;
+  # `mcpServers` no longer travels through the document either; see the
+  # comment on providerBlock above.
 
   document = {
     version = cfg.schemaVersion;
@@ -1022,6 +1112,8 @@ let
       && providerSettings == { }
       && !piRoutingNeeded
       && !rolesNeeded
+      && !mcpNeeded
+      && codexMcpServers == { }
     then
       base
     else
@@ -1076,6 +1168,35 @@ let
           ${lib.getExe gentleNix} roles \
             --tree "$out/tree" \
             --spec ${rolesSpecFile}
+        ''}
+        ${lib.optionalString mcpNeeded ''
+          # gentle-nix mcp writes every declared MCP server onto the tree,
+          # the same post-processing step roles and Pi routing are above,
+          # and for the same reason it runs before the `gentle-nix settings`
+          # loop below: a rendered server is only ever a fallback shape for
+          # whatever an operator's own `providers.<name>.settings` decides
+          # at the same key, and the settings loop's overlay always wins at
+          # a shared leaf -- so the declared server has to be the base and
+          # the operator's own setting the overlay, not the other way
+          # around. Codex is excluded here; it is merged from
+          # codexMcpToml below instead.
+          ${lib.getExe gentleNix} mcp \
+            --tree "$out/tree" \
+            --spec ${mcpSpecFile}
+        ''}
+        ${lib.optionalString (codexMcpServers != { }) ''
+          # Codex keeps its MCP config in config.toml, so its declared
+          # servers are merged through the same Python TOML merger Codex's
+          # other settings already use, rather than through `gentle-nix
+          # mcp` -- see codexMcpServers and codexMcpToml above. This runs
+          # before the TOML settings loop below for the same base/overlay
+          # precedence reason the JSON case does.
+          target="$out/tree/${tomlSettingsPaths.codex}"
+          mkdir -p "$(dirname "$target")"
+          ${lib.getExe merger} \
+            --fragment ${codexMcpToml} \
+            --target "$target"
+          chmod 644 "$target"
         ''}
         ${lib.concatMapStringsSep "\n" (name: ''
           ${lib.getExe gentleNix} settings \
@@ -1776,6 +1897,13 @@ in
       description = ''
         MCP servers, keyed by name. A server a component already configures does
         not need an entry here; this is for the ones only you know about.
+
+        Rendered by `gentle-nix mcp` as post-processing of the tree, not by
+        Gentle AI itself: wiring a user-declared server is not something Gentle
+        AI does imperatively. Every enabled client can express one except
+        hermes and the OS-variant IDE clients (windsurf, trae-ide,
+        vscode-copilot, antigravity) -- declaring a server while one of those
+        is enabled fails at eval rather than silently dropping it.
       '';
     };
 
@@ -2016,8 +2144,9 @@ in
       {
         assertion = lib.all (server: (server.command == null) != (server.url == null)) (
           lib.attrValues cfg.mcpServers
+          ++ lib.concatMap (provider: lib.attrValues provider.mcpServers) (lib.attrValues cfg.providers)
         );
-        message = "each programs.gentle-ai.mcpServers entry must set exactly one of command or url";
+        message = "each programs.gentle-ai.mcpServers or providers.<name>.mcpServers entry must set exactly one of command or url";
       }
       {
         # backgroundSubagents is keyed to a fixed set of clients, not to
@@ -2068,6 +2197,18 @@ in
         # even reaches that command.
         assertion = cfg.roles == { } || rolesUnsupportedAdapters == [ ];
         message = "programs.gentle-ai.roles declares roles, but programs.gentle-ai.providers.${lib.concatStringsSep ", " rolesUnsupportedAdapters} expresses no agent roles; remove the roles or drop that client";
+      }
+      {
+        # Mirrors the pinned fork's own MCP adapters: only claude-code,
+        # cursor, kimi, kiro-ide, pi, gemini-cli, qwen-code, openclaw,
+        # opencode, kilocode and codex can express a declared MCP server at
+        # all. hermes and the OS-variant IDE clients (windsurf, trae-ide,
+        # vscode-copilot, antigravity) would otherwise silently drop a
+        # declared server -- `gentle-nix mcp` also refuses this itself as a
+        # second layer (see internal/mcp's Validate), but naming it here
+        # catches the mistake before a build even reaches that command.
+        assertion = !mcpNeeded || mcpUnsupportedAdapters == [ ];
+        message = "programs.gentle-ai.mcpServers or a providers.<name>.mcpServers declares MCP servers, but programs.gentle-ai.providers.${lib.concatStringsSep ", " mcpUnsupportedAdapters} expresses no MCP servers; remove the servers or drop that client";
       }
     ];
 

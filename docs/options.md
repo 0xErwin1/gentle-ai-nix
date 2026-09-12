@@ -846,6 +846,13 @@ null
 MCP servers, keyed by name\. A server a component already configures does
 not need an entry here; this is for the ones only you know about\.
 
+Rendered by ` gentle-nix mcp ` as post-processing of the tree, not by
+Gentle AI itself: wiring a user-declared server is not something Gentle
+AI does imperatively\. Every enabled client can express one except
+hermes and the OS-variant IDE clients (windsurf, trae-ide,
+vscode-copilot, antigravity) – declaring a server while one of those
+is enabled fails at eval rather than silently dropping it\.
+
 
 
 *Type:*
@@ -1487,6 +1494,10 @@ MCP servers for this client only, replacing the flat set\. A client
 that identifies itself to a server, or one an installation gives
 tools the others have no use for, is named here; the rest take the
 flat set\.
+
+Rendered by ` gentle-nix mcp ` the same way the top-level
+` programs.gentle-ai.mcpServers ` is; see that option for which
+clients can express one\.
 
 
 
