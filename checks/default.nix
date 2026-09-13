@@ -409,7 +409,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-pi@6e4478c04615b0c013a017178dcfefa51579982d" \
+          "pi install git:github.com/Gentleman-Programming/gentle-pi@963e17f78490502a1638bcddc73e4207b8224ee6" \
           "pi install ${gentleEngramPiPath}" \
           "${gentleEngramPiPath}/bin/pi-engram init"
         do
@@ -2613,6 +2613,19 @@ in
       echo "the flake is not formatted; run 'nix fmt'" >&2
       exit 1
     }
+    touch "$out"
+  '';
+
+  # versions.nix's `stable` and `beta` entries are each built into their own
+  # package by flake.nix (`gentle-ai-stable`, `gentle-ai-beta`), so a pin that
+  # cannot fetch or a vendorHash that no longer matches its go.sum fails a
+  # flake check rather than someone's `programs.gentle-ai.package` build. The
+  # `contract` entry is exempt: it is the flake's default and already builds
+  # through every other check that evaluates the module.
+  gentleAiReleaseChannelsBuild = pkgs.runCommandLocal "gentle-ai-check-release-channels-build" { } ''
+    set -euo pipefail
+    ${lib.getExe self.packages.${system}.gentle-ai-stable} --version
+    ${lib.getExe self.packages.${system}.gentle-ai-beta} --version
     touch "$out"
   '';
 }

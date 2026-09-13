@@ -12,6 +12,10 @@
 #
 # Refresh main with:
 #   git ls-remote https://github.com/Gentleman-Programming/gentle-pi main
+#
+# `stable` is npm's `gentle-pi@2.6.0`, the first npm release to carry agent
+# profiles: the stable channel now reads a package's `profiles.json` too, the
+# same as `main` has since before this table existed.
 {
   stable = {
     source = "npm:gentle-pi";
@@ -21,7 +25,7 @@
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   main = {
-    version = "2.5.0-main.6e4478c0";
-    rev = "6e4478c04615b0c013a017178dcfefa51579982d";
+    version = "2.6.0-main.963e17f7";
+    rev = "963e17f78490502a1638bcddc73e4207b8224ee6";
   };
 }
