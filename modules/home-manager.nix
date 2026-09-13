@@ -850,6 +850,29 @@ let
     lib.mapAttrs (_: provider: provider.settings) enabledProviders
   );
 
+  # See lib/client-locations.nix for what this table is and why it is pure
+  # data kept outside this module: gentle-nix has no equivalent of
+  # pkgs.stdenv.hostPlatform to consult, so this module resolves the OS
+  # itself and hands the winning spelling down through gentle-nix settings'
+  # --settings-path and the mcp/skills specs' own paths/skillsDir blocks.
+  clientLocations = import ../lib/client-locations.nix;
+
+  clientLocationsForOS =
+    if pkgs.stdenv.hostPlatform.isDarwin then clientLocations.darwin else clientLocations.linux;
+
+  # The subset of clientLocationsForOS naming a "settings" path, "mcp" path
+  # or "skills" dir respectively -- gentle-nix settings, gentle-nix mcp and
+  # gentle-nix skills each only ever want their own one kind.
+  clientSettingsPaths = lib.mapAttrs (_: loc: loc.settings) (
+    lib.filterAttrs (_: loc: loc ? settings) clientLocationsForOS
+  );
+  clientMCPPaths = lib.mapAttrs (_: loc: loc.mcp) (
+    lib.filterAttrs (_: loc: loc ? mcp) clientLocationsForOS
+  );
+  clientSkillsDirs = lib.mapAttrs (_: loc: loc.skills) (
+    lib.filterAttrs (_: loc: loc ? skills) clientLocationsForOS
+  );
+
   # providers.<name>.settings no longer travels through the document as
   # `extensions` for the fork to merge (internal/cli/config_stager.go's
   # stageDeclaredExtensions/mergeExtensionBlock, in the pinned Gentle AI
@@ -1054,13 +1077,20 @@ let
     assignments = lib.mapAttrs (_: provider: lib.mapAttrs (_: mcpServer) provider.mcpServers) (
       lib.filterAttrs (_: provider: provider.mcpServers != { }) cfg.providers
     );
+    # vscode-copilot and trae-ide have no built-in path at all in
+    # internal/mcp (their MCP config path is OS-variant); windsurf,
+    # antigravity and hermes already have one, but the resolved OS path
+    # here always wins anyway -- see clientLocations' own doc.
+    paths = clientMCPPaths;
   };
 
   # The adapters `internal/mcp` (gentle-nix's own MCP renderer) knows how to
   # write a server for, plus codex (handled separately by this module's own
   # TOML path below) -- mirrors the pinned fork's own set of adapters whose
-  # MCPStrategy is not "unsupported". hermes and the OS-variant IDE clients
-  # (windsurf, trae-ide, vscode-copilot, antigravity) have none.
+  # MCPStrategy is not "unsupported". windsurf, antigravity, vscode-copilot
+  # and trae-ide are resolved through clientLocations/mcpSpecBody.paths
+  # above; hermes writes a stdio-only YAML shape (see internal/mcp's own
+  # package doc) -- gentle-nix mcp refuses a url-based hermes server itself.
   mcpCapableProviders = [
     "claude-code"
     "cursor"
@@ -1073,6 +1103,11 @@ let
     "opencode"
     "kilocode"
     "codex"
+    "windsurf"
+    "antigravity"
+    "vscode-copilot"
+    "trae-ide"
+    "hermes"
   ];
 
   mcpUnsupportedAdapters = lib.filter (name: !(lib.elem name mcpCapableProviders)) (
@@ -1159,6 +1194,11 @@ let
     assignments = lib.mapAttrs (_: provider: provider.skills) (
       lib.filterAttrs (_: provider: provider.skills != null) enabledProviders
     );
+    # windsurf, trae-ide and antigravity's skills directories are already
+    # OS-invariant in internal/skills' own table (unlike their settings/MCP
+    # paths); named here anyway so the one clientLocations table stays the
+    # single source of truth -- see its own doc.
+    skillsDir = clientSkillsDirs;
   };
 
   # Sent only when narrowed; `[ ]` (omitted below) keeps the default staged.
@@ -1351,7 +1391,10 @@ let
         ${lib.concatMapStringsSep "\n" (name: ''
           ${lib.getExe gentleNix} settings \
             --tree "$out/tree" \
-            --provider ${lib.escapeShellArg "${name}=${pkgs.writeText "gentle-ai-provider-settings-${name}.json" (builtins.toJSON jsonProviderSettings.${name})}"}
+            --provider ${lib.escapeShellArg "${name}=${pkgs.writeText "gentle-ai-provider-settings-${name}.json" (builtins.toJSON jsonProviderSettings.${name})}"} \
+            ${lib.optionalString (
+              clientSettingsPaths ? ${name}
+            ) "--settings-path ${lib.escapeShellArg "${name}=${clientSettingsPaths.${name}}"}"}
         '') (lib.attrNames jsonProviderSettings)}
         ${lib.concatMapStringsSep "\n" (name: ''
           target="$out/tree/${tomlSettingsPaths.${name}}"
@@ -2180,10 +2223,10 @@ in
 
         Rendered by `gentle-nix mcp` as post-processing of the tree, not by
         Gentle AI itself: wiring a user-declared server is not something Gentle
-        AI does imperatively. Every enabled client can express one except
-        hermes and the OS-variant IDE clients (windsurf, trae-ide,
-        vscode-copilot, antigravity) -- declaring a server while one of those
-        is enabled fails at eval rather than silently dropping it.
+        AI does imperatively. Every enabled client can express one, including
+        hermes (a stdio-only YAML shape; a `url`-based server is refused for
+        it) and the OS-variant IDE clients this module resolves through
+        `clientLocations` (windsurf, trae-ide, vscode-copilot, antigravity).
       '';
     };
 
@@ -2510,14 +2553,12 @@ in
         message = "programs.gentle-ai.roles declares roles, but programs.gentle-ai.providers.${lib.concatStringsSep ", " rolesUnsupportedAdapters} expresses no agent roles; remove the roles or drop that client";
       }
       {
-        # Mirrors the pinned fork's own MCP adapters: only claude-code,
-        # cursor, kimi, kiro-ide, pi, gemini-cli, qwen-code, openclaw,
-        # opencode, kilocode and codex can express a declared MCP server at
-        # all. hermes and the OS-variant IDE clients (windsurf, trae-ide,
-        # vscode-copilot, antigravity) would otherwise silently drop a
-        # declared server -- `gentle-nix mcp` also refuses this itself as a
-        # second layer (see internal/mcp's Validate), but naming it here
-        # catches the mistake before a build even reaches that command.
+        # Mirrors the pinned fork's own MCP adapters: every client in
+        # mcpCapableProviders (see its own doc) can express a declared MCP
+        # server; nothing else can -- `gentle-nix mcp` also refuses this
+        # itself as a second layer (see internal/mcp's Validate), but naming
+        # it here catches the mistake before a build even reaches that
+        # command.
         assertion = !mcpNeeded || mcpUnsupportedAdapters == [ ];
         message = "programs.gentle-ai.mcpServers or a providers.<name>.mcpServers declares MCP servers, but programs.gentle-ai.providers.${lib.concatStringsSep ", " mcpUnsupportedAdapters} expresses no MCP servers; remove the servers or drop that client";
       }

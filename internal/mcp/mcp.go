@@ -17,16 +17,31 @@
 // Codex's TOML fragment itself with `pkgs.formats.toml` and merges it the
 // same way it already merges Codex's other settings.
 //
-// A handful of clients the fork itself never wired an MCP strategy for at
-// all -- hermes and the OS-variant IDE clients (windsurf, trae-ide,
-// vscode-copilot, antigravity) -- are refused here rather than silently
-// dropped, the same way an adapter that cannot express a role is refused by
-// internal/roles.
+// Hermes and four IDE-style clients (windsurf, trae-ide, vscode-copilot,
+// antigravity) are also covered here now, matching the fork's own adapters:
+//
+//   - windsurf and antigravity write the fork's own plain "mcpServers" JSON
+//     shape at a path this package already knows how to compute (see
+//     mcp.go's own writeAgent), the same as gemini-cli or cursor.
+//   - vscode-copilot and trae-ide write that same shape too, but at a path
+//     that differs by OS (the fork's own adapters resolve it from
+//     runtime.GOOS) -- gentle-nix has no OS of its own to consult, so the
+//     Nix module resolves the OS-variant path itself and supplies it
+//     through Spec.Paths (gentle-nix mcp's own --spec paths block); WriteTree
+//     refuses either client outright when its own agent has a declared
+//     server but no entry in Paths.
+//   - hermes writes into a single YAML file (~/.hermes/config.yaml) via a Go
+//     port of the pinned fork's own hand-rolled
+//     filemerge.UpsertYAMLMCPServerBlock (see yaml.go); it only knows how to
+//     express a stdio server (command/args/env), so a declared hermes
+//     server with a url is refused, matching the fork's own YAML writer,
+//     which never grew a remote-server shape either.
 package mcp
 
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -76,6 +91,15 @@ type Spec struct {
 	Agents      []string                     `json:"agents,omitempty"`
 	Servers     map[string]Server            `json:"servers,omitempty"`
 	Assignments map[string]map[string]Server `json:"assignments,omitempty"`
+
+	// Paths overrides the destination this package writes an agent's MCP
+	// config to, keyed by agent name and holding a path relative to the
+	// rendered tree. It always wins over any built-in default (see
+	// writeAgent) and is the only way an OS-variant client (vscode-copilot,
+	// trae-ide) can be written at all -- this package carries no built-in
+	// path for either, unlike windsurf, antigravity and hermes, whose
+	// defaults hold for every OS (see the package doc).
+	Paths map[string]string `json:"paths,omitempty"`
 }
 
 // codexAgent is handled entirely by the Nix module's own TOML merger; this
@@ -87,21 +111,39 @@ const codexAgent = "codex"
 // supportedAgents are every adapter this package (plus the module's own
 // Codex TOML path) knows how to express an MCP server for, mirroring the
 // pinned fork's own set of adapters whose MCPStrategy is not "unsupported".
-// hermes and the OS-variant IDE clients (windsurf, trae-ide, vscode-copilot,
-// antigravity) are deliberately absent: the fork never wired an MCP
-// strategy for them either.
 var supportedAgents = map[string]bool{
-	"claude-code": true,
-	"cursor":      true,
-	"kimi":        true,
-	"kiro-ide":    true,
-	"pi":          true,
-	"gemini-cli":  true,
-	"qwen-code":   true,
-	"openclaw":    true,
-	"opencode":    true,
-	"kilocode":    true,
-	codexAgent:    true,
+	"claude-code":    true,
+	"cursor":         true,
+	"kimi":           true,
+	"kiro-ide":       true,
+	"pi":             true,
+	"gemini-cli":     true,
+	"qwen-code":      true,
+	"openclaw":       true,
+	"opencode":       true,
+	"kilocode":       true,
+	"windsurf":       true,
+	"antigravity":    true,
+	"vscode-copilot": true,
+	"trae-ide":       true,
+	"hermes":         true,
+	codexAgent:       true,
+}
+
+// pathRequiredAgents are the agents supportedAgents carries whose location
+// this package cannot compute on its own: the fork's own adapters resolve
+// them from runtime.GOOS, which gentle-nix has no equivalent of, so
+// Spec.Paths must name them explicitly -- see the package doc.
+var pathRequiredAgents = map[string]bool{
+	"vscode-copilot": true,
+	"trae-ide":       true,
+}
+
+// stdioOnlyAgents are agents whose writer here cannot express a remote (url)
+// server at all -- hermes' YAML shape mirrors the fork's own hand-rolled
+// filemerge.UpsertYAMLMCPServerBlock, which only ever wrote command/args/env.
+var stdioOnlyAgents = map[string]bool{
+	"hermes": true,
 }
 
 func validateServer(path, name string, server Server) error {
@@ -152,6 +194,37 @@ func Validate(spec Spec) error {
 		)
 	}
 
+	var missingPaths []string
+	for _, agent := range spec.Agents {
+		servers := declaredFor(spec, agent)
+		if len(servers) == 0 {
+			continue
+		}
+		if pathRequiredAgents[agent] {
+			if _, ok := spec.Paths[agent]; !ok {
+				missingPaths = append(missingPaths, agent)
+			}
+		}
+		if stdioOnlyAgents[agent] {
+			for name, server := range servers {
+				if server.URL != "" {
+					return validationErrorf(
+						"assignments.%[1]s.%[2]s (or servers.%[2]s): %[1]s only expresses a stdio MCP server (command/args/env); a url-based server has no equivalent in its config file",
+						agent, name,
+					)
+				}
+			}
+		}
+	}
+	if len(missingPaths) > 0 {
+		sort.Strings(missingPaths)
+		joined := strings.Join(missingPaths, ", ")
+		return validationErrorf(
+			"MCP servers were declared for %s, but gentle-nix mcp has no built-in path for it (its config location is OS-variant); pass paths.<agent> in the spec (the Nix module resolves this from clientLocations)",
+			joined,
+		)
+	}
+
 	return nil
 }
 
@@ -190,7 +263,7 @@ func WriteTree(tree string, spec Spec) error {
 			continue
 		}
 
-		if err := writeAgent(tree, agent, servers); err != nil {
+		if err := writeAgent(tree, agent, servers, spec.Paths); err != nil {
 			return err
 		}
 	}
@@ -198,7 +271,26 @@ func WriteTree(tree string, spec Spec) error {
 	return nil
 }
 
-func writeAgent(tree, agent string, servers map[string]Server) error {
+// windsurfMCPConfigRel and antigravityMCPConfigRel are OS-invariant: both
+// adapters resolve their MCPConfigPath under a home-relative directory that
+// never varies by runtime.GOOS (windsurf's GlobalConfigDir; antigravity's
+// own variant directory -- see hermesMCPConfigRel's sibling doc on
+// internal/settings' antigravity fallback for why that one is a run-time,
+// not an OS, choice).
+const (
+	windsurfMCPConfigRel    = ".codeium/windsurf/mcp_config.json"
+	antigravityMCPConfigRel = ".gemini/antigravity-cli/mcp_config.json"
+	hermesMCPConfigRel      = ".hermes/config.yaml"
+)
+
+func writeAgent(tree, agent string, servers map[string]Server, paths map[string]string) error {
+	resolve := func(builtinRel string) string {
+		if override, ok := paths[agent]; ok {
+			return filepath.Join(tree, override)
+		}
+		return filepath.Join(tree, builtinRel)
+	}
+
 	switch agent {
 	case "claude-code":
 		return writeSeparateFiles(tree, filepath.Join(tree, ".claude", "mcp"), servers)
@@ -222,6 +314,23 @@ func writeAgent(tree, agent string, servers map[string]Server) error {
 			return fmt.Errorf("resolve MCP settings path for %q", agent)
 		}
 		return mergeOpenCode(path, servers)
+	case "windsurf":
+		return mergePlain(resolve(windsurfMCPConfigRel), servers)
+	case "antigravity":
+		return mergePlain(resolve(antigravityMCPConfigRel), servers)
+	case "vscode-copilot", "trae-ide":
+		// Validate already refused either agent when it has a declared
+		// server but no entry in paths -- see pathRequiredAgents. Checked
+		// again here rather than trusted, so a caller that skips Validate
+		// (e.g. a future direct WriteTree caller) never writes to the tree
+		// root instead of failing loudly.
+		override, ok := paths[agent]
+		if !ok {
+			return fmt.Errorf("gentle-nix mcp: no MCP path known for %q; pass paths.%s in the spec", agent, agent)
+		}
+		return mergePlain(filepath.Join(tree, override), servers)
+	case "hermes":
+		return mergeYAML(resolve(hermesMCPConfigRel), servers)
 	default:
 		// Validate already refused an unsupported agent with a declared
 		// server; an agent that reaches here with nothing declared for it
@@ -323,4 +432,31 @@ func openCodeEntry(server Server) map[string]any {
 	}
 	entry["enabled"] = server.enabled()
 	return entry
+}
+
+// mergeYAML mirrors the fork's own hand-rolled YAML MCP writer for hermes
+// (filemerge.UpsertYAMLMCPServerBlock, ported in yaml.go): every declared
+// server is upserted, one at a time in name order for determinism, into the
+// mcp_servers: block of the YAML file at path, creating it if absent.
+// Validate already refused a url-based server for a stdio-only agent before
+// this runs.
+func mergeYAML(path string, servers map[string]Server) error {
+	existing, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read YAML config %q: %w", path, err)
+	}
+
+	content := string(existing)
+	for _, name := range sortedNames(servers) {
+		server := servers[name]
+		content = upsertYAMLMCPServerBlock(content, name, server.Command, server.Args, server.Env)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create YAML config directory for %q: %w", path, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write YAML config %q: %w", path, err)
+	}
+	return nil
 }

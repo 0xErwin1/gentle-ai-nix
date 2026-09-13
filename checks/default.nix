@@ -1677,23 +1677,158 @@ in
   # assertion does.
   mcpWithAnUnsupportedAdapterIsRejected =
     let
-      withMcpAndHermes = {
+      # "some-unmodeled-client" is not a real Gentle AI client -- providers
+      # is a free-form attrsOf, so this stands in for any client
+      # mcpCapableProviders does not name. hermes and the OS-variant IDE
+      # clients (windsurf, trae-ide, vscode-copilot, antigravity) are all
+      # MCP-capable now (see internal/mcp's own package doc); rejecting an
+      # OS-variant client with no clientLocations path is covered by
+      # mcpVSCodeCopilotAndTraeIDENeedAPathOverride below instead.
+      withMcpAndUnmodeledClient = {
         programs.gentle-ai = {
           enable = true;
           mcpServers.atlas.command = "atlas-mcp";
           providers = {
             opencode.enable = true;
-            hermes.enable = true;
+            some-unmodeled-client.enable = true;
           };
         };
       };
     in
     pkgs.runCommandLocal "gentle-ai-check-mcp-unsupported-adapter-rejected" { } ''
       set -euo pipefail
-      ${lib.optionalString (accepted [ withMcpAndHermes ]) ''
-        echo "an MCP server declared alongside hermes was accepted, expected an eval refusal naming it" >&2
+      ${lib.optionalString (accepted [ withMcpAndUnmodeledClient ]) ''
+        echo "an MCP server declared alongside an unmodeled client was accepted, expected an eval refusal naming it" >&2
         exit 1
       ''}
+      touch "$out"
+    '';
+
+  # Proves the OS-variant clientLocations wiring actually reaches the
+  # rendered tree, not just that gentle-nix's own internal/mcp,
+  # internal/settings and internal/skills unit tests accept an override:
+  # vscode-copilot's settings, windsurf's MCP server and antigravity's skill
+  # pruning all have to land at exactly the Linux path
+  # modules/home-manager.nix's clientLocations names (this check runs on
+  # x86_64-linux/aarch64-linux, so pkgs.stdenv.hostPlatform.isDarwin is
+  # false and clientLocationsForOS resolves to clientLocations.linux).
+  osVariantClientLocationsRenderThrough =
+    let
+      osVariantConfiguration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers = {
+              claude-code.enable = true;
+              vscode-copilot = {
+                enable = true;
+                settings.checkOwnSetting = "vscode-value";
+              };
+              windsurf = {
+                enable = true;
+                mcpServers.atlas.command = "atlas-mcp";
+              };
+              antigravity = {
+                enable = true;
+                skills = [ "go-testing" ];
+              };
+            };
+            skills = {
+              go-testing.enable = true;
+              cognitive-doc-design.enable = true;
+            };
+          };
+        }
+      ];
+      osVariantTree = osVariantConfiguration.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-os-variant-client-locations" { inherit osVariantTree; } ''
+      set -euo pipefail
+
+      vscodeSettings="$osVariantTree/tree/.config/Code/User/settings.json"
+      test -f "$vscodeSettings" || {
+        echo "vscode-copilot's settings were not rendered at its Linux path" >&2
+        exit 1
+      }
+      grep -q 'vscode-value' "$vscodeSettings" || {
+        echo "vscode-copilot's declared setting is missing" >&2
+        exit 1
+      }
+
+      windsurfMcp="$osVariantTree/tree/.codeium/windsurf/mcp_config.json"
+      test -f "$windsurfMcp" || {
+        echo "windsurf's MCP server was not rendered at its Linux path" >&2
+        exit 1
+      }
+      grep -q 'atlas-mcp' "$windsurfMcp" || {
+        echo "windsurf's declared MCP server is missing" >&2
+        exit 1
+      }
+
+      test -d "$osVariantTree/tree/.gemini/antigravity-cli/skills/go-testing" || {
+        echo "antigravity is missing the skill named in its own assignment" >&2
+        exit 1
+      }
+      test -d "$osVariantTree/tree/.gemini/antigravity-cli/skills/cognitive-doc-design" && {
+        echo "antigravity kept a skill outside its own assignment; pruning did not run in its Linux skills dir" >&2
+        exit 1
+      }
+
+      touch "$out"
+    '';
+
+  # clientLocations (lib/client-locations.nix) is plain data with no pkgs
+  # dependency, so this asserts both OS tables directly at eval time rather
+  # than cross-evaluating the whole module for a second platform. Every
+  # client's settings/MCP path (and skills dir, where one is declared) must
+  # be present under both "linux" and "darwin", so a client added for one
+  # OS is never silently missing the other.
+  clientLocationsTableIsWellFormed =
+    let
+      clientLocations = import ../lib/client-locations.nix;
+      osKeys = [
+        "linux"
+        "darwin"
+      ];
+      requiredFields = {
+        vscode-copilot = [
+          "settings"
+          "mcp"
+        ];
+        windsurf = [
+          "settings"
+          "mcp"
+          "skills"
+        ];
+        trae-ide = [
+          "settings"
+          "mcp"
+          "skills"
+        ];
+        antigravity = [
+          "settings"
+          "mcp"
+          "skills"
+        ];
+        hermes = [ "mcp" ];
+      };
+      missing = lib.concatMap (
+        os:
+        lib.concatMap (
+          client:
+          let
+            entry = clientLocations.${os}.${client} or { };
+            absentFields = lib.filter (field: !(entry ? ${field})) requiredFields.${client};
+          in
+          lib.optional (
+            absentFields != [ ]
+          ) "${os}.${client} is missing ${lib.concatStringsSep ", " absentFields}"
+        ) (lib.attrNames requiredFields)
+      ) osKeys;
+    in
+    assert lib.all (os: clientLocations ? ${os}) osKeys;
+    assert missing == [ ];
+    pkgs.runCommandLocal "gentle-ai-check-client-locations-well-formed" { } ''
       touch "$out"
     '';
 

@@ -13,17 +13,36 @@
 // including a list -- is replaced wholesale, and the declared (overlay)
 // value always wins at a leaf.
 //
-// Only clients whose settings file is a plain JSON object at a fixed,
-// non-OS-variant path are modeled here. Codex and Kimi keep their settings
-// in TOML (config.toml) and are routed through the existing Python
-// gentle-ai-merge (lib/merge.py) instead, in the same Nix overlay step that
-// calls this package for everyone else -- see modules/home-manager.nix. A
-// handful of IDE-style clients (VS Code, Antigravity, Windsurf, Trae, Kiro)
-// resolve their settings path from OS-specific state the fork's own Go code
-// inspects at run time; reproducing that from a Nix module is out of scope
-// for this phase, so declaring providers.<name>.settings for one of them is
-// not supported here (ResolvePath reports them as unknown, the same as any
-// other unrecognized provider name).
+// Most clients whose settings file is a plain JSON object live at a fixed,
+// non-OS-variant path and are modeled directly in settingsPaths. Codex and
+// Kimi keep their settings in TOML (config.toml) and are routed through the
+// existing Python gentle-ai-merge (lib/merge.py) instead, in the same Nix
+// overlay step that calls this package for everyone else -- see
+// modules/home-manager.nix.
+//
+// A handful of IDE-style clients resolve their settings path from
+// OS-specific state the fork's own Go code inspects at run time
+// (internal/agents/{vscode,antigravity,windsurf,trae}/adapter.go's own
+// SettingsPath). Reproducing "which OS" from a Nix module is in scope --
+// pkgs.stdenv.hostPlatform already knows it -- so the module resolves the
+// two OS-variant spellings itself (see clientLocations in
+// modules/home-manager.nix) and passes the winning one down through
+// gentle-nix settings' own --settings-path flag, which ResolvePath's
+// overrides parameter always prefers over this package's own table.
+// Antigravity's variant is not actually OS-specific -- both its adapter's
+// desktop and CLI variants live at the same path on every OS, chosen at run
+// time by which directory already exists on disk, which a build-time Nix
+// derivation cannot inspect -- so settingsPaths carries its CLI-variant
+// fallback outright; an installation that landed in the desktop variant
+// instead needs an explicit providers.antigravity.settingsPath override (see
+// modules/home-manager.nix's own doc on clientLocations).
+//
+// Kiro (internal/agents/kiro) resolves its settings path the same
+// OS-variant way, but declaring providers.kiro-ide.settings stays out of
+// scope for this package for now, same as before -- ResolvePath keeps
+// reporting it unknown. VS Code Copilot, Windsurf and Trae's settings paths
+// have no non-OS-variant fallback worth guessing either, so a caller must
+// supply --settings-path for those three.
 package settings
 
 import (
@@ -43,14 +62,33 @@ var settingsPaths = map[string]string{
 	"qwen-code":   filepath.Join(".qwen", "settings.json"),
 	"kilocode":    filepath.Join(".config", "kilo", "opencode.json"),
 	"openclaw":    filepath.Join(".openclaw", "openclaw.json"),
+
+	// Antigravity's variant selection is a run-time filesystem check, not an
+	// OS split -- see the package doc. This is the same "cli" fallback the
+	// fork's own adapter picks when neither variant directory exists yet.
+	"antigravity": filepath.Join(".gemini", "antigravity-cli", "settings.json"),
 }
 
-// ResolvePath is the fork's opencode adapter's own SettingsPath, ported: it
-// prefers an opencode.jsonc that already exists in the tree, and otherwise
-// (including provider != "opencode") looks the provider up in
-// settingsPaths. ok is false for any provider this package does not know
-// how to merge into.
+// ResolvePath is ResolvePathWithOverrides with no overrides -- the common
+// case for every caller that never needs to name an OS-variant client's
+// settings path itself.
 func ResolvePath(tree, provider string) (string, bool) {
+	return ResolvePathWithOverrides(tree, provider, nil)
+}
+
+// ResolvePathWithOverrides is the fork's opencode adapter's own
+// SettingsPath, ported, plus room for a caller-supplied destination: it
+// checks overrides first (a home-relative path, e.g. from gentle-nix
+// settings' own --settings-path flag), then handles opencode's own
+// prefers-an-existing-jsonc rule, and otherwise looks the provider up in
+// settingsPaths. ok is false for any provider neither overrides nor
+// settingsPaths knows how to merge into -- see the package doc for which
+// clients that is today.
+func ResolvePathWithOverrides(tree, provider string, overrides map[string]string) (string, bool) {
+	if rel, ok := overrides[provider]; ok {
+		return filepath.Join(tree, rel), true
+	}
+
 	if provider == "opencode" {
 		jsoncPath := filepath.Join(tree, ".config", "opencode", "opencode.jsonc")
 		if info, err := os.Stat(jsoncPath); err == nil && info.Mode().IsRegular() {
@@ -185,17 +223,24 @@ type ProviderBlock struct {
 type Options struct {
 	Tree      string
 	Providers []ProviderBlock
+
+	// PathOverrides is gentle-nix settings' own --settings-path table:
+	// provider name to a home-relative destination file, supplied by a
+	// caller (the Nix module, which knows the target OS) for a client whose
+	// settings path this package's own table does not carry -- see the
+	// package doc.
+	PathOverrides map[string]string
 }
 
 // Run merges every declared provider block into its own settings file
-// inside opts.Tree. It stops at the first provider ResolvePath does not
-// recognize -- gentle-nix settings has no partial-apply story, since a
-// misspelled provider name is a configuration mistake worth failing the
-// whole activation over, the same way an unknown provider or skill already
-// is elsewhere in this flake.
+// inside opts.Tree. It stops at the first provider ResolvePathWithOverrides
+// does not recognize -- gentle-nix settings has no partial-apply story,
+// since a misspelled provider name is a configuration mistake worth failing
+// the whole activation over, the same way an unknown provider or skill
+// already is elsewhere in this flake.
 func Run(opts Options) (int, error) {
 	for _, provider := range opts.Providers {
-		path, ok := ResolvePath(opts.Tree, provider.Name)
+		path, ok := ResolvePathWithOverrides(opts.Tree, provider.Name, opts.PathOverrides)
 		if !ok {
 			return 2, fmt.Errorf("gentle-nix settings: unknown provider %q", provider.Name)
 		}

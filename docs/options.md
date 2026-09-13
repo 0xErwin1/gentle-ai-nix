@@ -848,10 +848,10 @@ not need an entry here; this is for the ones only you know about\.
 
 Rendered by ` gentle-nix mcp ` as post-processing of the tree, not by
 Gentle AI itself: wiring a user-declared server is not something Gentle
-AI does imperatively\. Every enabled client can express one except
-hermes and the OS-variant IDE clients (windsurf, trae-ide,
-vscode-copilot, antigravity) – declaring a server while one of those
-is enabled fails at eval rather than silently dropping it\.
+AI does imperatively\. Every enabled client can express one, including
+hermes (a stdio-only YAML shape; a ` url `-based server is refused for
+it) and the OS-variant IDE clients this module resolves through
+` clientLocations ` (windsurf, trae-ide, vscode-copilot, antigravity)\.
 
 
 

@@ -242,3 +242,66 @@ func TestPruneNeverTouchesPathsOutsideSkillsDirectories(t *testing.T) {
 		t.Fatalf("Prune() must never touch files outside a skills directory: %v", err)
 	}
 }
+
+func TestPruneAntigravityWindsurfTraeIDEBuiltInDirs(t *testing.T) {
+	cases := []struct {
+		agent string
+		rel   string
+	}{
+		{"antigravity", filepath.Join(".gemini", "antigravity-cli", "skills")},
+		{"windsurf", filepath.Join(".codeium", "windsurf", "skills")},
+		{"trae-ide", filepath.Join(".trae", "skills")},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.agent, func(t *testing.T) {
+			tree := t.TempDir()
+			dir := filepath.Join(tree, tc.rel)
+			mkSkill(t, dir, "a")
+			mkSkill(t, dir, "b")
+
+			spec := Spec{Agents: []string{tc.agent}, Flat: []string{"a"}}
+			if err := Prune(tree, spec); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := os.Stat(filepath.Join(dir, "a")); err != nil {
+				t.Fatalf("expected %q to survive pruning: %v", "a", err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "b")); !os.IsNotExist(err) {
+				t.Fatalf("expected %q to be pruned, stat err = %v", "b", err)
+			}
+		})
+	}
+}
+
+func TestPruneSkillsDirOverrideWinsOverBuiltInTable(t *testing.T) {
+	tree := t.TempDir()
+	overrideDir := filepath.Join(tree, "custom", "skills")
+	mkSkill(t, overrideDir, "a")
+	mkSkill(t, overrideDir, "b")
+
+	// The built-in antigravity directory must be left untouched: the
+	// override redirects Prune away from it entirely.
+	builtinDir := filepath.Join(tree, ".gemini", "antigravity-cli", "skills")
+	mkSkill(t, builtinDir, "c")
+
+	spec := Spec{
+		Agents:    []string{"antigravity"},
+		Flat:      []string{"a"},
+		SkillsDir: map[string]string{"antigravity": filepath.Join("custom", "skills")},
+	}
+	if err := Prune(tree, spec); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(overrideDir, "a")); err != nil {
+		t.Fatalf("expected %q to survive pruning in the override dir: %v", "a", err)
+	}
+	if _, err := os.Stat(filepath.Join(overrideDir, "b")); !os.IsNotExist(err) {
+		t.Fatalf("expected %q to be pruned from the override dir, stat err = %v", "b", err)
+	}
+	if _, err := os.Stat(filepath.Join(builtinDir, "c")); err != nil {
+		t.Fatalf("Prune() must never touch the built-in dir once overridden: %v", err)
+	}
+}

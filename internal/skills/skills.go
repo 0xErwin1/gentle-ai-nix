@@ -20,11 +20,16 @@
 // Per-adapter skills directories mirror the fork's own adapters'
 // SkillsDir(): Pi has none (Pi has no injectable skills concept at all,
 // same as internal/mcp's own supportedAgents omits it for MCP -- wait, Pi
-// does support MCP; it simply carries no skill files), and antigravity,
-// windsurf and trae-ide are absent here the same way they are absent from
-// internal/settings' own settingsPaths -- their SkillsDir resolves through
-// OS-specific state the fork's own Go code inspects at run time, which is
-// out of scope for this phase (see internal/settings' package doc).
+// does support MCP; it simply carries no skill files).
+//
+// Unlike SettingsPath and MCPConfigPath, every one of antigravity's,
+// windsurf's and trae-ide's own SkillsDir() is OS-invariant -- none of them
+// route through the OS-variant *UserDir helper their settings/MCP paths
+// do -- so all three carry a plain entry here, the same as vscode-copilot's
+// (which was already OS-invariant). A caller that still wants to redirect
+// one (say, to match a real antigravity install that landed in its
+// "desktop" variant rather than the "cli" fallback this package assumes)
+// can do so through Spec.SkillsDir.
 package skills
 
 import (
@@ -47,6 +52,11 @@ type Spec struct {
 	Flat        []string            `json:"flat,omitempty"`
 	Exclusions  []string            `json:"exclusions,omitempty"`
 	Assignments map[string][]string `json:"assignments,omitempty"`
+
+	// SkillsDir overrides the directory Prune reads and prunes an agent's
+	// skills from, keyed by agent name and holding a path relative to the
+	// rendered tree. It always wins over skillsDirs -- see the package doc.
+	SkillsDir map[string]string `json:"skillsDir,omitempty"`
 }
 
 // skillsDirs are the adapters this package knows how to prune, and the
@@ -66,6 +76,12 @@ var skillsDirs = map[string]string{
 	"kimi":           filepath.Join(".config", "agents", "skills"),
 	"openclaw":       filepath.Join(".openclaw", "skills"),
 	"hermes":         filepath.Join(".hermes", "skills"),
+
+	// OS-invariant despite their settings/MCP paths being OS-variant -- see
+	// the package doc.
+	"antigravity": filepath.Join(".gemini", "antigravity-cli", "skills"),
+	"windsurf":    filepath.Join(".codeium", "windsurf", "skills"),
+	"trae-ide":    filepath.Join(".trae", "skills"),
 }
 
 // Resolve reports the skill IDs one agent explicitly keeps: its own
@@ -102,13 +118,16 @@ func without(resolved, excluded []string) []string {
 
 // Prune removes every skill directory under each declared agent's own
 // skills directory that is not in that agent's resolved set. An agent
-// skillsDirs does not know how to express, or whose skills directory does
-// not exist in tree, is left untouched. Prune never removes anything
-// outside a known adapter's own skills directory. With no explicit set, it
-// keeps everything except Exclusions.
+// neither spec.SkillsDir nor skillsDirs knows how to express, or whose
+// skills directory does not exist in tree, is left untouched. Prune never
+// removes anything outside a known adapter's own skills directory. With no
+// explicit set, it keeps everything except Exclusions.
 func Prune(tree string, spec Spec) error {
 	for _, agent := range spec.Agents {
-		relDir, ok := skillsDirs[agent]
+		relDir, ok := spec.SkillsDir[agent]
+		if !ok {
+			relDir, ok = skillsDirs[agent]
+		}
 		if !ok {
 			continue
 		}

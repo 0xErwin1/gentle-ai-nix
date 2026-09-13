@@ -72,10 +72,52 @@ func TestResolvePathOpenCodePrefersExistingJsonc(t *testing.T) {
 }
 
 func TestKnownProvidersDoesNotIncludeTomlOrUnmodeledClients(t *testing.T) {
-	for _, unsupported := range []string{"codex", "kimi", "hermes", "vscode-copilot", "antigravity", "windsurf", "trae-ide", "kiro-ide"} {
+	for _, unsupported := range []string{"codex", "kimi", "hermes", "vscode-copilot", "windsurf", "trae-ide", "kiro-ide"} {
 		if _, ok := ResolvePath(t.TempDir(), unsupported); ok {
-			t.Fatalf("%s should not be a Go-mergeable JSON settings path (routed through gentle-ai-merge instead)", unsupported)
+			t.Fatalf("%s should not resolve without an override (routed through gentle-ai-merge, or its settings path is OS-variant)", unsupported)
 		}
+	}
+}
+
+func TestResolvePathAntigravityBuiltInFallback(t *testing.T) {
+	tree := t.TempDir()
+	path, ok := ResolvePath(tree, "antigravity")
+	if !ok {
+		t.Fatal("ResolvePath(antigravity): not found")
+	}
+	want := filepath.Join(tree, ".gemini", "antigravity-cli", "settings.json")
+	if path != want {
+		t.Fatalf("ResolvePath(antigravity) = %q, want %q", path, want)
+	}
+}
+
+func TestResolvePathWithOverridesPrefersOverride(t *testing.T) {
+	tree := t.TempDir()
+
+	path, ok := ResolvePathWithOverrides(tree, "vscode-copilot", map[string]string{
+		"vscode-copilot": filepath.Join(".config", "Code", "User", "settings.json"),
+	})
+	if !ok {
+		t.Fatal("ResolvePathWithOverrides(vscode-copilot): not found")
+	}
+	want := filepath.Join(tree, ".config", "Code", "User", "settings.json")
+	if path != want {
+		t.Fatalf("ResolvePathWithOverrides(vscode-copilot) = %q, want %q", path, want)
+	}
+
+	// An override for a client that already has a built-in table entry
+	// always wins over that table.
+	overridden, ok := ResolvePathWithOverrides(tree, "claude-code", map[string]string{
+		"claude-code": "custom/settings.json",
+	})
+	if !ok || overridden != filepath.Join(tree, "custom", "settings.json") {
+		t.Fatalf("ResolvePathWithOverrides(claude-code, override) = %q, %v, want the override to win", overridden, ok)
+	}
+}
+
+func TestResolvePathWithOverridesUnknownProviderNoOverride(t *testing.T) {
+	if _, ok := ResolvePathWithOverrides(t.TempDir(), "trae-ide", nil); ok {
+		t.Fatal("expected trae-ide with no override to report ok=false")
 	}
 }
 
