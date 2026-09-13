@@ -42,6 +42,20 @@
 // internal/mcp. Codex is the one exception: its MCP config lives in
 // config.toml, so the Nix module routes it through the existing TOML
 // merger instead of this subcommand.
+//
+// "permissions" moves user permission rules out the same way: only Claude
+// Code expresses declared allow/deny/ask rules as a document-shaped rule
+// list, so programs.gentle-ai.permissions no longer travels through the
+// document as "permissions" at all. This subcommand unions the declared
+// rules into .claude/settings.json instead, reproducing exactly what the
+// pinned fork's own permissions injector wrote -- see internal/permissions.
+//
+// "skills" moves per-client skill scoping out the same way: the document's
+// own "skills" field can only ever be one flat list, so
+// providers.<name>.skills and skillExclusions no longer travel through it
+// either. The Nix module renders the union of every client's own resolved
+// set instead, and this subcommand prunes each client's skills directory
+// back down to what it actually resolves to -- see internal/skills.
 package main
 
 import (
@@ -55,7 +69,7 @@ var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|settings|pi|roles|mcp|retire|rewrite|frontmatter> [flags]")
+		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|settings|pi|roles|mcp|permissions|skills|retire|rewrite|frontmatter> [flags]")
 		os.Exit(2)
 	}
 
@@ -75,6 +89,10 @@ func main() {
 		code, err = runRoles(os.Args[2:])
 	case "mcp":
 		code, err = runMCP(os.Args[2:])
+	case "permissions":
+		code, err = runPermissions(os.Args[2:])
+	case "skills":
+		code, err = runSkills(os.Args[2:])
 	case "retire":
 		code, err = runRetire(os.Args[2:])
 	case "rewrite":

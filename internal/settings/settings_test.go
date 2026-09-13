@@ -33,7 +33,7 @@ func TestResolvePathKnownProviders(t *testing.T) {
 		"cursor":      ".cursor/settings.json",
 		"qwen-code":   ".qwen/settings.json",
 		"kilocode":    ".config/kilo/opencode.json",
-		"openclaw":    ".config/openclaw/openclaw.json",
+		"openclaw":    ".openclaw/openclaw.json",
 	}
 	for provider, rel := range tests {
 		path, ok := ResolvePath(tree, provider)

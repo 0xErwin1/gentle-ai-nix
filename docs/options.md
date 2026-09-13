@@ -2130,6 +2130,15 @@ attribute set of anything
 Skills for this provider only\. Null takes the globally enabled
 skills, so a provider is named here only when it must differ\.
 
+Resolved by ` gentle-nix skills ` as post-processing of the tree,
+not by Gentle AI itself: the document’s own ` skills ` field is one
+flat list shared by every client, so a per-client override has no
+shape to travel through it\. This client’s skills directory is
+pruned down to exactly this list once activation renders – a
+full replacement of the globally enabled skills for this client
+only, not a further narrowing of them, so the top-level ` skills `
+option’s own disabled entries are not applied on top of it\.
+
 
 
 *Type:*
@@ -2715,6 +2724,15 @@ Skills, keyed by Gentle AI’s own id\. Naming none installs every skill
 Gentle AI ships, so this is only for narrowing that: an entry set to
 false excludes one skill and leaves the rest, and any entry set to true
 narrows the installation to the ones named\.
+
+This resolves the same way for every client except one that sets its
+own ` providers.<id>.skills `, which fully replaces this resolution for
+that client only\. Resolution happens through ` gentle-nix skills ` as
+post-processing of the tree: setting an entry to ` true ` narrows the
+document’s ` skills ` to those named (unioned with every assignment);
+` false ` entries alone, or none at all, leave ` skills ` out of the
+document entirely, so a client without its own assignment keeps
+Gentle AI’s default set minus any ` false ` entries\.
 
 
 

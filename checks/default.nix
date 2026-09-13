@@ -222,6 +222,8 @@ in
         "backgroundIntent"
         "piBackgroundIntent"
         "profiles"
+        "permissions"
+        "skillExclusions"
       ];
       # `models`, `profiles`, `activeProfile`, `modelFamily` and
       # `modelPreset` are gentle-pi's own routing and profile store, not a
@@ -237,6 +239,15 @@ in
       # modules/home-manager.nix. A stale `mcpServers` still reaching the
       # document, at the top level or under any provider, would mean the
       # document is carrying a field only gentle-nix reads now.
+      # `skills` is added to every removed set below alongside `mcpServers`,
+      # for the same reason: `providers.<id>.skills` is not something the
+      # document itself can express per client (its own `skills` field is
+      # one flat list shared by every client) -- `gentle-nix skills` prunes
+      # each client's own directory to the resolved set instead of the
+      # document carrying it -- see skillsSpecBody in
+      # modules/home-manager.nix. A stale `skills` still reaching the
+      # document under any provider would mean the document is carrying a
+      # field only gentle-nix reads now.
       removedPiKeys = [
         "models"
         "profiles"
@@ -244,16 +255,20 @@ in
         "modelFamily"
         "modelPreset"
         "mcpServers"
+        "skills"
       ];
     in
     assert pi.backgroundIntent == "on";
-    assert pi.skills == [ "go-testing" ];
     assert lib.all (key: !(pi ? ${key})) removedPiKeys;
     assert opencode.profileStrategy == "generated-multi";
     assert opencode.backgroundIntent == "on";
     assert !(opencode ? mcpServers);
+    assert !(opencode ? skills);
     assert lib.all (key: !(document.selection ? ${key})) removedTopLevelKeys;
     assert !(document.selection ? mcpServers);
+    # commonFields sets only a per-provider `skills` override, never the
+    # flat option, so `skills` must stay out of the document entirely.
+    assert !(document.selection ? skills);
     pkgs.runCommandLocal "gentle-ai-check-providers-document-shape" { } ''touch "$out"'';
 
   # `gentlePiRelease` and `engramRelease` only ever add a `packages` entry
@@ -1383,6 +1398,158 @@ in
     grep -q "check-orchestrator" "$rendered/tree/.config/opencode/opencode.json"
     grep -q "check-apply" "$rendered/tree/.config/opencode/opencode.json"
   '';
+
+  # `programs.gentle-ai.permissions` is not something the document itself
+  # carries any more: `gentle-nix permissions` unions it into
+  # `.claude/settings.json` as post-processing of the tree instead (see
+  # internal/permissions and the `gentle-nix permissions` invocation in
+  # modules/home-manager.nix's `overlaid`). This proves both the union (a
+  # declared entry the shipped overlay already denies is not duplicated,
+  # one it does not mention is appended) and that the shipped overlay's own
+  # entries survive.
+  declaredPermissionRulesUnionOntoClaudeSettings =
+    let
+      withPermissions = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.claude-code.enable = true;
+            permissions = {
+              allow = [ "Bash(git *)" ];
+              deny = [
+                "Read(.env)" # already in the shipped overlay -- must not duplicate
+                "Read(.ssh/*)" # new -- must be appended
+              ];
+              ask = [ "Bash(rm *)" ];
+            };
+          };
+        }
+      ];
+      tree = withPermissions.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-declared-permissions" { inherit tree; } ''
+      set -euo pipefail
+      settings="$tree/tree/.claude/settings.json"
+      test -f "$settings" || { echo "settings.json was not written" >&2; exit 1; }
+
+      grep -qF '"bypassPermissions"' "$settings" || {
+        echo "the shipped permissions overlay is missing:" >&2
+        cat "$settings" >&2
+        exit 1
+      }
+      grep -qF '"Read(.env)"' "$settings" || {
+        echo "a shipped deny entry did not survive:" >&2
+        cat "$settings" >&2
+        exit 1
+      }
+      test "$(grep -oF '"Read(.env)"' "$settings" | wc -l)" -eq 1 || {
+        echo "a rule already in the shipped overlay was duplicated instead of unioned:" >&2
+        cat "$settings" >&2
+        exit 1
+      }
+      grep -qF '"Read(.ssh/*)"' "$settings" || {
+        echo "the declared deny entry was not appended:" >&2
+        cat "$settings" >&2
+        exit 1
+      }
+      grep -qF '"Bash(git *)"' "$settings" || {
+        echo "the declared allow entry did not reach settings.json:" >&2
+        cat "$settings" >&2
+        exit 1
+      }
+      grep -qF '"Bash(rm *)"' "$settings" || {
+        echo "the declared ask entry did not reach settings.json:" >&2
+        cat "$settings" >&2
+        exit 1
+      }
+      touch "$out"
+    '';
+
+  # `providers.<id>.skills` is not something the document itself can carry
+  # per client either -- its own `skills` field is one flat list shared by
+  # every client. Gentle AI stages the union of every client's resolved set
+  # into every client's directory, and `gentle-nix skills` then prunes each
+  # one back to what it actually resolves to (see internal/skills and the
+  # `gentle-nix skills` invocation in modules/home-manager.nix's
+  # `overlaid`). This proves a client with its own assignment keeps only
+  # that assignment, while a client with none keeps the flat set.
+  declaredSkillScopingPrunesPerClient =
+    let
+      scoped = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers = {
+              claude-code.enable = true;
+              opencode = {
+                enable = true;
+                skills = [ "go-testing" ];
+              };
+            };
+            skills = {
+              go-testing.enable = true;
+              cognitive-doc-design.enable = true;
+            };
+          };
+        }
+      ];
+      tree = scoped.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-declared-skill-scoping" { inherit tree; } ''
+      set -euo pipefail
+      test -d "$tree/tree/.claude/skills/go-testing" || {
+        echo "claude-code (flat set) is missing go-testing" >&2
+        exit 1
+      }
+      test -d "$tree/tree/.claude/skills/cognitive-doc-design" || {
+        echo "claude-code (flat set) is missing cognitive-doc-design" >&2
+        exit 1
+      }
+      test -d "$tree/tree/.config/opencode/skills/go-testing" || {
+        echo "opencode is missing the skill named in its own assignment" >&2
+        exit 1
+      }
+      test -d "$tree/tree/.config/opencode/skills/cognitive-doc-design" && {
+        echo "opencode kept a skill outside its own assignment; pruning did not run" >&2
+        exit 1
+      }
+      touch "$out"
+    '';
+
+  # An exclusion or assignment alone must not prune an unassigned client to
+  # nothing; compared against a baseline render, not a hardcoded id list.
+  declaredSkillScopingKeepsDefaultSetWhenFlatIsUndeclared =
+    let
+      baseCfg = {
+        programs.gentle-ai.enable = true;
+        programs.gentle-ai.providers.claude-code.enable = true;
+      };
+      renderOf =
+        extra: (evaluate [ (lib.recursiveUpdate baseCfg extra) ]).config.programs.gentle-ai.rendered;
+      baselineTree = renderOf { };
+      exclusionTree = renderOf { programs.gentle-ai.skills.go-testing.enable = false; };
+      assignmentTree = renderOf {
+        programs.gentle-ai.providers.opencode = {
+          enable = true;
+          skills = [ "go-testing" ];
+        };
+      };
+    in
+    pkgs.runCommandLocal "gentle-ai-check-declared-skill-scoping-defaults"
+      { inherit baselineTree exclusionTree assignmentTree; }
+      ''
+        set -euo pipefail
+        list() { find "$1" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort; }
+        fail() { echo "$1" >&2; exit 1; }
+
+        baseline="$(list "$baselineTree/tree/.claude/skills")"
+        want_excl="$(printf '%s\n' "$baseline" | grep -vFx "go-testing" || true)"
+        [ "$(list "$exclusionTree/tree/.claude/skills")" = "$want_excl" ] || fail "exclusions-only did not keep the default set minus the excluded skill"
+        [ "$(list "$assignmentTree/tree/.claude/skills")" = "$baseline" ] || fail "assignment-only pruned claude-code's own default set"
+        test -d "$assignmentTree/tree/.config/opencode/skills/go-testing" || fail "opencode is missing the skill named in its own assignment"
+
+        touch "$out"
+      '';
 
   # Renaming or defining roles is not something Gentle AI does imperatively,
   # so a declared role must never reach the document at all: `gentle-nix

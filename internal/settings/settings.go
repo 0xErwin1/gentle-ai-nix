@@ -42,7 +42,7 @@ var settingsPaths = map[string]string{
 	"cursor":      filepath.Join(".cursor", "settings.json"),
 	"qwen-code":   filepath.Join(".qwen", "settings.json"),
 	"kilocode":    filepath.Join(".config", "kilo", "opencode.json"),
-	"openclaw":    filepath.Join(".config", "openclaw", "openclaw.json"),
+	"openclaw":    filepath.Join(".openclaw", "openclaw.json"),
 }
 
 // ResolvePath is the fork's opencode adapter's own SettingsPath, ported: it

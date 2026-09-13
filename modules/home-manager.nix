@@ -241,6 +241,15 @@ let
           description = ''
             Skills for this provider only. Null takes the globally enabled
             skills, so a provider is named here only when it must differ.
+
+            Resolved by `gentle-nix skills` as post-processing of the tree,
+            not by Gentle AI itself: the document's own `skills` field is one
+            flat list shared by every client, so a per-client override has no
+            shape to travel through it. This client's skills directory is
+            pruned down to exactly this list once activation renders -- a
+            full replacement of the globally enabled skills for this client
+            only, not a further narrowing of them, so the top-level `skills`
+            option's own disabled entries are not applied on top of it.
           '';
         };
 
@@ -873,8 +882,14 @@ let
       // whenSet "activeProfile" provider.activeProfile
     )
     // whenSet "backgroundIntent" (cfg.backgroundSubagents.${name} or null)
-    // whenSet "profileStrategy" provider.profileStrategy
-    // whenSet "skills" provider.skills;
+    // whenSet "profileStrategy" provider.profileStrategy;
+  # `skills` no longer travels through the document for any provider either:
+  # the document's own "skills" field can only ever be one flat list, so a
+  # per-client override has no shape to travel through it at all --
+  # `gentle-nix skills` resolves it as post-processing instead, the same way
+  # roles, MCP servers and Pi routing already are -- see skillsSpecBody and
+  # the `gentle-nix skills` invocation in `overlaid` below.
+  #
   # `mcpServers` no longer travels through the document for any provider:
   # wiring a user-declared MCP server is not something Gentle AI does
   # imperatively, so `gentle-nix mcp` writes it straight into the rendered
@@ -1054,11 +1069,69 @@ let
     mcp_servers = lib.mapAttrs (_: codexMcpTomlEntry) codexMcpServers;
   };
 
+  # A user permission rule is not something every client expresses the same
+  # way -- only Claude Code takes a declared allow/deny/ask rule list at all
+  # -- so `permissions` no longer travels through the document either.
+  # `gentle-nix permissions` unions it straight into `.claude/settings.json`
+  # instead, the same post-processing step roles, MCP servers and Pi routing
+  # already are -- see internal/permissions for the exact union semantics
+  # and why only Claude Code qualifies.
+  permissionsSpecBody = {
+    agents = enabledNames cfg.providers;
+  }
+  // whenSet "allow" cfg.permissions.allow
+  // whenSet "deny" cfg.permissions.deny
+  // whenSet "ask" cfg.permissions.ask;
+
+  permissionsNeeded =
+    cfg.permissions.allow != [ ] || cfg.permissions.deny != [ ] || cfg.permissions.ask != [ ];
+
+  permissionsSpecFile = pkgs.writeText "gentle-ai-permissions-spec.json" (
+    builtins.toJSON permissionsSpecBody
+  );
+
+  # Per-client skill scoping -- `providers.<id>.skills` overriding the flat
+  # list, and `skillExclusions` narrowing it everywhere else -- has no shape
+  # to travel through the document: the contract's own "skills" field is one
+  # flat list, decoded the same way for every client. So the document is
+  # sent the UNION of every skill any client needs instead (every client's
+  # own resolved set, flattened), which makes Gentle AI stage every needed
+  # skill into every enabled client's own skills directory; `gentle-nix
+  # skills` then prunes each directory back down to what that one client
+  # actually resolves to -- see internal/skills for the exact resolution
+  # rule and the per-adapter directories it prunes.
+  # Exclusions alone must not narrow to nothing; flat stays `null` (Gentle
+  # AI's default set) unless at least one entry is set to `true`.
+  skillsFlatDeclared = enabledNames cfg.skills != [ ];
+
+  skillsSpecBody = {
+    agents = enabledNames cfg.providers;
+    flat = if skillsFlatDeclared then enabledNames cfg.skills else null;
+    exclusions = disabledNames cfg.skills;
+    assignments = lib.mapAttrs (_: provider: provider.skills) (
+      lib.filterAttrs (_: provider: provider.skills != null) enabledProviders
+    );
+  };
+
+  # Sent only when narrowed; `[ ]` (omitted below) keeps the default staged.
+  skillsUnion =
+    if skillsFlatDeclared then
+      lib.unique (
+        lib.subtractLists skillsSpecBody.exclusions skillsSpecBody.flat
+        ++ lib.concatLists (lib.attrValues skillsSpecBody.assignments)
+      )
+    else
+      [ ];
+
+  # No-op only when nothing narrows anyone's resolution.
+  skillsScopingNeeded = skillsSpecBody.exclusions != [ ] || skillsSpecBody.assignments != { };
+
+  skillsSpecFile = pkgs.writeText "gentle-ai-skills-spec.json" (builtins.toJSON skillsSpecBody);
+
   selection =
     whenSet "agents" (enabledNames cfg.providers)
     // whenSet "components" (enabledNames cfg.components)
-    // whenSet "skills" (enabledNames cfg.skills)
-    // whenSet "skillExclusions" (disabledNames cfg.skills)
+    // whenSet "skills" skillsUnion
     // whenSet "communityTools" (enabledNames cfg.communityTools)
     // whenSet "openCodePlugins" (enabledNames cfg.openCodePlugins)
     // whenSet "persona" cfg.persona
@@ -1073,14 +1146,13 @@ let
     // whenSet "codexCarrilModelAssignments" cfg.models.codexCarril
     // whenSet "codexPhaseModelAssignments" cfg.models.codexPhases
     // whenSet "codexOrchestrator" cfg.models.codexOrchestrator
-    // whenSet "permissions" (
-      whenSet "allow" cfg.permissions.allow
-      // whenSet "deny" cfg.permissions.deny
-      // whenSet "ask" cfg.permissions.ask
-    )
     // cfg.settings;
-  # `mcpServers` no longer travels through the document either; see the
-  # comment on providerBlock above.
+  # `permissions` no longer travels through the document either -- see
+  # permissionsSpecBody above -- and neither does `skillExclusions` or any
+  # `providers.<id>.skills`; `skills` above is the union skillsSpecBody
+  # describes, not the flat enabled set it used to be. See the comment on
+  # providerBlock above for `mcpServers`, which also never travels through
+  # the document.
 
   document = {
     version = cfg.schemaVersion;
@@ -1114,6 +1186,8 @@ let
       && !rolesNeeded
       && !mcpNeeded
       && codexMcpServers == { }
+      && !permissionsNeeded
+      && !skillsScopingNeeded
     then
       base
     else
@@ -1183,6 +1257,34 @@ let
           ${lib.getExe gentleNix} mcp \
             --tree "$out/tree" \
             --spec ${mcpSpecFile}
+        ''}
+        ${lib.optionalString permissionsNeeded ''
+          # gentle-nix permissions unions every declared
+          # programs.gentle-ai.permissions rule into .claude/settings.json,
+          # the same post-processing step roles, MCP servers and Pi routing
+          # are above, and for the same reason it runs before the
+          # `gentle-nix settings` loop below: a declared rule is unioned
+          # onto whatever is already there, while an operator's own
+          # `providers.claude-code.settings.permissions` is a decision that
+          # should win outright at the same key -- so the union has to be
+          # the base and the operator's own setting the overlay, not the
+          # other way around.
+          ${lib.getExe gentleNix} permissions \
+            --tree "$out/tree" \
+            --spec ${permissionsSpecFile}
+        ''}
+        ${lib.optionalString skillsScopingNeeded ''
+          # gentle-nix skills prunes every enabled client's skills directory
+          # down to what it actually resolves to -- its own
+          # providers.<id>.skills assignment, or the flat set minus
+          # skillExclusions otherwise. It runs after the base render (which
+          # already staged the union skillsSpecBody describes into every
+          # client) and before extraFiles below, so a skill an operator adds
+          # of their own through extraFiles is never at risk of being pruned
+          # as unresolved.
+          ${lib.getExe gentleNix} skills \
+            --tree "$out/tree" \
+            --spec ${skillsSpecFile}
         ''}
         ${lib.optionalString (codexMcpServers != { }) ''
           # Codex keeps its MCP config in config.toml, so its declared
@@ -1726,6 +1828,15 @@ in
         Gentle AI ships, so this is only for narrowing that: an entry set to
         false excludes one skill and leaves the rest, and any entry set to true
         narrows the installation to the ones named.
+
+        This resolves the same way for every client except one that sets its
+        own `providers.<id>.skills`, which fully replaces this resolution for
+        that client only. Resolution happens through `gentle-nix skills` as
+        post-processing of the tree: setting an entry to `true` narrows the
+        document's `skills` to those named (unioned with every assignment);
+        `false` entries alone, or none at all, leave `skills` out of the
+        document entirely, so a client without its own assignment keeps
+        Gentle AI's default set minus any `false` entries.
       '';
     };
 
@@ -1873,6 +1984,13 @@ in
 
     };
 
+    # Only Claude Code takes a declared allow/deny/ask rule list at all --
+    # every other client either has no injectable permission overlay, or
+    # keys it a different way entirely. Rendered by `gentle-nix permissions`
+    # as post-processing of the tree, not by Gentle AI itself: it unions
+    # these rules onto whatever the shipped overlay already put at
+    # `.claude/settings.json`'s own `permissions.allow/deny/ask`, so a rule
+    # this declares never removes a guardrail it does not repeat.
     permissions = {
       allow = mkOption {
         type = types.listOf types.str;
