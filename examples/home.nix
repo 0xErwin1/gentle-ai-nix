@@ -55,6 +55,18 @@
           model = "claude-haiku";
         };
         activeProfile = "cheap";
+
+        # Pi rebuilds `agent/settings.json`'s own `packages` as it installs,
+        # so the rendered copy is merged into it instead of replacing it, with
+        # that array kept a union rather than replaced. Relative to Pi's own
+        # root (`.pi`) rather than the home directory -- the preferred
+        # spelling over `programs.gentle-ai.secrets.merge = [ ".pi/agent/settings.json" ... ]`.
+        secrets.merge = [
+          {
+            path = "agent/settings.json";
+            unionLists = [ "packages" ];
+          }
+        ];
       };
     };
 

@@ -2314,6 +2314,162 @@ in
         touch "$out"
       '';
 
+  # `providers.<name>.secrets` is meant to be interchangeable with the global,
+  # home-relative option: the same file withheld from the projection and the
+  # same merge target either spelling names. Building both trees and diffing
+  # them proves it directly, rather than trusting the two code paths agree.
+  providerSecretsMatchGlobalWithheld =
+    let
+      claudeCodeMinimal = {
+        programs.gentle-ai = {
+          enable = true;
+          providers.claude-code.enable = true;
+        };
+      };
+
+      globalSpelling = evaluate [
+        (lib.recursiveUpdate claudeCodeMinimal {
+          programs.gentle-ai.secrets.merge = [ ".claude/settings.json" ];
+        })
+      ];
+
+      perProviderSpelling = evaluate [
+        (lib.recursiveUpdate claudeCodeMinimal {
+          programs.gentle-ai.providers.claude-code.secrets.merge = [ "settings.json" ];
+        })
+      ];
+    in
+    pkgs.runCommandLocal "gentle-ai-check-provider-secrets-parity"
+      {
+        globalDelivered = globalSpelling.config.home.file.gentle-ai.source;
+        perProviderDelivered = perProviderSpelling.config.home.file.gentle-ai.source;
+      }
+      ''
+        set -euo pipefail
+        diff -r "$globalDelivered" "$perProviderDelivered" || {
+          echo "a per-provider merge target produced a different projection than the equivalent global path" >&2
+          exit 1
+        }
+        touch "$out"
+      '';
+
+  # Claude Code keeps `.claude.json` beside `.claude/`, not inside it, so a
+  # per-provider path needs a `../` to reach it. This proves the resolved
+  # path lands exactly where the equivalent global, home-relative path would
+  # -- `.claude.json` at the top of the home directory -- rather than at the
+  # unnormalised `.claude/../.claude.json` spelling the join alone would give.
+  providerSecretDotDotResolvesHomeRelative =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.claude-code = {
+              enable = true;
+              secrets.merge = [ "../.claude.json" ];
+            };
+          };
+        }
+      ];
+      activation = configuration.config.home.activationPackage;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-provider-secret-dotdot" { inherit activation; } ''
+      set -euo pipefail
+      grep -qF -- '--target /home/test-user/.claude.json' "$activation/activate" || {
+        echo "a provider secrets merge path using .. did not resolve to the home-relative path it names" >&2
+        cat "$activation/activate" >&2
+        exit 1
+      }
+      grep -qF -- '.claude/../.claude.json' "$activation/activate" && {
+        echo "the .. component was not normalised away before reaching the activation script" >&2
+        exit 1
+      }
+      touch "$out"
+    '';
+
+  # Reuses mergePreservesClientState's own assertions -- client state kept,
+  # the declared entry added, a client-owned array unioned rather than
+  # replaced, the placeholder resolved -- against a fragment reached through
+  # a per-provider merge target instead of a global, home-relative one, to
+  # prove the two spellings carry the same guarantees at merge time, not just
+  # the same withheld path.
+  providerSecretsMergeActivationParity =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.claude-code = {
+              enable = true;
+              settings.checkToken = "@CHECK_TOKEN@";
+              secrets.merge = [
+                {
+                  path = "settings.json";
+                  unionLists = [ "permissions.deny" ];
+                }
+              ];
+            };
+            secrets.placeholders.CHECK_TOKEN = "token-secret";
+          };
+        }
+      ];
+      fragment = "${configuration.config.programs.gentle-ai.rendered}/tree/.claude/settings.json";
+    in
+    pkgs.runCommandLocal "gentle-ai-check-provider-secrets-merge-parity"
+      {
+        inherit fragment;
+        nativeBuildInputs = [
+          (pkgs.writers.writePython3Bin "gentle-ai-merge" {
+            libraries = [ pkgs.python3Packages.tomlkit ];
+            flakeIgnore = [
+              "E501"
+              "W503"
+            ];
+          } (builtins.readFile ../lib/merge.py))
+        ];
+      }
+      ''
+        set -euo pipefail
+        printf 'v4lue' > token-secret
+
+        cat > target.json <<'JSON'
+        {"oauthAccount":{"id":"me"},"permissions":{"deny":["stale-from-client"]}}
+        JSON
+
+        gentle-ai-merge --fragment "$fragment" --target target.json \
+          --union-list permissions.deny --secret "CHECK_TOKEN=$PWD/token-secret"
+
+        grep -q '"oauthAccount"' target.json || { echo "the merge dropped the client's own state" >&2; exit 1; }
+        grep -q 'stale-from-client' target.json || { echo "a client-owned array was replaced instead of unioned" >&2; exit 1; }
+        grep -q 'v4lue' target.json || { echo "the placeholder was not resolved" >&2; exit 1; }
+        grep -q '@CHECK_TOKEN@' target.json && { echo "the placeholder survived" >&2; exit 1; }
+
+        touch "$out"
+      '';
+
+  # `providers.<name>.secrets` is resolved against `providerRoots`, so a
+  # client Gentle AI has no adapter for -- or a typo -- has nothing to resolve
+  # it against and must be refused rather than silently rendering nothing.
+  unknownProviderSecretsRejected = treeCheck "unknown-provider-secrets-rejected" ''
+    ${lib.optionalString
+      (
+        !(rejected [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers.opencode.enable = true;
+              providers.totally-unknown.secrets.paths = [ "foo.json" ];
+            };
+          }
+        ])
+      )
+      ''
+        echo "a provider with no known root was accepted for declaring secrets" >&2
+        exit 1
+      ''
+    }
+  '';
+
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
     cp -r --no-preserve=mode,ownership ${self} source
     ${

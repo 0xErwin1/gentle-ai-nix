@@ -483,6 +483,54 @@ let
             activation does not read anyway.
           '';
         };
+
+        secrets = {
+          paths = mkOption {
+            type = types.listOf types.str;
+            default = [ ];
+            example = literalExpression ''[ "mcp/atlas.json" ]'';
+            description = ''
+              Like `programs.gentle-ai.secrets.paths`, but every entry is
+              relative to ${name}'s own root instead of the home directory, so
+              declaring one takes no knowledge of where Gentle AI rooted this
+              client. Resolved against that root and folded into the same
+              withheld set the global option populates -- both forms are
+              interchangeable, and an entry declared here reaches exactly the
+              same file a home-relative path in the global option would have
+              named.
+
+              A leading `../` reaches outside the root for the rare file a
+              client keeps beside it rather than inside it. The result is
+              still normalised to a home-relative path, and an entry that
+              would resolve outside the home directory entirely is refused at
+              eval rather than silently clipped.
+            '';
+          };
+
+          merge = mkOption {
+            type = types.listOf (types.either types.str mergeTargetType);
+            default = [ ];
+            example = literalExpression ''
+              [
+                {
+                  path = "agent/settings.json";
+                  unionLists = [ "packages" ];
+                }
+              ]
+            '';
+            description = ''
+              Like `programs.gentle-ai.secrets.merge`, but every path is
+              relative to ${name}'s own root; see `paths` above for the
+              `../` escape hatch and how a per-provider path is resolved to
+              the home-relative spelling the merge step actually uses. This is
+              the preferred spelling over the global option's home-relative
+              paths: declaring a merge target here takes no knowledge of
+              where Gentle AI rooted ${name}, only what the client itself
+              calls the file. Global and per-provider entries are folded into
+              the same merge set, so the two forms are interchangeable.
+            '';
+          };
+        };
       };
     }
   );
@@ -1373,7 +1421,15 @@ let
   # Where that file comes from is deliberately not this module's business: a
   # sops-nix or agenix secret exposes exactly such a path, and so does a plain
   # file, so none of them has to be a dependency here.
-  withheld = cfg.secrets.paths ++ map (entry: entry.path) mergeTargets;
+  # `providerSecretPaths`/`providerMergeTargets` are declared with
+  # `providerRoots`, below this binding in the file, but `let` bindings are
+  # lazy and mutually visible regardless of order, so referencing them here
+  # costs nothing and keeps `withheld` next to the option it is withholding
+  # against.
+  allSecretPaths = lib.unique (cfg.secrets.paths ++ providerSecretPaths);
+  allMergeTargets = mergeTargets ++ providerMergeTargets;
+
+  withheld = allSecretPaths ++ map (entry: entry.path) allMergeTargets;
 
   # gentle-nix is the one Go binary this repository builds from its own
   # source (cmd/gentle-nix, internal/...), replacing four of the five
@@ -1583,6 +1639,112 @@ let
     "kimi" = ".kimi";
     "openclaw" = ".openclaw";
   };
+
+  # A provider-scoped secret path is written relative to that provider's own
+  # root, so it is resolved against `providerRoots` and normalised to the
+  # home-relative spelling `withheld` and the merge/activation loops already
+  # work in -- the two forms have to land on exactly the same path, or an
+  # operator switching from one spelling to the other would see a file
+  # suddenly reappear in the projection or drop out of the merge set.
+  #
+  # A leading `../` component is how a path reaches outside the provider's
+  # root for the rare file a client keeps beside it instead of inside it
+  # (Claude Code's `.claude.json`, next to `.claude/`); walking the joined
+  # path component by component, popping the stack on `..`, is what resolves
+  # that back to a home-relative path without ever shelling out to a real
+  # filesystem path (these are declaration-time strings, not paths that have
+  # to exist). Popping past an empty stack means the entry would land outside
+  # the home directory entirely, which is refused below rather than silently
+  # clipped to whatever the stack still held.
+  resolveProviderSecretPath =
+    root: path:
+    let
+      combined = "${root}/${path}";
+      parts = lib.filter (part: part != "" && part != ".") (lib.splitString "/" combined);
+      step =
+        acc: part:
+        if acc.escaped then
+          acc
+        else if part == ".." then
+          if acc.out == [ ] then
+            acc // { escaped = true; }
+          else
+            acc // { out = lib.sublist 0 (lib.length acc.out - 1) acc.out; }
+        else
+          acc // { out = acc.out ++ [ part ]; };
+      result = lib.foldl' step {
+        out = [ ];
+        escaped = false;
+      } parts;
+    in
+    result // { path = lib.concatStringsSep "/" result.out; };
+
+  providersDeclaringSecrets = lib.filterAttrs (
+    _: provider: provider.secrets.paths != [ ] || provider.secrets.merge != [ ]
+  ) cfg.providers;
+
+  # Named for the assertion below rather than resolved: a provider Gentle AI
+  # has no root for cannot have its declared secrets normalised at all, so
+  # this is checked before `providerSecrets` ever touches `providerRoots.
+  # ${name}` for one.
+  unknownSecretsProviders = lib.attrNames (
+    lib.filterAttrs (name: _: !(providerRoots ? ${name})) providersDeclaringSecrets
+  );
+
+  # Escaped entries are named the same way, by provider and the path as
+  # declared, so the assertion below can point at exactly what was written
+  # instead of the stack this module reduced it to.
+  escapedProviderSecretPaths = lib.concatLists (
+    lib.mapAttrsToList (
+      name: provider:
+      let
+        root = providerRoots.${name};
+      in
+      lib.optional (lib.any (path: (resolveProviderSecretPath root path).escaped) provider.secrets.paths)
+        {
+          inherit name;
+          path = lib.findFirst (
+            path: (resolveProviderSecretPath root path).escaped
+          ) null provider.secrets.paths;
+        }
+      ++ lib.concatMap (
+        entry:
+        let
+          path = if builtins.isString entry then entry else entry.path;
+        in
+        lib.optional (resolveProviderSecretPath root path).escaped {
+          inherit name path;
+        }
+      ) provider.secrets.merge
+    ) (lib.filterAttrs (name: _: providerRoots ? ${name}) providersDeclaringSecrets)
+  );
+
+  providerSecretsFor =
+    name: provider:
+    let
+      root = providerRoots.${name};
+      resolve = path: (resolveProviderSecretPath root path).path;
+    in
+    {
+      paths = map resolve provider.secrets.paths;
+      merge = map (
+        entry:
+        if builtins.isString entry then
+          {
+            path = resolve entry;
+            unionLists = [ ];
+          }
+        else
+          entry // { path = resolve entry.path; }
+      ) provider.secrets.merge;
+    };
+
+  providerSecrets = lib.mapAttrsToList providerSecretsFor (
+    lib.filterAttrs (name: _: providerRoots ? ${name}) providersDeclaringSecrets
+  );
+
+  providerSecretPaths = lib.concatMap (entry: entry.paths) providerSecrets;
+  providerMergeTargets = lib.concatMap (entry: entry.merge) providerSecrets;
 
   # A client Gentle AI has no adapter for still reads the same kind of harness,
   # so it is given one another client already produced rather than a hand-written
@@ -2103,6 +2265,12 @@ in
           They are kept out of the projection and written as real files at
           activation with every placeholder below replaced, because a store
           symlink can be neither private nor written.
+
+          Every entry here is relative to the home directory, which means
+          knowing where Gentle AI rooted the client that owns it.
+          `providers.<name>.secrets.paths` takes the same entries relative to
+          that client's own root instead, and is the preferred spelling for a
+          path that belongs to one client.
         '';
       };
 
@@ -2132,6 +2300,12 @@ in
 
           An entry is a path, or an attribute set naming the arrays in it the
           client appends to itself. See `unionLists` for when that matters.
+
+          Every path here is relative to the home directory.
+          `providers.<name>.secrets.merge` takes the same entries relative to
+          that client's own root instead, and is the preferred spelling: it
+          needs no knowledge of where Gentle AI rooted the client, only what
+          the client itself calls the file.
         '';
       };
 
@@ -2254,6 +2428,25 @@ in
         message = "programs.gentle-ai.customProviders.${lib.concatStringsSep ", " unknownSourceProviders} takes its harness from a client that is not enabled, or that has no known directory";
       }
       {
+        # `providers.<name>.secrets` is resolved against `providerRoots`, so
+        # a name that is not in that table -- a client Gentle AI has no
+        # adapter for, or a typo -- has nothing to resolve it against.
+        assertion = unknownSecretsProviders == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " unknownSecretsProviders}.secrets is set, but that client has no known root; use programs.gentle-ai.secrets for a home-relative path instead";
+      }
+      {
+        # A `../` component walks the joined path back past the home
+        # directory itself, which is not a mistake this module can silently
+        # clip to the nearest path that does exist without also picking
+        # which existing path was meant.
+        assertion = escapedProviderSecretPaths == [ ];
+        message = "programs.gentle-ai.providers.<name>.secrets declares a path that escapes the home directory: ${
+          lib.concatMapStringsSep ", " (
+            entry: "${entry.name}.secrets: `${entry.path}`"
+          ) escapedProviderSecretPaths
+        }";
+      }
+      {
         assertion = lib.all (entry: (entry.text == null) != (entry.source == null)) (
           lib.attrValues cfg.extraFiles
         );
@@ -2370,7 +2563,7 @@ in
         --home ${lib.escapeShellArg config.home.homeDirectory} >/dev/null
     '';
 
-    home.activation.gentleAiMergedSecrets = lib.mkIf (cfg.secrets.merge != [ ]) (
+    home.activation.gentleAiMergedSecrets = lib.mkIf (allMergeTargets != [ ]) (
       lib.hm.dag.entryAfter [ "writeBoundary" ] (
         lib.concatMapStringsSep "\n" (entry: ''
           run ${lib.getExe merger} \
@@ -2380,18 +2573,18 @@ in
               lib.concatMapStringsSep " " (name: "--union-list ${lib.escapeShellArg name}") entry.unionLists
             } \
             ${secretArguments}
-        '') mergeTargets
+        '') allMergeTargets
       )
     );
 
-    home.activation.gentleAiSecrets = lib.mkIf (cfg.secrets.paths != [ ]) (
+    home.activation.gentleAiSecrets = lib.mkIf (allSecretPaths != [ ]) (
       lib.hm.dag.entryAfter [ "writeBoundary" ] (
         lib.concatMapStringsSep "\n" (path: ''
           run ${lib.getExe merger} --replace \
             --fragment ${lib.escapeShellArg "${rendered}/tree/${path}"} \
             --target ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"} \
             ${secretArguments}
-        '') cfg.secrets.paths
+        '') allSecretPaths
       )
     );
 

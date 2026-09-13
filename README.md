@@ -249,6 +249,13 @@ secrets.merge = [
 | Written | replaced | merged in |
 | Formats | any | JSON and TOML |
 
+Every path above is relative to the home directory, which means knowing where
+Gentle AI rooted the client that owns it; `providers.<name>.secrets.{paths,merge}`
+takes the same entries relative to that client's own root instead (`../` for
+the rare file, like `.claude.json`, that a client keeps beside its root rather
+than inside it), and is the preferred spelling for a path that belongs to one
+client.
+
 ## Reference
 
 Every option, with its type, default and example, is in [`docs/options.md`](docs/options.md). It is generated from the module itself and a check fails the build if the committed copy drifts, so it cannot describe an option the module does not have.

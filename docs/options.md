@@ -2093,6 +2093,91 @@ false
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.secrets\.merge
+
+
+
+Like ` programs.gentle-ai.secrets.merge `, but every path is
+relative to ‹name›'s own root; see ` paths ` above for the
+` ../ ` escape hatch and how a per-provider path is resolved to
+the home-relative spelling the merge step actually uses\. This is
+the preferred spelling over the global option’s home-relative
+paths: declaring a merge target here takes no knowledge of
+where Gentle AI rooted ‹name›, only what the client itself
+calls the file\. Global and per-provider entries are folded into
+the same merge set, so the two forms are interchangeable\.
+
+
+
+*Type:*
+list of (string or (submodule))
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[
+  {
+    path = "agent/settings.json";
+    unionLists = [ "packages" ];
+  }
+]
+
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.secrets\.paths
+
+
+
+Like ` programs.gentle-ai.secrets.paths `, but every entry is
+relative to ‹name›'s own root instead of the home directory, so
+declaring one takes no knowledge of where Gentle AI rooted this
+client\. Resolved against that root and folded into the same
+withheld set the global option populates – both forms are
+interchangeable, and an entry declared here reaches exactly the
+same file a home-relative path in the global option would have
+named\.
+
+A leading ` ../ ` reaches outside the root for the rare file a
+client keeps beside it rather than inside it\. The result is
+still normalised to a home-relative path, and an entry that
+would resolve outside the home directory entirely is refused at
+eval rather than silently clipped\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[ "mcp/atlas.json" ]
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.settings
 
 
@@ -2578,8 +2663,6 @@ list of string
 
 ## programs\.gentle-ai\.secrets\.merge
 
-
-
 Rendered paths Gentle AI shares with the client itself\. Claude Code
 keeps its OAuth and project history in ` .claude.json `, Codex its
 per-project trust levels in ` config.toml `, so writing the rendered
@@ -2593,6 +2676,12 @@ this file is not ours to prune\.
 
 An entry is a path, or an attribute set naming the arrays in it the
 client appends to itself\. See ` unionLists ` for when that matters\.
+
+Every path here is relative to the home directory\.
+` providers.<name>.secrets.merge ` takes the same entries relative to
+that client’s own root instead, and is the preferred spelling: it
+needs no knowledge of where Gentle AI rooted the client, only what
+the client itself calls the file\.
 
 
 
@@ -2633,6 +2722,12 @@ They are kept out of the projection and written as real files at
 activation with every placeholder below replaced, because a store
 symlink can be neither private nor written\.
 
+Every entry here is relative to the home directory, which means
+knowing where Gentle AI rooted the client that owns it\.
+` providers.<name>.secrets.paths ` takes the same entries relative to
+that client’s own root instead, and is the preferred spelling for a
+path that belongs to one client\.
+
 
 
 *Type:*
@@ -2657,6 +2752,8 @@ list of string
 
 
 ## programs\.gentle-ai\.secrets\.placeholders
+
+
 
 Maps a placeholder name to a file holding its value, read at
 activation\. ` ATLAS_TOKEN ` replaces every ` @ATLAS_TOKEN@ ` in the paths
