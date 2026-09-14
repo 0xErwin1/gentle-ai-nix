@@ -772,10 +772,10 @@ list of string
 
 Which gentle-pi release Pi installs, by channel\.
 
-` stable ` is npm’s published release, which is what Pi already
-installs on its own; choosing it changes nothing about how Pi’s
-packages are provisioned\. ` main ` is the tip of gentle-pi’s main
-branch pinned to a revision, installed from git instead of npm –
+` stable ` is the exact published npm release this flake supports,
+installed explicitly so a switch cannot silently follow npm’s latest
+tag\. ` main ` is the tip of gentle-pi’s main branch pinned to a
+revision, installed from git instead of npm –
 the same “a pin is how a flake expresses a branch” argument
 ` release ` above makes for Gentle AI’s own beta channel\.
 

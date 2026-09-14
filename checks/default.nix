@@ -271,12 +271,11 @@ in
     assert !(document.selection ? skills);
     pkgs.runCommandLocal "gentle-ai-check-providers-document-shape" { } ''touch "$out"'';
 
-  # `gentlePiRelease` and `engramRelease` only ever add a `packages` entry
-  # under Pi's provider block, and only for the channel actually chosen off
-  # its default: a document naming neither must render exactly as it did
-  # before either option existed, so that pairing is asserted alongside the
-  # one that carries a source, the same way providersDocumentShape pairs a
-  # field's presence with its absence.
+  # `gentlePiRelease` and `engramRelease` choose Pi install-source overrides,
+  # never document entries. Stable and main both override gentle-pi, while
+  # only a non-stable Engram channel overrides its plugin source; the paired
+  # configurations below assert the document remains free of `packages` in
+  # either case.
   # `providers.pi.packages` and the plugin channels no longer travel through
   # the document at all -- they are gentle-nix's own `--override`/`--extra`
   # arguments to `gentle-nix provision` (see piCombinedPackages,
@@ -306,10 +305,12 @@ in
 
       defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
       overriddenDocument = overriddenConfiguration.config.programs.gentle-ai.document;
+      defaultOverrides = defaultConfiguration.config.programs.gentle-ai.piProvisionOverrides;
       overriddenOverrides = overriddenConfiguration.config.programs.gentle-ai.piProvisionOverrides;
     in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
+    assert defaultOverrides.gentle-pi == "npm:gentle-pi@2.6.4";
     assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@"
       overriddenOverrides.gentle-pi;
     # A store path here would change identity on every rebuild and leave Pi
@@ -355,9 +356,14 @@ in
 
       defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
       overriddenDocument = overriddenConfiguration.config.programs.gentle-ai.document;
+      defaultOverrides = defaultConfiguration.config.programs.gentle-ai.piProvisionOverrides;
       overriddenOverrides = overriddenConfiguration.config.programs.gentle-ai.piProvisionOverrides;
 
       gentleEngramPiPath = overriddenOverrides.gentle-engram;
+
+      defaultOverrideArguments = lib.concatMapStringsSep " " (
+        name: "--override ${lib.escapeShellArg "${name}=${defaultOverrides.${name}}"}"
+      ) (lib.attrNames defaultOverrides);
 
       overrideArguments = lib.concatMapStringsSep " " (
         name: "--override ${lib.escapeShellArg "${name}=${overriddenOverrides.${name}}"}"
@@ -395,12 +401,12 @@ in
         render overridden "$overriddenDocumentFile"
 
         gentle-nix provision --manifest "$PWD/default.manifest.json" --agent pi \
-          --stamp-dir "$PWD/stamps" --print > default.commands
+          --stamp-dir "$PWD/stamps" --print ${defaultOverrideArguments} > default.commands
 
         gentle-nix provision --manifest "$PWD/overridden.manifest.json" --agent pi \
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > overridden.commands
 
-        for want in "pi install npm:gentle-pi" "pi install npm:gentle-engram"; do
+        for want in "pi install npm:gentle-pi@2.6.4" "pi install npm:gentle-engram"; do
           grep -qxF "$want" default.commands || {
             echo "the default configuration no longer runs: $want" >&2
             cat default.commands >&2
@@ -409,7 +415,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-pi@963e17f78490502a1638bcddc73e4207b8224ee6" \
+          "pi install git:github.com/Gentleman-Programming/gentle-pi@857f3203f2afab1339106cf7ba4cb1dd64ec65f4" \
           "pi install ${gentleEngramPiPath}" \
           "${gentleEngramPiPath}/bin/pi-engram init"
         do
@@ -856,6 +862,7 @@ in
         packages = [
           "npm:gentle-pi"
           "npm:gentle-pi@2.4.0"
+          "npm:gentle-pi@2.6.4"
           "git:github.com/Gentleman-Programming/gentle-pi@abc123"
           "npm:gentle-engram"
           "npm:gentle-engram@0.1.12"
@@ -903,6 +910,11 @@ in
         type = "package";
         keep = "git:github.com/Gentleman-Programming/gentle-pi@abc123";
       };
+      packageRuleKeepingStableGentlePi = builtins.toJSON {
+        type = "package";
+        keep = "npm:gentle-pi@2.6.4";
+        wanted = "npm:gentle-pi@2.6.4";
+      };
 
       # Pinning one of Pi's own fixed packages (here pi-btw) retires the bare
       # entry the fixed sequence used to install, keeping only the pinned
@@ -921,10 +933,6 @@ in
 
       npmGentlePi = builtins.toJSON {
         type = "npm";
-        name = "gentle-pi";
-      };
-      gitGentlePi = builtins.toJSON {
-        type = "git";
         name = "gentle-pi";
       };
       npmGentleEngram = builtins.toJSON {
@@ -1036,6 +1044,7 @@ in
           [
             "npm:gentle-pi"
             "npm:gentle-pi@2.4.0"
+            "npm:gentle-pi@2.6.4"
             "git:github.com/Gentleman-Programming/gentle-pi@abc123"
             "npm:gentle-engram"
             "npm:gentle-engram@0.1.12"
@@ -1043,17 +1052,19 @@ in
           ]
         }
 
-        # The stable channel: gentle-pi installs from npm, so every git
-        # gentle-pi entry is displaced; gentle-engram installs from npm too,
-        # so every local entry is displaced, the current plugin path included
-        # -- stable has no local plugin left to except.
+        # The stable channel keeps its exact npm pin and displaces every other
+        # gentle-pi source, including the bare npm spelling, an older version,
+        # and a prior main revision. gentle-engram installs from npm too, so
+        # every local entry is displaced, the current plugin path included.
         ${scenario "stable" "$displacedFixtureFile"
           [
-            gitGentlePi
+            packageRuleKeepingStableGentlePi
             localWithNoException
           ]
           false
           [
+            "npm:gentle-pi"
+            "npm:gentle-pi@2.4.0"
             "git:github.com/Gentleman-Programming/gentle-pi@abc123"
             "../../../../nix/store/xyz-gentle-engram-pi-2.0.0-rc.9"
             "../gentle-ai/plugins/gentle-engram"

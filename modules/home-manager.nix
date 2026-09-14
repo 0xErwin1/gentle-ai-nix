@@ -119,11 +119,11 @@ let
 
   # Pi-only install source overrides, keyed the way the contract's
   # `providers.pi.packages` wants them: by the npm package name the adapter
-  # installs. Present only for a channel actually chosen off its default, so
-  # a default configuration emits nothing here and the document this flake
-  # has always rendered for Pi does not change shape.
+  # installs. gentle-pi is always explicit: stable pins the exact npm release
+  # this flake supports, while main pins its commit SHA. Neither source travels
+  # through the rendered document.
   pluginPackagesFor =
-    optionalAttrs (cfg.gentlePiRelease != "stable") {
+    optionalAttrs (selectedGentlePiRelease ? source || cfg.gentlePiRelease != "stable") {
       gentle-pi = gentlePiSource selectedGentlePiRelease;
     }
     // optionalAttrs (cfg.engramRelease != "stable") {
@@ -1502,10 +1502,10 @@ let
   # or a plugin build now installed by a different path. Each rule names one
   # identity a channel choice displaces; `gentle-ai-retire` reads it back
   # against Pi's own settings.json, never against a copy this module keeps.
-  # gentle-pi's own npm default, spelled the way the fixed sequence's own
-  # unoverridden `pi install npm:<name>` command would spell it -- the
-  # `wanted` a rule compares against when there is no channel override.
-  gentlePiNpmDefault = "npm:gentle-pi";
+  # gentle-pi's stable npm source, pinned to the exact release this flake
+  # provisions. It is the `wanted` spelling the stable rule requires before
+  # it retires a previous gentle-pi source.
+  gentlePiNpmStable = gentlePiSource gentlePiReleases.stable;
   gentleEngramNpmDefault = "npm:gentle-engram";
 
   # Every rule below carries a `wanted` spelling: the exact entry (or, for a
@@ -1535,9 +1535,12 @@ let
       wanted = pluginPackagesFor.gentle-pi;
     }
     ++ lib.optional (cfg.gentlePiRelease == "stable") {
-      type = "git";
-      name = "gentle-pi";
-      wanted = gentlePiNpmDefault;
+      # Stable is pinned too: a bare npm source, an older npm version, or a
+      # prior main revision all name gentle-pi, but only this exact source is
+      # retained after Pi confirms it installed the pinned replacement.
+      type = "package";
+      keep = gentlePiNpmStable;
+      wanted = gentlePiNpmStable;
     }
     ++ lib.optional (cfg.engramRelease != "stable") {
       type = "npm";
@@ -1950,10 +1953,10 @@ in
       description = ''
         Which gentle-pi release Pi installs, by channel.
 
-        `stable` is npm's published release, which is what Pi already
-        installs on its own; choosing it changes nothing about how Pi's
-        packages are provisioned. `main` is the tip of gentle-pi's main
-        branch pinned to a revision, installed from git instead of npm --
+        `stable` is the exact published npm release this flake supports,
+        installed explicitly so a switch cannot silently follow npm's latest
+        tag. `main` is the tip of gentle-pi's main branch pinned to a
+        revision, installed from git instead of npm --
         the same "a pin is how a flake expresses a branch" argument
         `release` above makes for Gentle AI's own beta channel.
 

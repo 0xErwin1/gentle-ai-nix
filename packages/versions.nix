@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "2.8.0";
+    version = "2.9.0";
     owner = "Gentleman-Programming";
-    rev = "v2.8.0";
-    hash = "sha256-CME3JeYS8NSHtNE3fi2krUwK1wP2okPI+Xorf8hMAxs=";
+    rev = "v2.9.0";
+    hash = "sha256-1TIC3gCIa9YPY3z6TvXTlgkIB5HLSsD+YGXfGAogJJo=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,13 +29,12 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # Main's tip is v2.8.0 itself right now, so this channel is even with stable
-  # until the next commit lands.
+  # Main is ahead of the latest stable tag; this channel tracks its tip.
   beta = {
-    version = "2.8.0-main.890ca948";
+    version = "2.8.2-main.e3f53de6";
     owner = "Gentleman-Programming";
-    rev = "890ca948e3430abe8d586ed28773a1c7c9c7af65";
-    hash = "sha256-CME3JeYS8NSHtNE3fi2krUwK1wP2okPI+Xorf8hMAxs=";
+    rev = "e3f53de6cb5b4e944fc02f52469a6d7797dde03f";
+    hash = "sha256-sFAhgb1wkc/jOIyjZT9l9D1MV0FWli5/KPgvZnNCcUI=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
