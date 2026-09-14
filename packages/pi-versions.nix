@@ -13,19 +13,19 @@
 # Refresh main with:
 #   git ls-remote https://github.com/Gentleman-Programming/gentle-pi main
 #
-# `stable` is npm's `gentle-pi@2.6.4`. Pinning the npm source makes a switch
+# `stable` is npm's `gentle-pi@2.7.0`. Pinning the npm source makes a switch
 # converge on the release this flake tested, rather than whatever `latest`
 # resolves to when Pi runs its installer.
 {
   stable = {
-    source = "npm:gentle-pi@2.6.4";
+    source = "npm:gentle-pi@2.7.0";
   };
 
   # Tracks gentle-pi's main the same way versions.nix's beta channel tracks
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   main = {
-    version = "2.6.4-main.7df2f2fb";
-    rev = "7df2f2fb702124e50a79ecfbad6516024136c58f";
+    version = "2.7.0-main.0da9bcca";
+    rev = "0da9bcca894e780ab5f3b1d0ebb27910d722c147";
   };
 }

@@ -167,7 +167,7 @@ not tracked by Nix.
 
 Two of Pi's own packages are picked by channel rather than declared directly.
 `gentlePiRelease = "stable" | "main"` chooses gentle-pi itself: `stable` pins
-`npm:gentle-pi@2.6.4`, so a switch converges on the version this flake supports
+`npm:gentle-pi@2.7.0`, so a switch converges on the version this flake supports
 instead of npm's moving `latest` tag; `main` pins a commit SHA on
 gentle-pi's main branch and installs it from git instead, refreshed the same way
 [`packages/versions.nix`](packages/versions.nix)

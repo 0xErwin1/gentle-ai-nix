@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "2.9.0";
+    version = "2.9.1";
     owner = "Gentleman-Programming";
-    rev = "v2.9.0";
-    hash = "sha256-1TIC3gCIa9YPY3z6TvXTlgkIB5HLSsD+YGXfGAogJJo=";
+    rev = "v2.9.1";
+    hash = "sha256-ZYitdIUDUautUeS0KjWMwgbbrCB4fM5t4c3HJAZnfuk=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -49,10 +49,10 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.9.0-main.1288f42b-declarative-config";
+    version = "2.9.1-main.c3d0290f-declarative-config";
     owner = "0xErwin1";
-    rev = "1288f42bdf115cd394c72f3f8daeb9fb02bf333d";
-    hash = "sha256-jc0nDuenTZcQuFEi32t3pYWTUWPZEH7qSBpAt3UjneY=";
+    rev = "c3d0290fd5f95f4726448a8ff0a8525abf7f3d49";
+    hash = "sha256-uRPln98REvZuW/YImAXPPqYl4t6zqej+t778nYG1tyY=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };

@@ -310,7 +310,7 @@ in
     in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
-    assert defaultOverrides.gentle-pi == "npm:gentle-pi@2.6.4";
+    assert defaultOverrides.gentle-pi == "npm:gentle-pi@2.7.0";
     assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@"
       overriddenOverrides.gentle-pi;
     # A store path here would change identity on every rebuild and leave Pi
@@ -406,7 +406,7 @@ in
         gentle-nix provision --manifest "$PWD/overridden.manifest.json" --agent pi \
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > overridden.commands
 
-        for want in "pi install npm:gentle-pi@2.6.4" "pi install npm:gentle-engram"; do
+        for want in "pi install npm:gentle-pi@2.7.0" "pi install npm:gentle-engram"; do
           grep -qxF "$want" default.commands || {
             echo "the default configuration no longer runs: $want" >&2
             cat default.commands >&2
@@ -415,7 +415,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-pi@7df2f2fb702124e50a79ecfbad6516024136c58f" \
+          "pi install git:github.com/Gentleman-Programming/gentle-pi@0da9bcca894e780ab5f3b1d0ebb27910d722c147" \
           "pi install ${gentleEngramPiPath}" \
           "${gentleEngramPiPath}/bin/pi-engram init"
         do
@@ -862,7 +862,7 @@ in
         packages = [
           "npm:gentle-pi"
           "npm:gentle-pi@2.4.0"
-          "npm:gentle-pi@2.6.4"
+          "npm:gentle-pi@2.7.0"
           "git:github.com/Gentleman-Programming/gentle-pi@abc123"
           "npm:gentle-engram"
           "npm:gentle-engram@0.1.12"
@@ -912,8 +912,8 @@ in
       };
       packageRuleKeepingStableGentlePi = builtins.toJSON {
         type = "package";
-        keep = "npm:gentle-pi@2.6.4";
-        wanted = "npm:gentle-pi@2.6.4";
+        keep = "npm:gentle-pi@2.7.0";
+        wanted = "npm:gentle-pi@2.7.0";
       };
 
       # Pinning one of Pi's own fixed packages (here pi-btw) retires the bare
@@ -1044,7 +1044,7 @@ in
           [
             "npm:gentle-pi"
             "npm:gentle-pi@2.4.0"
-            "npm:gentle-pi@2.6.4"
+            "npm:gentle-pi@2.7.0"
             "git:github.com/Gentleman-Programming/gentle-pi@abc123"
             "npm:gentle-engram"
             "npm:gentle-engram@0.1.12"
