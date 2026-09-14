@@ -415,7 +415,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-pi@857f3203f2afab1339106cf7ba4cb1dd64ec65f4" \
+          "pi install git:github.com/Gentleman-Programming/gentle-pi@7df2f2fb702124e50a79ecfbad6516024136c58f" \
           "pi install ${gentleEngramPiPath}" \
           "${gentleEngramPiPath}/bin/pi-engram init"
         do

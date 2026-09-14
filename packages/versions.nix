@@ -49,10 +49,10 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.8.0-main.5f53c8cb-declarative-config";
+    version = "2.9.0-main.1288f42b-declarative-config";
     owner = "0xErwin1";
-    rev = "5f53c8cb2327e69937fd78191b24ad78b79762ae";
-    hash = "sha256-bc20fQohV9zP0EYOd7io/cNVEBsfOtUS5C7kZcojXKo=";
+    rev = "1288f42bdf115cd394c72f3f8daeb9fb02bf333d";
+    hash = "sha256-jc0nDuenTZcQuFEi32t3pYWTUWPZEH7qSBpAt3UjneY=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
