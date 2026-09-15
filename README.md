@@ -168,9 +168,11 @@ not tracked by Nix.
 Two of Pi's own packages are picked by channel rather than declared directly.
 `gentlePiRelease = "stable" | "main"` chooses gentle-pi itself: `stable` pins
 `npm:gentle-pi@2.7.0`, so a switch converges on the version this flake supports
-instead of npm's moving `latest` tag; `main` pins a commit SHA on
-gentle-pi's main branch and installs it from git instead, refreshed the same way
-[`packages/versions.nix`](packages/versions.nix)
+instead of npm's moving `latest` tag; `main` pins a commit SHA on the canonical
+[`Gentleman-Programming/gentle-shell`](https://github.com/Gentleman-Programming/gentle-shell)
+main branch and installs it from git instead. The repository was renamed, but the
+option remains `gentlePiRelease` and the npm package and Pi package key remain
+`gentle-pi`. It is refreshed the same way [`packages/versions.nix`](packages/versions.nix)
 tracks Gentle AI's own beta channel — `git ls-remote` against the branch, then a
 new pin. `engramRelease = "stable" | "rc"` drives both the Engram binary and,
 when Pi is enabled, which build of Engram's Pi plugin Pi installs, so the wire

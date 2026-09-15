@@ -8,6 +8,7 @@
 let
   lib = pkgs.lib;
   module = self.homeManagerModules.default;
+  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@1964042576d027e3dffccda7d8a72587eada5e8c";
 
   evaluate =
     extraModules:
@@ -311,14 +312,54 @@ in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
     assert defaultOverrides.gentle-pi == "npm:gentle-pi@2.7.0";
-    assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@"
-      overriddenOverrides.gentle-pi;
+    assert overriddenOverrides.gentle-pi == gentleShellMainSource;
     # A store path here would change identity on every rebuild and leave Pi
     # holding two entries for the same plugin, so the source Pi is given is
     # the stable path the plugin is linked into the home directory at, never
     # the store path underneath it.
     assert overriddenOverrides.gentle-engram == "/home/test-user/.pi/gentle-ai/plugins/gentle-engram";
     pkgs.runCommandLocal "gentle-ai-check-pi-packages-document-shape" { } ''touch "$out"'';
+
+  # A repository rename changes the source-derived package name, so the
+  # generic `package` rule cannot retire a former gentle-pi Git source once
+  # main moves to gentle-shell. The migration must be rendered as a guarded
+  # Git rule, and the stable transition must separately retire canonical
+  # gentle-shell only after its pinned npm replacement is present.
+  piLegacyGitMigrationRulesAreRendered =
+    let
+      configurationFor =
+        release:
+        evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              gentlePiRelease = release;
+              providers.pi = {
+                enable = true;
+                provisionPackages = true;
+              };
+            };
+          }
+        ];
+      mainActivation = (configurationFor "main").config.home.activationPackage;
+      stableActivation = (configurationFor "stable").config.home.activationPackage;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-legacy-git-migration-rules"
+      { inherit mainActivation stableActivation; }
+      ''
+        set -euo pipefail
+
+        grep -qF '"name":"gentle-pi","type":"git","wanted":"${gentleShellMainSource}"' "$mainActivation/activate" || {
+          echo "main did not render the guarded legacy gentle-pi Git migration rule" >&2
+          exit 1
+        }
+        grep -qF '"name":"gentle-shell","type":"git","wanted":"npm:gentle-pi@2.7.0"' "$stableActivation/activate" || {
+          echo "stable did not render the guarded canonical gentle-shell Git retirement rule" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
 
   # piPackagesDocumentShape only proves the document carries the right
   # sources; this proves the renderer actually substitutes them into what Pi
@@ -415,7 +456,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-pi@0da9bcca894e780ab5f3b1d0ebb27910d722c147" \
+          "pi install git:github.com/Gentleman-Programming/gentle-shell@1964042576d027e3dffccda7d8a72587eada5e8c" \
           "pi install ${gentleEngramPiPath}" \
           "${gentleEngramPiPath}/bin/pi-engram init"
         do
@@ -493,7 +534,7 @@ in
     in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] document.selection);
     assert extra == [ "git:github.com/x/y@rev" ];
-    assert lib.hasPrefix "git:github.com/Gentleman-Programming/gentle-pi@" overrides.gentle-pi;
+    assert overrides.gentle-pi == gentleShellMainSource;
     pkgs.runCommandLocal "gentle-ai-check-pi-extra-package-document-shape" { } ''touch "$out"'';
 
   # piExtraPackageDocumentShape only proves the module computes the right
@@ -864,6 +905,7 @@ in
           "npm:gentle-pi@2.4.0"
           "npm:gentle-pi@2.7.0"
           "git:github.com/Gentleman-Programming/gentle-pi@abc123"
+          "git:github.com/Gentleman-Programming/gentle-shell@def456"
           "npm:gentle-engram"
           "npm:gentle-engram@0.1.12"
           "../../../../nix/store/xyz-gentle-engram-pi-2.0.0-rc.9"
@@ -872,12 +914,18 @@ in
         ];
       };
 
+      # A failed canonical install leaves the former source present, so its
+      # guarded migration rule must not remove that working plugin yet.
+      legacyGitMigrationWithoutReplacementFixture = {
+        packages = [ "git:github.com/Gentleman-Programming/gentle-pi@abc123" ];
+      };
+
       # The same fixture after a "main" channel's own rules have already
       # converged it once: every entry a rerun of those rules would displace
       # is already gone, so a rerun must remove nothing.
       convergedFixture = {
         packages = [
-          "git:github.com/Gentleman-Programming/gentle-pi@abc123"
+          "git:github.com/Gentleman-Programming/gentle-shell@abc123"
           "../gentle-ai/plugins/gentle-engram"
           "npm:pi-mcp-adapter"
         ];
@@ -901,14 +949,25 @@ in
       # gentle-pi off stable is a pinned git revision too: a rev bump is a
       # source change for the same package, retired the same way a
       # user-declared package's source change is -- by identity, keeping
-      # only the current rev's exact spelling.
+      # only the current rev's exact spelling. The explicit Git rule covers
+      # the old repository name after its canonical replacement is present.
       packageRuleKeepingCurrentGentlePi = builtins.toJSON {
         type = "package";
-        keep = "git:github.com/Gentleman-Programming/gentle-pi@def456";
+        keep = "git:github.com/Gentleman-Programming/gentle-shell@def456";
+      };
+      legacyGentlePiGitMigration = builtins.toJSON {
+        type = "git";
+        name = "gentle-pi";
+        wanted = "git:github.com/Gentleman-Programming/gentle-shell@def456";
       };
       packageRuleKeepingConvergedGentlePi = builtins.toJSON {
         type = "package";
-        keep = "git:github.com/Gentleman-Programming/gentle-pi@abc123";
+        keep = "git:github.com/Gentleman-Programming/gentle-shell@abc123";
+      };
+      canonicalGentleShellGitRetirement = builtins.toJSON {
+        type = "git";
+        name = "gentle-shell";
+        wanted = "npm:gentle-pi@2.7.0";
       };
       packageRuleKeepingStableGentlePi = builtins.toJSON {
         type = "package";
@@ -1009,6 +1068,9 @@ in
         displacedFixtureFile = pkgs.writeText "gentle-ai-pi-settings-displaced.json" (
           builtins.toJSON displacedFixture
         );
+        legacyGitMigrationWithoutReplacementFixtureFile = pkgs.writeText "gentle-ai-pi-settings-legacy-git-migration-without-replacement.json" (
+          builtins.toJSON legacyGitMigrationWithoutReplacementFixture
+        );
         convergedFixtureFile = pkgs.writeText "gentle-ai-pi-settings-converged.json" (
           builtins.toJSON convergedFixture
         );
@@ -1039,6 +1101,7 @@ in
             npmGentlePi
             npmGentleEngram
             packageRuleKeepingCurrentGentlePi
+            legacyGentlePiGitMigration
           ]
           true
           [
@@ -1059,6 +1122,7 @@ in
         ${scenario "stable" "$displacedFixtureFile"
           [
             packageRuleKeepingStableGentlePi
+            canonicalGentleShellGitRetirement
             localWithNoException
           ]
           false
@@ -1066,9 +1130,22 @@ in
             "npm:gentle-pi"
             "npm:gentle-pi@2.4.0"
             "git:github.com/Gentleman-Programming/gentle-pi@abc123"
+            "git:github.com/Gentleman-Programming/gentle-shell@def456"
             "../../../../nix/store/xyz-gentle-engram-pi-2.0.0-rc.9"
             "../gentle-ai/plugins/gentle-engram"
           ]
+        }
+
+        # A failed canonical install leaves the old Git source alone; the
+        # migration rule's wanted guard must protect it until a later switch
+        # installs the canonical replacement.
+        ${scenario "legacy-git-migration-without-replacement"
+          "$legacyGitMigrationWithoutReplacementFixtureFile"
+          [
+            legacyGentlePiGitMigration
+          ]
+          false
+          [ ]
         }
 
         # Re-running the "main" channel's own rules against a settings file
@@ -1077,6 +1154,7 @@ in
           npmGentlePi
           npmGentleEngram
           packageRuleKeepingConvergedGentlePi
+          legacyGentlePiGitMigration
         ] true [ ]}
 
         # A "package" rule matches the source's own package name, not the
@@ -1147,7 +1225,7 @@ in
           if [ "$case" = absent ]; then
             packages='["npm:gentle-pi"]'
           else
-            packages='["npm:gentle-pi","git:github.com/Gentleman-Programming/gentle-pi@newrev"]'
+            packages='["npm:gentle-pi","git:github.com/Gentleman-Programming/gentle-shell@newrev"]'
           fi
           printf '{"packages": %s}' "$packages" > "wanted-$case/.pi/agent/settings.json"
           cat > "wanted-$case/bin/pi" <<'SH'
@@ -1162,7 +1240,7 @@ in
           RECORD="$PWD/wanted-$case.removed"
           touch "$RECORD"
           export RECORD
-          rule=$(jq -n '{type: "npm", name: "gentle-pi", wanted: "git:github.com/Gentleman-Programming/gentle-pi@newrev"}')
+          rule=$(jq -n '{type: "npm", name: "gentle-pi", wanted: "git:github.com/Gentleman-Programming/gentle-shell@newrev"}')
           PATH="$PWD/wanted-$case/bin:$PATH" gentle-ai-retire \
             --settings "$PWD/wanted-$case/.pi/agent/settings.json" \
             --displaced "$rule" 2> "wanted-$case.log"
@@ -1173,7 +1251,7 @@ in
               cat "$RECORD" >&2
               exit 1
             }
-            grep -qF "kept npm:gentle-pi: replacement git:github.com/Gentleman-Programming/gentle-pi@newrev is not installed" "wanted-$case.log" || {
+            grep -qF "kept npm:gentle-pi: replacement git:github.com/Gentleman-Programming/gentle-shell@newrev is not installed" "wanted-$case.log" || {
               echo "no 'kept' line was logged:" >&2
               cat "wanted-$case.log" >&2
               exit 1

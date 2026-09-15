@@ -31,10 +31,10 @@
   # build's evidence channel, so a build from here is never mistaken for stable.
   # Main is ahead of the latest stable tag; this channel tracks its tip.
   beta = {
-    version = "2.8.2-main.e3f53de6";
+    version = "2.9.1-main.70c774f8";
     owner = "Gentleman-Programming";
-    rev = "e3f53de6cb5b4e944fc02f52469a6d7797dde03f";
-    hash = "sha256-sFAhgb1wkc/jOIyjZT9l9D1MV0FWli5/KPgvZnNCcUI=";
+    rev = "70c774f86bffb81c5beb8ebecc2a5175acd55937";
+    hash = "sha256-m471M9FrPbe7hz43FUaanIkCAsobSJOs+Fe/W0nuA/k=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -49,10 +49,10 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   contract = {
-    version = "2.9.1-main.c3d0290f-declarative-config";
+    version = "2.9.1-main.9f2b4c17-declarative-config";
     owner = "0xErwin1";
-    rev = "c3d0290fd5f95f4726448a8ff0a8525abf7f3d49";
-    hash = "sha256-uRPln98REvZuW/YImAXPPqYl4t6zqej+t778nYG1tyY=";
+    rev = "9f2b4c175da5fed438da8802c2dec3f71f60ee9f";
+    hash = "sha256-UnfS64EO9ofyzDGieqo32UyBYy6BAeFDPDDzCWo0nc0=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };

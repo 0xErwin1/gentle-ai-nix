@@ -112,10 +112,11 @@ let
   # gentle-pi is not a derivation this flake builds: Pi installs it itself
   # from whatever source string this resolves to. `stable` already names one
   # directly; every other channel is a revision Pi's own git installer
-  # fetches, so the source is composed from it here instead of being
+  # fetches from the canonical gentle-shell repository, while the package
+  # identity remains gentle-pi. The source is composed here instead of being
   # restated per channel in pi-versions.nix.
   gentlePiSource =
-    release: release.source or "git:github.com/Gentleman-Programming/gentle-pi@${release.rev}";
+    release: release.source or "git:github.com/Gentleman-Programming/gentle-shell@${release.rev}";
 
   # Pi-only install source overrides, keyed the way the contract's
   # `providers.pi.packages` wants them: by the npm package name the adapter
@@ -1534,12 +1535,30 @@ let
       keep = pluginPackagesFor.gentle-pi;
       wanted = pluginPackagesFor.gentle-pi;
     }
+    # The canonical repository was renamed from gentle-pi to gentle-shell.
+    # `package` rules derive identity from the repository tail, so they cannot
+    # recognize the legacy source after that rename. Retire it only after Pi
+    # confirms the canonical source is installed; a failed provisioning leaves
+    # the working legacy plugin in place.
+    ++ lib.optional (cfg.gentlePiRelease != "stable") {
+      type = "git";
+      name = "gentle-pi";
+      wanted = pluginPackagesFor.gentle-pi;
+    }
     ++ lib.optional (cfg.gentlePiRelease == "stable") {
       # Stable is pinned too: a bare npm source, an older npm version, or a
-      # prior main revision all name gentle-pi, but only this exact source is
-      # retained after Pi confirms it installed the pinned replacement.
+      # prior gentle-pi Git revision all name gentle-pi, but only this exact
+      # source is retained after Pi confirms it installed the pinned replacement.
       type = "package";
       keep = gentlePiNpmStable;
+      wanted = gentlePiNpmStable;
+    }
+    # The stable package rule above covers old gentle-pi spellings. Canonical
+    # gentle-shell has a distinct source-derived identity, so retire it through
+    # its own guarded Git rule without duplicating the old-source transition.
+    ++ lib.optional (cfg.gentlePiRelease == "stable") {
+      type = "git";
+      name = "gentle-shell";
       wanted = gentlePiNpmStable;
     }
     ++ lib.optional (cfg.engramRelease != "stable") {
