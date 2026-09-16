@@ -18,6 +18,8 @@
         # set, so a throwaway task can run on cheap models without
         # reconfiguring anything.
         profiles.cheap = {
+          # One effort for the whole profile; an assignment naming its own keeps it.
+          defaultEffort = "low";
           orchestrator = {
             provider = "anthropic";
             model = "claude-haiku";

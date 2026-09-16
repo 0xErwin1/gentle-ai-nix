@@ -1843,6 +1843,49 @@ attribute set of (submodule)
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.defaultEffort
+
+
+
+Reasoning effort every assignment in this profile takes when it
+states none of its own\.
+
+A profile is usually uniform in effort: the one you switch to for a
+cheap task is low throughout, the one for a hard change is high
+throughout\. Repeating that level on every phase says nothing the
+profile does not already say once here\.
+
+It reaches only this profile’s own assignments — ` orchestrator `
+and every entry of ` phases `\. An assignment that states an effort
+keeps it, and ` models ` and ` roles.<id>.model ` are not this
+profile’s to fill\.
+
+Passed through as written, the same way ` effort ` is: which levels
+a client accepts is the client’s own answer, not this module’s\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"high"
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.orchestrator
 
 
@@ -2630,8 +2673,6 @@ false
 
 ## programs\.gentle-ai\.secrets\.envFiles
 
-
-
 Files of ` NAME=value ` lines, each supplying a placeholder\. This is the
 shape a shell-sourced secret file already has, and the shape a sops
 template can render, so an existing one needs no rewriting\.
@@ -2662,6 +2703,8 @@ list of string
 
 
 ## programs\.gentle-ai\.secrets\.merge
+
+
 
 Rendered paths Gentle AI shares with the client itself\. Claude Code
 keeps its OAuth and project history in ` .claude.json `, Codex its

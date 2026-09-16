@@ -77,6 +77,13 @@
         }
       );
 
+      # The constructors a consumer's model assignments are written with.
+      # Pure and provider-agnostic: the ids are whichever ones a machine
+      # actually has installed, so only the constructors are shared.
+      lib = {
+        models = import ./lib/models.nix { inherit (nixpkgs) lib; };
+      };
+
       homeManagerModules.default = import ./modules/home-manager.nix;
 
       checks = forAllSystems (

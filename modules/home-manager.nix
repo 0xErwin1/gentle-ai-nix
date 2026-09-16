@@ -214,6 +214,28 @@ let
         default = null;
         description = "Model this profile's orchestrator runs on.";
       };
+      defaultEffort = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "high";
+        description = ''
+          Reasoning effort every assignment in this profile takes when it
+          states none of its own.
+
+          A profile is usually uniform in effort: the one you switch to for a
+          cheap task is low throughout, the one for a hard change is high
+          throughout. Repeating that level on every phase says nothing the
+          profile does not already say once here.
+
+          It reaches only this profile's own assignments — `orchestrator`
+          and every entry of `phases`. An assignment that states an effort
+          keeps it, and `models` and `roles.<id>.model` are not this
+          profile's to fill.
+
+          Passed through as written, the same way `effort` is: which levels
+          a client accepts is the client's own answer, not this module's.
+        '';
+      };
       phases = mkOption {
         type = types.attrsOf modelAssignmentType;
         default = { };
@@ -913,12 +935,28 @@ let
   # A profile's own shape, nested under providers.<id>.profiles.<name>. The
   # name lives in the enclosing attribute set's key, the same way the
   # contract keys it, so it is not restated inside the value.
+  #
+  # `defaultEffort` fills the effort of every assignment here that states
+  # none of its own. A profile is usually uniform in effort, so stating the
+  # level once says what repeating it on every phase said. Only this
+  # profile's own assignments: one that states an effort keeps it, and
+  # nothing outside the profile is filled.
   profile =
     value:
+    let
+      withDefaultEffort =
+        assignment:
+        if value.defaultEffort == null || assignment.effort != null then
+          assignment
+        else
+          assignment // { effort = value.defaultEffort; };
+    in
     optionalAttrs (value.orchestrator != null) {
-      orchestrator = toModelAssignment value.orchestrator;
+      orchestrator = toModelAssignment (withDefaultEffort value.orchestrator);
     }
-    // whenSet "phaseAssignments" (lib.mapAttrs (_: toModelAssignment) value.phases);
+    // whenSet "phaseAssignments" (
+      lib.mapAttrs (_: assignment: toModelAssignment (withDefaultEffort assignment)) value.phases
+    );
 
   # OpenCode is the one client whose `models` carries full provider-qualified
   # assignments rather than a vocabulary it decodes itself; every other client

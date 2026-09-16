@@ -2717,4 +2717,143 @@ in
     ${lib.getExe self.packages.${system}.gentle-ai-beta} --version
     touch "$out"
   '';
+
+  # flake.nix exports the model constructors as lib.models, and nothing in
+  # them is a provider table: every id a constructor answers to is one the
+  # caller declared, because the ids a machine has installed are its own.
+  # This freezes the shapes -- the names `for` builds from an id and from an
+  # alias, the effort levels, and what an effort leaves behind -- so a
+  # rename is a decision rather than a drift.
+  modelHelpersBuildDeclaredProviders =
+    let
+      models = self.lib.models;
+      shapes = builtins.toJSON {
+        fromAliases = builtins.attrNames (
+          models.for {
+            codex = "openai-codex";
+            nan = "nan";
+          }
+        );
+        fromIds = builtins.attrNames (
+          models.for [
+            "openai-codex"
+            "cloudflare-ai"
+            "nan"
+          ]
+        );
+        generic = models.on "openrouter" "qwen3-coder";
+        levels = builtins.attrNames models.effort;
+        withEffort = models.effort.xhigh ((models.for { nan = "nan"; }).onNan "glm5.3-flash");
+        withoutEffort = (models.for { nan = "nan"; }).onNan "glm5.3-flash";
+      };
+    in
+    pkgs.runCommandLocal "gentle-ai-check-model-helpers-shapes"
+      {
+        inherit shapes;
+        passAsFile = [ "shapes" ];
+      }
+      ''
+        set -euo pipefail
+        grep -q '"onCloudflareAi","onNan","onOpenaiCodex"' "$shapesPath"
+        grep -q '"onCodex","onNan"' "$shapesPath"
+        grep -q '"high","low","max","medium","minimal","off","xhigh"' "$shapesPath"
+        grep -q '"withoutEffort":{"model":"glm5.3-flash","provider":"nan"}' "$shapesPath"
+        grep -q '"withEffort":{"effort":"xhigh","model":"glm5.3-flash","provider":"nan"}' "$shapesPath"
+        grep -q '"generic":{"model":"qwen3-coder","provider":"openrouter"}' "$shapesPath"
+        touch "$out"
+      '';
+
+  # A provider id is the caller's declaration, so `for` refuses one that is
+  # not an id instead of building a name out of nothing: a typo that
+  # produced `onNone` would be a constructor nobody can call.
+  modelHelpersRefuseNonProviderIds =
+    let
+      models = self.lib.models;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-model-helpers-refuse"
+      {
+        notAList = if (builtins.tryEval (models.for 42)).success then "accepted" else "rejected";
+        notAnId = if (builtins.tryEval (models.for [ 7 ])).success then "accepted" else "rejected";
+        emptyId = if (builtins.tryEval (models.for [ "" ])).success then "accepted" else "rejected";
+      }
+      ''
+        set -euo pipefail
+        for outcome in "$notAList" "$notAnId" "$emptyId"; do
+          test "$outcome" = rejected || { echo "models.for accepted a value that is not a provider id" >&2; exit 1; }
+        done
+        touch "$out"
+      '';
+
+  # `defaultEffort` says once what repeating a level on every assignment
+  # said. This proves it reaches every assignment that states none -- in the
+  # document for a client whose profiles travel through it, and in the
+  # rendered tree for Pi, whose profiles do not -- and that an assignment
+  # which states its own effort still wins.
+  defaultEffortFillsProfileAssignmentsWithoutOverridingThem =
+    let
+      models = self.lib.models;
+      declared = models.for {
+        codex = "openai-codex";
+        nan = "nan";
+      };
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers = {
+              pi = {
+                enable = true;
+                activeProfile = "helpers";
+                profiles.helpers = {
+                  defaultEffort = "high";
+                  orchestrator = declared.onCodex "gpt-6-astra";
+                  phases.sdd-apply = declared.onNan "glm5.3-flash";
+                  phases.sdd-verify = models.effort.low (declared.onNan "glm5.3-flash");
+                };
+              };
+              opencode = {
+                enable = true;
+                profiles.helpers = {
+                  defaultEffort = "high";
+                  orchestrator = models.on "anthropic" "claude-haiku";
+                  phases.sdd-apply = models.on "anthropic" "claude-sonnet-5";
+                  phases.sdd-verify = models.effort.low (models.on "anthropic" "claude-sonnet-5");
+                };
+              };
+            };
+          };
+        }
+      ];
+      opencodeHelpers =
+        configuration.config.programs.gentle-ai.document.selection.providers.opencode.profiles.helpers;
+      rendered = configuration.config.programs.gentle-ai.rendered;
+      filled =
+        opencodeHelpers.orchestrator.effort == "high"
+        && opencodeHelpers.phaseAssignments.sdd-apply.effort == "high";
+      kept = opencodeHelpers.phaseAssignments.sdd-verify.effort == "low";
+    in
+    pkgs.runCommandLocal "gentle-ai-check-default-effort-fills-and-yields" { inherit rendered; } ''
+      set -euo pipefail
+      ${lib.optionalString (!filled) ''
+        echo "defaultEffort did not fill a profile assignment that stated no effort" >&2
+        exit 1
+      ''}
+      ${lib.optionalString (!kept) ''
+        echo "defaultEffort overrode an assignment that stated its own effort" >&2
+        exit 1
+      ''}
+
+      profiles="$rendered/tree/.pi/gentle-ai/profiles.json"
+      settings="$rendered/tree/.pi/agent/settings.json"
+
+      test -f "$profiles" || { echo "Pi profiles.json was not rendered" >&2; exit 1; }
+      grep -q '"active": "helpers"' "$profiles" || { echo "the active profile was not written" >&2; exit 1; }
+      grep -q '"nan/glm5.3-flash"' "$profiles" || { echo "the phase model was not written" >&2; exit 1; }
+      grep -q '"thinking": "high"' "$profiles" || { echo "defaultEffort did not reach Pi's phase routing" >&2; exit 1; }
+      grep -q '"thinking": "low"' "$profiles" || { echo "an explicit effort was lost in Pi's phase routing" >&2; exit 1; }
+
+      test -f "$settings" || { echo "Pi settings.json was not rendered" >&2; exit 1; }
+      grep -q '"defaultThinkingLevel": "high"' "$settings" || { echo "defaultEffort did not reach the orchestrator defaults" >&2; exit 1; }
+      touch "$out"
+    '';
 }
