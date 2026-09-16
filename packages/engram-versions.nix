@@ -27,9 +27,9 @@
   # is not the default is the prerelease status itself, not a warning that has
   # to be reprinted every time.
   rc = {
-    version = "2.0.0-rc.11";
-    rev = "v2.0.0-rc.11";
-    hash = "sha256-Zy+RRs9IJ3ETLsiBrxFICdrMpmCnJH2gLR7QjMDNbHA=";
+    version = "2.0.0-rc.12";
+    rev = "v2.0.0-rc.12";
+    hash = "sha256-CXVsKoca3fIl3YSSq7ef14jbYdEc2F0hAmFux5FSFQw=";
     vendorHash = "sha256-Bntymb7T9zk31G6WFQIuulnoeFYg0XPellN1nRVcUFA=";
   };
 }

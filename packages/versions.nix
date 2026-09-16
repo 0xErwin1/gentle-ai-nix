@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "2.9.1";
+    version = "3.0.0";
     owner = "Gentleman-Programming";
-    rev = "v2.9.1";
-    hash = "sha256-ZYitdIUDUautUeS0KjWMwgbbrCB4fM5t4c3HJAZnfuk=";
+    rev = "v3.0.0";
+    hash = "sha256-MdHpA9UfYJdjGzv4WF1v3tCmH86wnPrf/ifv3FuTFeU=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,12 +29,13 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # Main is ahead of the latest stable tag; this channel tracks its tip.
+  # v3.0.0 was tagged from the tip of main, so today this channel and `stable`
+  # name the same tree; the refs differ because main keeps moving.
   beta = {
-    version = "2.9.1-main.70c774f8";
+    version = "3.0.0-main.1a2f6775";
     owner = "Gentleman-Programming";
-    rev = "70c774f86bffb81c5beb8ebecc2a5175acd55937";
-    hash = "sha256-m471M9FrPbe7hz43FUaanIkCAsobSJOs+Fe/W0nuA/k=";
+    rev = "1a2f67751f135fc499a82ac738e4ecb81e68d37d";
+    hash = "sha256-MdHpA9UfYJdjGzv4WF1v3tCmH86wnPrf/ifv3FuTFeU=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -48,11 +49,15 @@
   #
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
+  #
+  # It sits on the 3.0.0 generation rather than on main: the chain behind it is a
+  # stack of PRs, and rebasing that stack is what keeps it mergeable without
+  # upstream having a `config` of its own.
   contract = {
-    version = "2.9.1-main.9f2b4c17-declarative-config";
+    version = "3.0.0-main.90def73c-declarative-config";
     owner = "0xErwin1";
-    rev = "9f2b4c175da5fed438da8802c2dec3f71f60ee9f";
-    hash = "sha256-UnfS64EO9ofyzDGieqo32UyBYy6BAeFDPDDzCWo0nc0=";
+    rev = "90def73cb4b99373f60cd3eaaf9f709ddfc84abd";
+    hash = "sha256-ZFTHIfIKj4yjybkCLvVase5K7vWVRb72UrJYu/y8R4E=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
