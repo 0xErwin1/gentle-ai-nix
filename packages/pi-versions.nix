@@ -26,7 +26,7 @@
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   main = {
-    version = "2.7.0-main.19640425";
-    rev = "1964042576d027e3dffccda7d8a72587eada5e8c";
+    version = "2.7.0-main.64fdc367";
+    rev = "64fdc367f82d43aaef3d529a326b102a0460d62c";
   };
 }
