@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.0.0";
+    version = "3.0.2";
     owner = "Gentleman-Programming";
-    rev = "v3.0.0";
-    hash = "sha256-MdHpA9UfYJdjGzv4WF1v3tCmH86wnPrf/ifv3FuTFeU=";
+    rev = "v3.0.2";
+    hash = "sha256-mCJtf3n0tas2cevJxvxWQcjDLGYVJvMy3uaxtS/ir+w=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,13 +29,15 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.0.0 was tagged from the tip of main, so today this channel and `stable`
-  # name the same tree; the refs differ because main keeps moving.
+  # v3.0.2 was tagged from the tip of main, so today this channel and `stable`
+  # name the same tree; the refs differ because main keeps moving, and the tag
+  # and the commit fetch to the same store path because the archive root is
+  # stripped.
   beta = {
-    version = "3.0.0-main.1a2f6775";
+    version = "3.0.2-main.9bf454d4";
     owner = "Gentleman-Programming";
-    rev = "1a2f67751f135fc499a82ac738e4ecb81e68d37d";
-    hash = "sha256-MdHpA9UfYJdjGzv4WF1v3tCmH86wnPrf/ifv3FuTFeU=";
+    rev = "9bf454d4d40803635bd302451ec8ed08d78bd1f4";
+    hash = "sha256-mCJtf3n0tas2cevJxvxWQcjDLGYVJvMy3uaxtS/ir+w=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -50,14 +52,16 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   #
-  # It sits on the 3.0.0 generation rather than on main: the chain behind it is a
-  # stack of PRs, and rebasing that stack is what keeps it mergeable without
-  # upstream having a `config` of its own.
+  # It sits on a tagged generation rather than on the moving tip of main: the
+  # chain behind it is a stack of PRs, and rebasing that stack is what keeps it
+  # mergeable without upstream having a `config` of its own. It last moved from
+  # v3.0.0 to v3.0.2, which carries upstream's module-path rename to /v3 and the
+  # installer fix built on it; the chain's own diff is unchanged by that rebase.
   contract = {
-    version = "3.0.0-main.90def73c-declarative-config";
+    version = "3.0.2-main.7784118e-declarative-config";
     owner = "0xErwin1";
-    rev = "90def73cb4b99373f60cd3eaaf9f709ddfc84abd";
-    hash = "sha256-ZFTHIfIKj4yjybkCLvVase5K7vWVRb72UrJYu/y8R4E=";
+    rev = "7784118eb5030ab1ea48c9741fe7d1905e95ee7a";
+    hash = "sha256-y3ByRyvAZCUVFp2Eb7xtkhXYJPsimP5n0lvObny62jg=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
