@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.0.2";
+    version = "3.1.0";
     owner = "Gentleman-Programming";
-    rev = "v3.0.2";
-    hash = "sha256-mCJtf3n0tas2cevJxvxWQcjDLGYVJvMy3uaxtS/ir+w=";
+    rev = "v3.1.0";
+    hash = "sha256-Q67yrEKBJdK1c+TYN5N0jM/1nX+Eqa8aHdqVXDN92Wg=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,15 +29,15 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.0.2 was tagged from the tip of main, so today this channel and `stable`
+  # v3.1.0 was tagged from the tip of main, so today this channel and `stable`
   # name the same tree; the refs differ because main keeps moving, and the tag
   # and the commit fetch to the same store path because the archive root is
   # stripped.
   beta = {
-    version = "3.0.2-main.9bf454d4";
+    version = "3.1.0-main.cfc415ce";
     owner = "Gentleman-Programming";
-    rev = "9bf454d4d40803635bd302451ec8ed08d78bd1f4";
-    hash = "sha256-mCJtf3n0tas2cevJxvxWQcjDLGYVJvMy3uaxtS/ir+w=";
+    rev = "cfc415ce4d330ada53ff6ece99f9f11b63956f51";
+    hash = "sha256-Q67yrEKBJdK1c+TYN5N0jM/1nX+Eqa8aHdqVXDN92Wg=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -55,13 +55,14 @@
   # It sits on a tagged generation rather than on the moving tip of main: the
   # chain behind it is a stack of PRs, and rebasing that stack is what keeps it
   # mergeable without upstream having a `config` of its own. It last moved from
-  # v3.0.0 to v3.0.2, which carries upstream's module-path rename to /v3 and the
-  # installer fix built on it; the chain's own diff is unchanged by that rebase.
+  # v3.0.2 to v3.1.0, upstream's ODD work-unit-commit release; the chain's own
+  # diff is unchanged by that rebase, the same 97 files and 8512 insertions it
+  # has carried since v3.0.0.
   contract = {
-    version = "3.0.2-main.7784118e-declarative-config";
+    version = "3.1.0-main.199e1bfe-declarative-config";
     owner = "0xErwin1";
-    rev = "7784118eb5030ab1ea48c9741fe7d1905e95ee7a";
-    hash = "sha256-y3ByRyvAZCUVFp2Eb7xtkhXYJPsimP5n0lvObny62jg=";
+    rev = "199e1bfea57afa942ead8459b1c516b57e7985cb";
+    hash = "sha256-S0J0EzLu1p8RQgmCIopHE4vj56+UvSWRWCi7KM/o3as=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };

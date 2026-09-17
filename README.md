@@ -204,7 +204,7 @@ not tracked by Nix.
 
 Two of Pi's own packages are picked by channel rather than declared directly.
 `gentlePiRelease = "stable" | "main"` chooses gentle-pi itself: `stable` pins
-`npm:gentle-pi@3.1.1`, so a switch converges on the version this flake supports
+`npm:gentle-pi@3.2.0`, so a switch converges on the version this flake supports
 instead of npm's moving `latest` tag; `main` pins a commit SHA on the canonical
 [`Gentleman-Programming/gentle-shell`](https://github.com/Gentleman-Programming/gentle-shell)
 main branch and installs it from git instead. The repository was renamed, but the
