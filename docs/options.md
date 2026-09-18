@@ -1361,6 +1361,51 @@ true
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.package
+
+
+
+This client’s own binary, made available to the renderer\.
+
+Gentle AI decides what to stage for a client by running it: v3\.3\.0
+onward runs ` opencode --version ` to choose between the v1 and v2
+managed runtime assets, and a Nix build sandbox has no client of
+its own\. OpenCode is the client probed today, and it is probed on
+every render rather than only on the ones that use it, because the
+default component set stages the OpenCode logo plugin: even a
+configuration that never mentions OpenCode needs an answer\. Unset,
+` pkgs.opencode ` gives one, and an installation whose OpenCode is a
+different build should name its own – the variant staged follows
+the build that answers, and a mismatch stages the wrong plugin
+directory without saying so\.
+
+Nix never installs this: it is the render’s evidence, not a
+delivered program\. A client whose renderer does not interrogate it
+ignores the value\.
+
+
+
+*Type:*
+null or package
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+pkgs.opencode
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.packages
 
 
@@ -2681,8 +2726,6 @@ string
 
 ## programs\.gentle-ai\.sdd\.mode
 
-
-
 SDD orchestrator mode\.
 
 
@@ -2701,6 +2744,8 @@ null
 
 
 ## programs\.gentle-ai\.sdd\.strictTdd
+
+
 
 Whether SDD phases enforce strict TDD\.
 

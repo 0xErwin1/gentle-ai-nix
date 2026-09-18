@@ -418,6 +418,10 @@ in
           gentleAi
           gentleNixPackage
           pkgs.jq
+          # These checks render the document themselves rather than through the
+          # module's render derivation, so the client the renderer interrogates
+          # has to be on this builder's PATH too.
+          pkgs.opencode
         ];
         defaultDocumentFile = pkgs.writeText "gentle-ai-document-pi-default.json" (
           builtins.toJSON defaultDocument
@@ -428,6 +432,10 @@ in
       }
       ''
         set -euo pipefail
+        # The renderer runs the client to decide which managed assets to
+        # stage, and OpenCode is a Bun binary that wants a writable home.
+        export HOME="$PWD/process-home"
+        mkdir -p "$HOME"
 
         render() {
           local name="$1" doc="$2"
@@ -572,11 +580,19 @@ in
           gentleAi
           gentleNixPackage
           pkgs.jq
+          # These checks render the document themselves rather than through the
+          # module's render derivation, so the client the renderer interrogates
+          # has to be on this builder's PATH too.
+          pkgs.opencode
         ];
         documentFile = pkgs.writeText "gentle-ai-document-pi-extra-package.json" (builtins.toJSON document);
       }
       ''
         set -euo pipefail
+        # The renderer runs the client to decide which managed assets to
+        # stage, and OpenCode is a Bun binary that wants a writable home.
+        export HOME="$PWD/process-home"
+        mkdir -p "$HOME"
 
         mkdir -p home stage
         gentle-ai config render \
@@ -639,11 +655,19 @@ in
           gentleAi
           gentleNixPackage
           pkgs.jq
+          # These checks render the document themselves rather than through the
+          # module's render derivation, so the client the renderer interrogates
+          # has to be on this builder's PATH too.
+          pkgs.opencode
         ];
         documentFile = pkgs.writeText "gentle-ai-document-pi-invalid-extra.json" (builtins.toJSON document);
       }
       ''
         set -euo pipefail
+        # The renderer runs the client to decide which managed assets to
+        # stage, and OpenCode is a Bun binary that wants a writable home.
+        export HOME="$PWD/process-home"
+        mkdir -p "$HOME"
 
         mkdir -p home stage
         gentle-ai config render \
@@ -708,11 +732,19 @@ in
           gentleAi
           gentleNixPackage
           pkgs.jq
+          # These checks render the document themselves rather than through the
+          # module's render derivation, so the client the renderer interrogates
+          # has to be on this builder's PATH too.
+          pkgs.opencode
         ];
         documentFile = pkgs.writeText "gentle-ai-document-pi-pinned-fixed.json" (builtins.toJSON document);
       }
       ''
         set -euo pipefail
+        # The renderer runs the client to decide which managed assets to
+        # stage, and OpenCode is a Bun binary that wants a writable home.
+        export HOME="$PWD/process-home"
+        mkdir -p "$HOME"
 
         mkdir -p home stage
         gentle-ai config render \
@@ -3013,4 +3045,63 @@ in
       grep -q '"defaultThinkingLevel": "high"' "$settings" || { echo "defaultEffort did not reach the orchestrator defaults" >&2; exit 1; }
       touch "$out"
     '';
+
+  # Gentle AI chooses between its v1 and v2 managed OpenCode assets by running
+  # the client, and it does that on every render rather than only on the ones
+  # that use OpenCode: the default component set stages the OpenCode logo
+  # plugin, so even a configuration that never mentions OpenCode needs an
+  # answer. A build sandbox has no client of its own, which is what the
+  # module's `providers.<name>.package` and its `pkgs.opencode` fallback are
+  # for. This proves the seam resolves and that the staged asset set follows
+  # the client that answered.
+  openCodeRuntimeProbeResolvesThroughTheDeclaredClient =
+    let
+      configurationFor =
+        extra:
+        evaluate [
+          {
+            programs.gentle-ai = lib.recursiveUpdate {
+              enable = true;
+              providers.opencode = {
+                enable = true;
+                package = pkgs.opencode;
+              };
+            } extra;
+          }
+        ];
+      defaultComponents = (configurationFor { }).config.programs.gentle-ai.rendered;
+      declaredComponents =
+        (configurationFor {
+          components.sdd.enable = true;
+        }).config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-opencode-runtime-probe"
+      {
+        inherit defaultComponents declaredComponents;
+      }
+      ''
+        set -euo pipefail
+
+        # The default component set is why a configuration that names no
+        # component needs a client at all: without the seam this tree is not
+        # produced.
+        test -d "$defaultComponents/tree" || {
+          echo "the default component set did not render" >&2
+          exit 1
+        }
+
+        # nixpkgs' OpenCode is a v1 build, so the v1 directory is the one the
+        # probe has to select.
+        plugins="$declaredComponents/tree/.config/opencode/plugins"
+        test -f "$plugins/skill-registry.ts" || {
+          echo "the v1 managed SDD plugin was not staged" >&2
+          exit 1
+        }
+        test -d "$declaredComponents/tree/.config/opencode/plugins-v2" && {
+          echo "the v2 asset set was staged for a v1 client" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
 }

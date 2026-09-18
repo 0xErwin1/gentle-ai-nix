@@ -29,15 +29,14 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.3.0 was tagged from the tip of main, so today this channel and `stable`
-  # name the same tree; the refs differ because main keeps moving, and the tag
-  # and the commit fetch to the same store path because the archive root is
-  # stripped.
+  # v3.3.0 was tagged from the tip of main, and main has moved since, so the tag
+  # and the commit are different revisions that fetch to different store paths --
+  # the tag is the last release, not the branch.
   beta = {
-    version = "3.3.0-main.e28af0fd";
+    version = "3.3.0-main.b626a1fd";
     owner = "Gentleman-Programming";
-    rev = "e28af0fd7f8a11b5ee1089b3e13465a500590c41";
-    hash = "sha256-an8AMBCojIdigvb/3+THNOIwJqk2ZyHlb4Xc0PzzcEc=";
+    rev = "b626a1fdeda85f19b702d461201e3647d7c64a0b";
+    hash = "sha256-FKZcekN/TAenpDWJUhULFnBalDphRBs66dxOI/SuFzA=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -52,23 +51,22 @@
   # When the contract lands upstream, this entry goes away and `stable` becomes
   # the default again.
   #
-  # It sits on a tagged generation rather than on the moving tip of main: the
-  # chain behind it is a stack of PRs, and rebasing that stack is what keeps it
-  # mergeable without upstream having a `config` of its own.
+  # It sits on the tip of main rather than on a release tag: the chain is a
+  # stack of PRs rebased onto whatever main is, which is what keeps it mergeable
+  # without upstream having a `config` of its own. It is rebased as one unit and
+  # carries that feature and nothing else, so nothing from outside the
+  # declarative configuration contract justifies a commit here.
   #
-  # It is deliberately one generation behind `stable`. v3.3.0 is the first
-  # release whose renderer probes the OpenCode runtime (`opencode --version`, see
-  # internal/opencode/runtime.go) to choose between the v1 and v2 managed
-  # assets, and a Nix build sandbox has no client binary to probe: rendering
-  # this module's document fails there with "OpenCode runtime version
-  # unavailable or unsupported". The chain is rebased onto v3.3.0 in the fork,
-  # but this channel stays on the last generation that renders without the
-  # client in the build environment until the flake can supply it.
+  # Rendering through it needs the clients Gentle AI interrogates. v3.3.0 taught
+  # the renderer to run `opencode --version` and choose between the v1 and v2
+  # managed assets, which a build sandbox cannot answer on its own: that is what
+  # `providers.<name>.package` exists for, and why an OpenCode configuration
+  # without it fails to render from this generation on.
   contract = {
-    version = "3.2.1-main.8fa59a4a-declarative-config";
+    version = "3.3.0-main.08712268-declarative-config";
     owner = "0xErwin1";
-    rev = "8fa59a4a8ff0ce5f15097966a21d191c13cec53a";
-    hash = "sha256-x2p0RXrqP9Nt/gfHROvO28ttFyIPizlBZLR7ld1gGTM=";
+    rev = "08712268898a8ea99ae5ddb303541f8cda25ff27";
+    hash = "sha256-2F7klK7wEcPsstVWF/ATO/aJ9/SCFwb00Tuastd0hvc=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };

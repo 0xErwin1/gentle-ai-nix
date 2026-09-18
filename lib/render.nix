@@ -23,6 +23,14 @@
 
   gentle-ai,
 
+  # The clients this render may interrogate, by their own binary. Gentle AI
+  # decides what to stage for a client by running it -- v3.3.0 onward runs
+  # `opencode --version` to choose between the v1 and v2 managed runtime
+  # assets -- and a build sandbox has no client on PATH. Handing it the
+  # declared one is what keeps that decision, rather than the version, the
+  # thing the client's own binary answers.
+  clientPackages ? [ ],
+
   name ? "gentle-ai-config",
 }:
 
@@ -41,6 +49,12 @@ runCommandLocal name
     # build from depending on whatever the sandbox happens to expose.
     export HOME="$PWD/render-home"
     mkdir -p "$HOME" "$out/tree"
+
+    # Ahead of the sandbox's own PATH, so a client a probe looks for is this
+    # one and not whatever a build input happens to drag in.
+    ${lib.optionalString (clientPackages != [ ]) ''
+      export PATH="${lib.makeBinPath clientPackages}:$PATH"
+    ''}
 
     # Gentle AI reports a rejected document as diagnostics on stdout and fails.
     # The report is captured rather than streamed so a successful render leaves

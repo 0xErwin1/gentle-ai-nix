@@ -341,6 +341,18 @@ by a Pi package still resolves in the runtimes that pass `--no-extensions`
 | The tree is linked recursively | Every file is its own symlink, so unrelated files in the same directories are left alone and a genuine collision is reported instead of one module shadowing another's directory. |
 | Nothing is rewritten at activation | Activation only links what was already rendered and verified at build time. |
 
+Gentle AI decides some things by running the client rather than by reading the
+configuration. Since v3.3.0 the renderer runs `opencode --version` to choose
+between its v1 and v2 managed assets, and it does that on **every** render, not
+only on the ones that use OpenCode: the default component set stages the
+OpenCode logo plugin. A build sandbox has no client on PATH, so
+`providers.opencode.package` is how an installation names the OpenCode it
+actually runs. Unset, `pkgs.opencode` answers -- which is your overlay's
+OpenCode if you define one, so declaring the client once in an overlay is
+usually enough. The variant staged follows whichever build answers, so an
+OpenCode installed outside Nix should be named here rather than left to the
+default.
+
 ## Releases
 
 Gentle AI is built per channel, selected declaratively:

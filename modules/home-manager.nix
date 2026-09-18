@@ -448,6 +448,31 @@ let
           '';
         };
 
+        package = mkOption {
+          type = types.nullOr types.package;
+          default = null;
+          example = literalExpression "pkgs.opencode";
+          description = ''
+            This client's own binary, made available to the renderer.
+
+            Gentle AI decides what to stage for a client by running it: v3.3.0
+            onward runs `opencode --version` to choose between the v1 and v2
+            managed runtime assets, and a Nix build sandbox has no client of
+            its own. OpenCode is the client probed today, and it is probed on
+            every render rather than only on the ones that use it, because the
+            default component set stages the OpenCode logo plugin: even a
+            configuration that never mentions OpenCode needs an answer. Unset,
+            `pkgs.opencode` gives one, and an installation whose OpenCode is a
+            different build should name its own -- the variant staged follows
+            the build that answers, and a mismatch stages the wrong plugin
+            directory without saying so.
+
+            Nix never installs this: it is the render's evidence, not a
+            delivered program. A client whose renderer does not interrogate it
+            ignores the value.
+          '';
+        };
+
         packages = mkOption {
           type = types.attrsOf types.str;
           default = { };
@@ -967,6 +992,26 @@ let
 
   enabledProviders = lib.filterAttrs (_: provider: provider.enable) cfg.providers;
 
+  # The binaries the renderer interrogates, in a stable order. Gentle AI decides
+  # what to stage for a client by running it, and OpenCode is the one it probes
+  # today -- on every render, not only on the ones that use it: the default
+  # component set stages the OpenCode logo plugin, so a configuration that never
+  # mentions OpenCode still needs a client to answer. `pkgs.opencode` is that
+  # answer when the configuration names none, and `providers.opencode.package`
+  # is how an installation running a different build says so.
+  opencodeClient =
+    if (cfg.providers.opencode.package or null) != null then
+      cfg.providers.opencode.package
+    else
+      pkgs.opencode or null;
+
+  clientPackages = lib.filter (package: package != null) (
+    [ opencodeClient ]
+    ++ lib.mapAttrsToList (_: provider: provider.package) (
+      lib.filterAttrs (name: provider: name != "opencode" && provider.package != null) enabledProviders
+    )
+  );
+
   providerSettings = lib.filterAttrs (_: value: value != { }) (
     lib.mapAttrs (_: provider: provider.settings) enabledProviders
   );
@@ -1411,6 +1456,7 @@ let
   base = pkgs.callPackage ../lib/render.nix { } {
     inherit document;
     inherit (config.home) homeDirectory;
+    inherit clientPackages;
     gentle-ai = cfg.package;
   };
 
