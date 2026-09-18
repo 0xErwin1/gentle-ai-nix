@@ -55,16 +55,16 @@
           gentle-ai-stable = gentleAiFor releases.stable;
           gentle-ai-beta = gentleAiFor releases.beta;
 
-          # Engram's candidate, selectable and never the default: its own
-          # release notes ask that a stable installation stay available rather
-          # than be replaced by it.
-          engram-rc = engramFor engramReleases.rc;
+          # Engram's branch channel, selectable and never the default: a
+          # tagged release is what an installation should target, and main is
+          # where the plugin line moves ahead of the last tag.
+          engram-main = engramFor engramReleases.main;
 
-          # Engram's Pi plugin, built from the same rc revision as engram-rc,
-          # for Pi to install by local path when `engramRelease` moves off
-          # stable.
+          # Engram's Pi plugin, built from the same main revision as
+          # engram-main, for Pi to install by local path when `engramRelease`
+          # moves off stable.
           gentle-engram-pi = pkgs.callPackage ./packages/gentle-engram-pi.nix {
-            release = engramReleases.rc;
+            release = engramReleases.main;
           };
 
           # Reference documentation for every option this module declares.

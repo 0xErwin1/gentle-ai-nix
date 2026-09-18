@@ -11,7 +11,7 @@
   # plugin are built from the same revision, because a store with one
   # Engram's wire format and another's Pi plugin is not a configuration
   # anyone chose on purpose.
-  release ? (import ./engram-versions.nix).rc,
+  release ? (import ./engram-versions.nix).stable,
 }:
 
 # Engram's Pi plugin lives at plugin/pi inside the same repository the Go

@@ -273,10 +273,11 @@ in
     pkgs.runCommandLocal "gentle-ai-check-providers-document-shape" { } ''touch "$out"'';
 
   # `gentlePiRelease` and `engramRelease` choose Pi install-source overrides,
-  # never document entries. Stable and main both override gentle-pi, while
-  # only a non-stable Engram channel overrides its plugin source; the paired
-  # configurations below assert the document remains free of `packages` in
-  # either case.
+  # never document entries. Stable and main both override gentle-pi, and both
+  # channels override the Engram plugin -- on stable with the npm version the
+  # release ships, off stable with the plugin built from the same revision as
+  # the binary. The paired configurations below assert the document remains
+  # free of `packages` in either case.
   # `providers.pi.packages` and the plugin channels no longer travel through
   # the document at all -- they are gentle-nix's own `--override`/`--extra`
   # arguments to `gentle-nix provision` (see piCombinedPackages,
@@ -301,7 +302,7 @@ in
       defaultConfiguration = configurationFor { };
       overriddenConfiguration = configurationFor {
         gentlePiRelease = "main";
-        engramRelease = "rc";
+        engramRelease = "main";
       };
 
       defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
@@ -312,6 +313,9 @@ in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
     assert defaultOverrides.gentle-pi == "npm:gentle-pi@3.2.0";
+    # Stable pins the plugin to the version the release ships, never npm's
+    # moving `latest`, which is already ahead of it.
+    assert defaultOverrides.gentle-engram == "npm:gentle-engram@0.1.13";
     assert overriddenOverrides.gentle-pi == gentleShellMainSource;
     # A store path here would change identity on every rebuild and leave Pi
     # holding two entries for the same plugin, so the source Pi is given is
@@ -392,7 +396,7 @@ in
       defaultConfiguration = configurationFor { };
       overriddenConfiguration = configurationFor {
         gentlePiRelease = "main";
-        engramRelease = "rc";
+        engramRelease = "main";
       };
 
       defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
@@ -447,7 +451,7 @@ in
         gentle-nix provision --manifest "$PWD/overridden.manifest.json" --agent pi \
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > overridden.commands
 
-        for want in "pi install npm:gentle-pi@3.2.0" "pi install npm:gentle-engram"; do
+        for want in "pi install npm:gentle-pi@3.2.0" "pi install npm:gentle-engram@0.1.13"; do
           grep -qxF "$want" default.commands || {
             echo "the default configuration no longer runs: $want" >&2
             cat default.commands >&2
@@ -488,7 +492,7 @@ in
             programs.gentle-ai = {
               enable = true;
               providers.pi.enable = true;
-              engramRelease = "rc";
+              engramRelease = "main";
               secrets.merge = [ ".pi/agent/settings.json" ];
               overrideRendered =
                 tree:

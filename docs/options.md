@@ -573,10 +573,12 @@ moving together, because a store with one Engram’s wire format and
 another’s Pi plugin is not a configuration anyone chose on purpose\.
 
 ` stable ` is the newest tagged release, and Pi installs its plugin
-from npm as it always has\. ` rc ` is the 2\.0 candidate selectable in
-engram-versions\.nix; choosing it also has Pi install the plugin
-built from that same revision, so the harness binary and the plugin
-can never drift apart\. The build is linked into the rendered tree at
+from npm pinned to the exact version that release ships, so the
+binary and the plugin are the pair this flake tested rather than
+whatever ` latest ` resolves to\. ` main ` tracks the tip of Engram’s
+default branch; choosing it has Pi install the plugin built from
+that same revision instead of anything from npm, so the two can
+never drift apart\. The build is linked into the rendered tree at
 ` .pi/gentle-ai/plugins/gentle-engram `, a path stable across rebuilds,
 rather than installed from its own store path directly: Pi records a
 local source by its path, so the store path itself would change
@@ -589,7 +591,7 @@ to, but not which plugin build Pi installs\.
 
 
 *Type:*
-one of “rc”, “stable”
+one of “main”, “stable”
 
 
 

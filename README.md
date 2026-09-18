@@ -107,18 +107,19 @@ Engram is a component, not something to wire by hand: `components.engram.enable`
 
 Engram is built per channel too, in
 [`packages/engram-versions.nix`](packages/engram-versions.nix). `stable` is the
-default and the only one a plain `engramPackage` resolves to. The 2.0 candidate
-is available as `engram-rc`, and taking it is a decision written into the
+default and the only one a plain `engramPackage` resolves to. `main` tracks the
+tip of Engram's default branch, and taking it is a decision written into the
 configuration rather than a version bump that arrives with a flake update:
 
 ```nix
-programs.gentle-ai.engramPackage = gentle-ai-nix.packages.${pkgs.system}.engram-rc;
+programs.gentle-ai.engramPackage = gentle-ai-nix.packages.${pkgs.system}.engram-main;
 ```
 
-Its own release notes ask that a stable installation stay available rather than
-be replaced, and two of its named risk areas apply to any store with history:
-legacy sessions with blank ownership, which `engram doctor` reports, and
-Pi/OpenCode session attribution becoming fail-closed on the runtime identity.
+Engram's two lines move independently — the Go binary on tags, the Pi plugin on
+npm — and `main` is where the plugin gets ahead of the last one. `stable` pins
+the plugin to the version its release actually ships; `main` builds the plugin
+from the same revision as the binary and installs it by path, so the pair cannot
+drift apart there by construction.
 
 A community tool takes the same shape one level down. `communityTools.codegraph.enable` writes the guidance, `communityTools.codegraph.package` is where its binary comes from, and the CLI call that points it at the declared clients runs at activation from the commands Gentle AI put in the manifest:
 
@@ -211,10 +212,11 @@ main branch and installs it from git instead. The repository was renamed, but th
 option remains `gentlePiRelease` and the npm package and Pi package key remain
 `gentle-pi`. It is refreshed the same way [`packages/versions.nix`](packages/versions.nix)
 tracks Gentle AI's own beta channel — `git ls-remote` against the branch, then a
-new pin. `engramRelease = "stable" | "rc"` drives both the Engram binary and,
+new pin. `engramRelease = "stable" | "main"` drives both the Engram binary and,
 when Pi is enabled, which build of Engram's Pi plugin Pi installs, so the wire
-format and the plugin can never drift apart: on `rc` the plugin is built from
-that same Engram revision and linked into the rendered tree at
+format and the plugin can never drift apart: on `stable` the plugin comes from
+npm pinned to the exact version the release ships, and on `main` it is built
+from that same Engram revision and linked into the rendered tree at
 `.pi/gentle-ai/plugins/gentle-engram`, installed by path because gentle-pi's
 git installer cannot reach a subdirectory of a repository.
 

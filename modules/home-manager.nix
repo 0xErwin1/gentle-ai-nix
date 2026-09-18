@@ -134,8 +134,14 @@ let
     optionalAttrs (selectedGentlePiRelease ? source || cfg.gentlePiRelease != "stable") {
       gentle-pi = gentlePiSource selectedGentlePiRelease;
     }
-    // optionalAttrs (cfg.engramRelease != "stable") {
-      gentle-engram = gentleEngramPiHomePath;
+    // {
+      # Always an override, on every channel: on stable it pins the npm
+      # source to the version the release ships, and off stable it swaps in
+      # the plugin built from the same revision as the binary. Without it,
+      # Pi's fixed sequence installs the bare npm source, which is npm's
+      # moving `latest`.
+      gentle-engram =
+        if cfg.engramRelease != "stable" then gentleEngramPiHomePath else gentleEngramNpmDefault;
     };
 
   # The npm package names `gentle-nix provision`'s Pi adapter always installs
@@ -1618,7 +1624,16 @@ let
   # provisions. It is the `wanted` spelling the stable rule requires before
   # it retires a previous gentle-pi source.
   gentlePiNpmStable = gentlePiSource gentlePiReleases.stable;
-  gentleEngramNpmDefault = "npm:gentle-engram";
+
+  # gentle-engram's stable npm source, pinned the same way and for the same
+  # reason. npm's `latest` here is not the version the Engram release ships:
+  # 2.0.0 carries `gentle-engram@0.1.13` while `latest` already resolves to
+  # 0.1.14, whose `mem_list_projects` calls a route the 2.0.0 binary does not
+  # serve. Pinning is what makes a switch converge on the pair this flake
+  # tested, rather than on whatever `latest` happens to be. Off stable the
+  # plugin is a local path instead, built from the same revision as the
+  # binary.
+  gentleEngramNpmDefault = "npm:gentle-engram@0.1.13";
 
   # Every rule below carries a `wanted` spelling: the exact entry (or, for a
   # local path, the location it resolves to) that has to already be present
@@ -2106,10 +2121,12 @@ in
         another's Pi plugin is not a configuration anyone chose on purpose.
 
         `stable` is the newest tagged release, and Pi installs its plugin
-        from npm as it always has. `rc` is the 2.0 candidate selectable in
-        engram-versions.nix; choosing it also has Pi install the plugin
-        built from that same revision, so the harness binary and the plugin
-        can never drift apart. The build is linked into the rendered tree at
+        from npm pinned to the exact version that release ships, so the
+        binary and the plugin are the pair this flake tested rather than
+        whatever `latest` resolves to. `main` tracks the tip of Engram's
+        default branch; choosing it has Pi install the plugin built from
+        that same revision instead of anything from npm, so the two can
+        never drift apart. The build is linked into the rendered tree at
         `.pi/gentle-ai/plugins/gentle-engram`, a path stable across rebuilds,
         rather than installed from its own store path directly: Pi records a
         local source by its path, so the store path itself would change
