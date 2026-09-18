@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.2.0";
+    version = "3.2.1";
     owner = "Gentleman-Programming";
-    rev = "v3.2.0";
-    hash = "sha256-20quvfNYaP6PIOPkIPAcUMTBAHaVaqHp/dRxQXVUB38=";
+    rev = "v3.2.1";
+    hash = "sha256-+l1pQIxVsv7MeyteJwMfQku1IqhHcF9Yn4Qrxi6qey4=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,15 +29,15 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.2.0 was tagged from the tip of main, so today this channel and `stable`
+  # v3.2.1 was tagged from the tip of main, so today this channel and `stable`
   # name the same tree; the refs differ because main keeps moving, and the tag
   # and the commit fetch to the same store path because the archive root is
   # stripped.
   beta = {
-    version = "3.2.0-main.e8811b53";
+    version = "3.2.1-main.e7729359";
     owner = "Gentleman-Programming";
-    rev = "e8811b53a736ca160755b370b4d19ce7210365e0";
-    hash = "sha256-20quvfNYaP6PIOPkIPAcUMTBAHaVaqHp/dRxQXVUB38=";
+    rev = "e7729359fd9d6cb691ed2a88e8f72b1372f7c92e";
+    hash = "sha256-+l1pQIxVsv7MeyteJwMfQku1IqhHcF9Yn4Qrxi6qey4=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -55,14 +55,14 @@
   # It sits on a tagged generation rather than on the moving tip of main: the
   # chain behind it is a stack of PRs, and rebasing that stack is what keeps it
   # mergeable without upstream having a `config` of its own. It last moved from
-  # v3.1.0 to v3.2.0, upstream's telemetry release; the chain's own diff is
+  # v3.2.0 to v3.2.1, upstream's ODD delegation release; the chain's own diff is
   # unchanged by that rebase, the same 97 files and 8512 insertions it has
   # carried since v3.0.0.
   contract = {
-    version = "3.2.0-main.b43d8a39-declarative-config";
+    version = "3.2.1-main.8fa59a4a-declarative-config";
     owner = "0xErwin1";
-    rev = "b43d8a392df6b689b7e34896177768850fff8e4a";
-    hash = "sha256-EYWOD4UJlkUSZnyLj0rWKsme882BEhyysNadZVEc7j8=";
+    rev = "8fa59a4a8ff0ce5f15097966a21d191c13cec53a";
+    hash = "sha256-x2p0RXrqP9Nt/gfHROvO28ttFyIPizlBZLR7ld1gGTM=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
