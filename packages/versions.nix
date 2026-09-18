@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.1.0";
+    version = "3.2.0";
     owner = "Gentleman-Programming";
-    rev = "v3.1.0";
-    hash = "sha256-Q67yrEKBJdK1c+TYN5N0jM/1nX+Eqa8aHdqVXDN92Wg=";
+    rev = "v3.2.0";
+    hash = "sha256-20quvfNYaP6PIOPkIPAcUMTBAHaVaqHp/dRxQXVUB38=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,15 +29,15 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.1.0 was tagged from the tip of main, so today this channel and `stable`
+  # v3.2.0 was tagged from the tip of main, so today this channel and `stable`
   # name the same tree; the refs differ because main keeps moving, and the tag
   # and the commit fetch to the same store path because the archive root is
   # stripped.
   beta = {
-    version = "3.1.0-main.cfc415ce";
+    version = "3.2.0-main.e8811b53";
     owner = "Gentleman-Programming";
-    rev = "cfc415ce4d330ada53ff6ece99f9f11b63956f51";
-    hash = "sha256-Q67yrEKBJdK1c+TYN5N0jM/1nX+Eqa8aHdqVXDN92Wg=";
+    rev = "e8811b53a736ca160755b370b4d19ce7210365e0";
+    hash = "sha256-20quvfNYaP6PIOPkIPAcUMTBAHaVaqHp/dRxQXVUB38=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -55,14 +55,14 @@
   # It sits on a tagged generation rather than on the moving tip of main: the
   # chain behind it is a stack of PRs, and rebasing that stack is what keeps it
   # mergeable without upstream having a `config` of its own. It last moved from
-  # v3.0.2 to v3.1.0, upstream's ODD work-unit-commit release; the chain's own
-  # diff is unchanged by that rebase, the same 97 files and 8512 insertions it
-  # has carried since v3.0.0.
+  # v3.1.0 to v3.2.0, upstream's telemetry release; the chain's own diff is
+  # unchanged by that rebase, the same 97 files and 8512 insertions it has
+  # carried since v3.0.0.
   contract = {
-    version = "3.1.0-main.199e1bfe-declarative-config";
+    version = "3.2.0-main.b43d8a39-declarative-config";
     owner = "0xErwin1";
-    rev = "199e1bfea57afa942ead8459b1c516b57e7985cb";
-    hash = "sha256-S0J0EzLu1p8RQgmCIopHE4vj56+UvSWRWCi7KM/o3as=";
+    rev = "b43d8a392df6b689b7e34896177768850fff8e4a";
+    hash = "sha256-EYWOD4UJlkUSZnyLj0rWKsme882BEhyysNadZVEc7j8=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
