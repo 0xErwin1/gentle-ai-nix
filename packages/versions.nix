@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.2.1";
+    version = "3.3.0";
     owner = "Gentleman-Programming";
-    rev = "v3.2.1";
-    hash = "sha256-+l1pQIxVsv7MeyteJwMfQku1IqhHcF9Yn4Qrxi6qey4=";
+    rev = "v3.3.0";
+    hash = "sha256-an8AMBCojIdigvb/3+THNOIwJqk2ZyHlb4Xc0PzzcEc=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,15 +29,15 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.2.1 was tagged from the tip of main, so today this channel and `stable`
+  # v3.3.0 was tagged from the tip of main, so today this channel and `stable`
   # name the same tree; the refs differ because main keeps moving, and the tag
   # and the commit fetch to the same store path because the archive root is
   # stripped.
   beta = {
-    version = "3.2.1-main.e7729359";
+    version = "3.3.0-main.e28af0fd";
     owner = "Gentleman-Programming";
-    rev = "e7729359fd9d6cb691ed2a88e8f72b1372f7c92e";
-    hash = "sha256-+l1pQIxVsv7MeyteJwMfQku1IqhHcF9Yn4Qrxi6qey4=";
+    rev = "e28af0fd7f8a11b5ee1089b3e13465a500590c41";
+    hash = "sha256-an8AMBCojIdigvb/3+THNOIwJqk2ZyHlb4Xc0PzzcEc=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -54,10 +54,16 @@
   #
   # It sits on a tagged generation rather than on the moving tip of main: the
   # chain behind it is a stack of PRs, and rebasing that stack is what keeps it
-  # mergeable without upstream having a `config` of its own. It last moved from
-  # v3.2.0 to v3.2.1, upstream's ODD delegation release; the chain's own diff is
-  # unchanged by that rebase, the same 97 files and 8512 insertions it has
-  # carried since v3.0.0.
+  # mergeable without upstream having a `config` of its own.
+  #
+  # It is deliberately one generation behind `stable`. v3.3.0 is the first
+  # release whose renderer probes the OpenCode runtime (`opencode --version`, see
+  # internal/opencode/runtime.go) to choose between the v1 and v2 managed
+  # assets, and a Nix build sandbox has no client binary to probe: rendering
+  # this module's document fails there with "OpenCode runtime version
+  # unavailable or unsupported". The chain is rebased onto v3.3.0 in the fork,
+  # but this channel stays on the last generation that renders without the
+  # client in the build environment until the flake can supply it.
   contract = {
     version = "3.2.1-main.8fa59a4a-declarative-config";
     owner = "0xErwin1";
