@@ -11,19 +11,21 @@ import (
 	"github.com/0xErwin1/gentle-ai-nix/internal/pirouting"
 )
 
-// runPi dispatches "gentle-nix pi <subcommand>". "routing" is the only
-// subcommand today; the nesting exists so a later Pi-only concern (packages
-// already live under gentle-nix provision's own flags) has somewhere to go
-// without a new top-level verb.
+// runPi dispatches "gentle-nix pi <subcommand>". "routing" and "models"
+// are the only subcommands today; the nesting exists so a later Pi-only
+// concern (packages already live under gentle-nix provision's own flags)
+// has somewhere to go without a new top-level verb.
 func runPi(args []string) (int, error) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "usage: gentle-nix pi routing [flags]")
+		fmt.Fprintln(os.Stderr, "usage: gentle-nix pi routing|models [flags]")
 		return 2, nil
 	}
 
 	switch args[0] {
 	case "routing":
 		return runPiRouting(args[1:])
+	case "models":
+		return runPiModels(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "gentle-nix pi: unknown subcommand %q\n", args[0])
 		return 2, nil

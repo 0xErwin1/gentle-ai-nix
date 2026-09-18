@@ -320,6 +320,12 @@ Renaming or defining roles is not something Gentle AI does imperatively, so
 post-processing of the store tree `gentle-ai config render` already
 produced, for the five clients that can express a role at all.
 
+`gentle-nix pi routing` and `gentle-nix pi models` are the same kind of
+post-processing step for Pi. The latter writes Pi's own custom-provider
+overlay (`~/.pi/agent/models.json`), which exists so a provider registered
+by a Pi package still resolves in the runtimes that pass `--no-extensions`
+-- notably the review host relay's locked-down reviewer subprocess.
+
 | Decision | Why |
 |----------|-----|
 | Rendering happens in a derivation | The result is a store path: reproducible, cacheable, and inspectable through `programs.gentle-ai.rendered` before it is linked. |

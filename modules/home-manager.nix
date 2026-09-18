@@ -73,6 +73,13 @@ let
     lib.filterAttrs (name: provider: name != "pi" && provider.packages != { }) enabledProviders
   );
 
+  # Only Pi reads `modelProviders` either -- its own overlay file, not a
+  # document field -- so the same filter names the providers at fault for
+  # the refusal below.
+  nonPiProvidersWithModelProviders = lib.attrNames (
+    lib.filterAttrs (name: provider: name != "pi" && provider.modelProviders != { }) enabledProviders
+  );
+
   # Mirrors gentle-nix provision's own ValidSource
   # (internal/provision/source.go): a Pi install source is only an
   # `npm:`, `git:`, `https://`, or `ssh://` reference with a non-empty
@@ -431,6 +438,36 @@ let
 
             Where the client also offers a `modelPreset`, what is named here
             wins over what the profile would have given that key.
+          '';
+        };
+
+        modelProviders = mkOption {
+          type = types.attrsOf (types.attrsOf types.anything);
+          default = { };
+          description = ''
+            Pi's own custom-provider overlay (`~/.pi/agent/models.json`),
+            keyed by provider id. The value is passed through exactly as
+            written into `{"providers": ...}` -- no field is invented or
+            defaulted by this module, and Pi validates the file itself at
+            startup, so a wrong field surfaces as its diagnostic there, not
+            as a build failure.
+
+            The file exists because two Pi runtimes pass `--no-extensions`
+            -- notably the review host relay's locked-down reviewer
+            subprocess -- and therefore never see a provider registered by
+            a Pi package; the overlay is read from the agent dir
+            independently of extensions.
+
+            This module owns the file whole: it is written as one file, not
+            merged, because Pi only ever reads it. An existing hand-written
+            `models.json` must be removed before the first switch, since
+            home-manager will not replace a real file with a store symlink.
+
+            This is not the same file as `models` above, which routes this
+            provider's phases and agents into `.pi/gentle-ai/models.json`.
+
+            Only Pi reads this; a provider other than pi is refused for
+            setting it.
           '';
         };
 
@@ -1040,6 +1077,28 @@ let
     builtins.toJSON piRoutingSpecBody
   );
 
+  # gentle-nix pi models' own input: Pi's own custom-provider overlay,
+  # written from the raw providers.pi.modelProviders option rather than
+  # from `providers` above, since providerBlock never carries it -- the
+  # document does not know this file exists, and Pi is its only reader.
+  # Empty when pi is not enabled or nothing was declared, in which case
+  # nothing invokes the subcommand at all -- see piModelProvidersNeeded.
+  # Like piRoutingSpecBody this is data, not provider knowledge: the value
+  # travels exactly as written, because Pi validates the file itself.
+  piModelProvidersSpecBody =
+    if !piEnabled then
+      { }
+    else
+      optionalAttrs (cfg.providers.pi.modelProviders != { }) {
+        providers = cfg.providers.pi.modelProviders;
+      };
+
+  piModelProvidersNeeded = piModelProvidersSpecBody != { };
+
+  piModelProvidersSpecFile = pkgs.writeText "gentle-ai-pi-models-spec.json" (
+    builtins.toJSON piModelProvidersSpecBody
+  );
+
   # A provider enabled with nothing else set has nothing worth nesting: an
   # empty block would still be a key the renderer has to look at and find
   # nothing in, so it is left out of the document instead.
@@ -1310,6 +1369,7 @@ let
       && !embedGentleEngramPiPlugin
       && providerSettings == { }
       && !piRoutingNeeded
+      && !piModelProvidersNeeded
       && !rolesNeeded
       && !mcpNeeded
       && codexMcpServers == { }
@@ -1355,6 +1415,19 @@ let
           ${lib.getExe gentleNix} pi routing \
             --tree "$out/tree" \
             --spec ${piRoutingSpecFile}
+        ''}
+        ${lib.optionalString piModelProvidersNeeded ''
+          # gentle-nix pi models writes Pi's own custom-provider overlay,
+          # .pi/agent/models.json -- the one way a provider whose only
+          # registration ships as a Pi package still resolves in the
+          # runtimes that pass --no-extensions (the review host relay's
+          # reviewer subprocess among them). Like pi routing above it runs
+          # before the `gentle-nix settings` loop, though the two never
+          # touch the same key: the overlay is owned whole by this module,
+          # and Pi -- not this repository -- is what validates its fields.
+          ${lib.getExe gentleNix} pi models \
+            --tree "$out/tree" \
+            --spec ${piModelProvidersSpecFile}
         ''}
         ${lib.optionalString rolesNeeded ''
           # gentle-nix roles renders every declared programs.gentle-ai.roles
@@ -2597,6 +2670,11 @@ in
       {
         assertion = piPackagesWithInvalidSources == [ ];
         message = "programs.gentle-ai.providers.pi.packages.${lib.concatStringsSep ", " piPackagesWithInvalidSources} uses an unsupported Pi package source: use npm:<name>[@version], git:<host>/<user>/<repo>[@ref], an https:// or ssh:// URL, or an absolute path";
+      }
+      {
+        # Pi is what reads this too; the same refusal as `packages` above.
+        assertion = nonPiProvidersWithModelProviders == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithModelProviders}.modelProviders is refused: only providers.pi reads modelProviders";
       }
       {
         # Mirrors the pinned fork's own `config.role.unsupported-adapter`

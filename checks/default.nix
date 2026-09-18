@@ -2136,6 +2136,79 @@ in
         touch "$out"
       '';
 
+  # `gentle-nix pi models` writes Pi's own custom-provider overlay
+  # (~/.pi/agent/models.json) from the declared providers.pi.modelProviders
+  # (see piModelProvidersSpecBody in modules/home-manager.nix). This proves
+  # the full pipeline -- Home Manager evaluation through the `overlaid`
+  # derivation -- renders the file with a declared provider in it, and that
+  # the pass-through is faithful: the module renders content, never provider
+  # knowledge, so a field it has no notion of -- here a model's
+  # `contextWindow` and its `compat` block -- survives verbatim rather than
+  # being dropped or defaulted.
+  piModelProvidersRenderIntoTree =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
+              enable = true;
+              modelProviders.nan = {
+                baseUrl = "https://api.example.com/v1";
+                api = "openai-completions";
+                models.deepseek-v4-flash = {
+                  name = "DeepSeek V4 Flash";
+                  contextWindow = 262144;
+                  compat.reasoning = true;
+                };
+              };
+            };
+          };
+        }
+      ];
+      rendered = configuration.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-model-providers-render-through" { inherit rendered; } ''
+      set -euo pipefail
+      models="$rendered/tree/.pi/agent/models.json"
+
+      test -f "$models" || { echo "~/.pi/agent/models.json was not rendered" >&2; exit 1; }
+      grep -q '"nan"' "$models" || { echo "the declared provider id was not rendered" >&2; exit 1; }
+      grep -q '"baseUrl": "https://api.example.com/v1"' "$models" || { echo "the provider's baseUrl was not rendered as written" >&2; exit 1; }
+      grep -q '"deepseek-v4-flash"' "$models" || { echo "the declared model id was not rendered" >&2; exit 1; }
+      grep -q '"contextWindow": 262144' "$models" || { echo "a model field this module has no notion of was dropped" >&2; exit 1; }
+      grep -q '"reasoning": true' "$models" || { echo "the provider's compat block was not rendered as written" >&2; exit 1; }
+
+      touch "$out"
+    '';
+
+  # Nothing is written when nothing is declared: an omitted modelProviders
+  # runs no subcommand and leaves no file, so it can never clobber a live
+  # ~/.pi/agent/models.json this module did not create.
+  piWithoutModelProvidersRendersNoModelsJson =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi.enable = true;
+          };
+        }
+      ];
+      rendered = configuration.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-without-model-providers-no-models-json"
+      { inherit rendered; }
+      ''
+        set -euo pipefail
+        test ! -e "$rendered/tree/.pi/agent/models.json" || {
+          echo "~/.pi/agent/models.json was rendered without any declared modelProviders" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   # treefmt rewrites in place, so it runs against a writable copy and the check
   # is whether anything changed rather than whether it refused to run.
   # Generated reference documentation is only useful while it matches the

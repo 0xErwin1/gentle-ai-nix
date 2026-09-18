@@ -70,6 +70,7 @@ var version = "dev"
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, "usage: gentle-nix <provision|settings|pi|roles|mcp|permissions|skills|retire|rewrite|frontmatter> [flags]")
+		fmt.Fprintln(os.Stderr, "       gentle-nix pi <routing|models> [flags]")
 		os.Exit(2)
 	}
 

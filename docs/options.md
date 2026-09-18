@@ -1727,6 +1727,49 @@ null
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.modelProviders
+
+
+
+Pi’s own custom-provider overlay (` ~/.pi/agent/models.json `),
+keyed by provider id\. The value is passed through exactly as
+written into ` {"providers": ...} ` – no field is invented or
+defaulted by this module, and Pi validates the file itself at
+startup, so a wrong field surfaces as its diagnostic there, not
+as a build failure\.
+
+The file exists because two Pi runtimes pass ` --no-extensions `
+– notably the review host relay’s locked-down reviewer
+subprocess – and therefore never see a provider registered by
+a Pi package; the overlay is read from the agent dir
+independently of extensions\.
+
+This module owns the file whole: it is written as one file, not
+merged, because Pi only ever reads it\. An existing hand-written
+` models.json ` must be removed before the first switch, since
+home-manager will not replace a real file with a store symlink\.
+
+This is not the same file as ` models ` above, which routes this
+provider’s phases and agents into ` .pi/gentle-ai/models.json `\.
+
+Only Pi reads this; a provider other than pi is refused for
+setting it\.
+
+
+
+*Type:*
+attribute set of attribute set of anything
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.models
 
 
@@ -2652,8 +2695,6 @@ null
 
 ## programs\.gentle-ai\.sdd\.strictTdd
 
-
-
 Whether SDD phases enforce strict TDD\.
 
 
@@ -2672,6 +2713,8 @@ false
 
 
 ## programs\.gentle-ai\.secrets\.envFiles
+
+
 
 Files of ` NAME=value ` lines, each supplying a placeholder\. This is the
 shape a shell-sourced secret file already has, and the shape a sops
