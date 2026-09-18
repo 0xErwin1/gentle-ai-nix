@@ -272,8 +272,8 @@ in
     assert !(document.selection ? skills);
     pkgs.runCommandLocal "gentle-ai-check-providers-document-shape" { } ''touch "$out"'';
 
-  # `gentlePiRelease` and `engramRelease` choose Pi install-source overrides,
-  # never document entries. Stable and main both override gentle-pi, and both
+  # The two channel options choose Pi install-source overrides, never
+  # document entries. Stable and main both override gentle-pi, and both
   # channels override the Engram plugin -- on stable with the npm version the
   # release ships, off stable with the plugin built from the same revision as
   # the binary. The paired configurations below assert the document remains
@@ -291,18 +291,17 @@ in
         overrides:
         evaluate [
           {
-            programs.gentle-ai = {
+            programs.gentle-ai = lib.recursiveUpdate {
               enable = true;
               providers.pi.enable = true;
-            }
-            // overrides;
+            } overrides;
           }
         ];
 
       defaultConfiguration = configurationFor { };
       overriddenConfiguration = configurationFor {
-        gentlePiRelease = "main";
-        engramRelease = "main";
+        providers.pi.release = "main";
+        components.engram.release = "main";
       };
 
       defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
@@ -337,10 +336,10 @@ in
           {
             programs.gentle-ai = {
               enable = true;
-              gentlePiRelease = release;
               providers.pi = {
                 enable = true;
                 provisionPackages = true;
+                release = release;
               };
             };
           }
@@ -385,18 +384,17 @@ in
         overrides:
         evaluate [
           {
-            programs.gentle-ai = {
+            programs.gentle-ai = lib.recursiveUpdate {
               enable = true;
               providers.pi.enable = true;
-            }
-            // overrides;
+            } overrides;
           }
         ];
 
       defaultConfiguration = configurationFor { };
       overriddenConfiguration = configurationFor {
-        gentlePiRelease = "main";
-        engramRelease = "main";
+        providers.pi.release = "main";
+        components.engram.release = "main";
       };
 
       defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
@@ -492,7 +490,7 @@ in
             programs.gentle-ai = {
               enable = true;
               providers.pi.enable = true;
-              engramRelease = "main";
+              components.engram.release = "main";
               secrets.merge = [ ".pi/agent/settings.json" ];
               overrideRendered =
                 tree:
@@ -517,16 +515,16 @@ in
   # user-declared entry reaches gentle-nix's own `piProvisionOverrides`/
   # `piProvisionExtra` split instead: `my-plugin` names none of Pi's fixed
   # packages, so it is an extra; `gentle-pi` is still one of them, so
-  # `gentlePiRelease` still surfaces as an override.
+  # `providers.pi.release` still surfaces as an override.
   piExtraPackageDocumentShape =
     let
       configuration = evaluate [
         {
           programs.gentle-ai = {
             enable = true;
-            gentlePiRelease = "main";
             providers.pi = {
               enable = true;
+              release = "main";
               packages.my-plugin = "git:github.com/x/y@rev";
             };
           };
@@ -748,7 +746,7 @@ in
         touch "$out"
       '';
 
-  # gentle-pi and gentle-engram are gentlePiRelease's and engramRelease's own
+  # gentle-pi and gentle-engram are the channel options' own
   # entries; accepting them here too would let a channel choice and a
   # hand-written source silently disagree about which one Pi actually
   # installs, so both are refused at eval rather than left to collide later.
@@ -856,14 +854,16 @@ in
               {
                 programs.gentle-ai = {
                   enable = true;
-                  providers.pi.enable = true;
-                  gentlePiRelease = "nightly";
+                  providers.pi = {
+                    enable = true;
+                    release = "nightly";
+                  };
                 };
               }
             ])
           )
           ''
-            echo "an unknown gentlePiRelease was accepted" >&2
+            echo "an unknown providers.pi.release was accepted" >&2
             exit 1
           ''
         }
@@ -874,13 +874,93 @@ in
                 programs.gentle-ai = {
                   enable = true;
                   providers.pi.enable = true;
-                  engramRelease = "nightly";
+                  components.engram.release = "nightly";
                 };
               }
             ])
           )
           ''
-            echo "an unknown engramRelease was accepted" >&2
+            echo "an unknown components.engram.release was accepted" >&2
+            exit 1
+          ''
+        }
+        touch "$out"
+      '';
+
+  # The two channel options living on a key that may not read them is the cost
+  # of declaring them for every key: the reference generator cannot enumerate
+  # a submodule's options by name, so an option set selected by `name` fails
+  # there before it can work in a configuration. Each one is therefore refused
+  # where it is not read, rather than sitting there looking like it did
+  # something.
+  channelOptionsRejectNonOwningKeys =
+    pkgs.runCommandLocal "gentle-ai-check-channel-options-reject-non-owning-keys" { }
+      ''
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers = {
+                    pi.enable = true;
+                    opencode = {
+                      enable = true;
+                      release = "main";
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-pi provider was allowed to choose a gentle-pi channel" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi.enable = true;
+                  components = {
+                    engram.enable = true;
+                    skills = {
+                      enable = true;
+                      release = "main";
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-engram component was allowed to choose an Engram release" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi.enable = true;
+                  components = {
+                    engram.enable = true;
+                    skills = {
+                      enable = true;
+                      package = pkgs.hello;
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-engram component was allowed to set an Engram package" >&2
             exit 1
           ''
         }

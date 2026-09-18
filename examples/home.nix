@@ -6,8 +6,6 @@
   programs.gentle-ai = {
     enable = true;
 
-    # gentlePiRelease = "main"; # track gentle-pi's main, installed by Pi from git.
-
     # Clients, each with whatever differs for it alone.
     providers = {
       opencode = {
@@ -52,6 +50,11 @@
       # gentle-pi's own `/gentle:profiles`.
       pi = {
         enable = true;
+
+        # `stable` is the npm release this flake supports; `main` tracks the tip
+        # of gentle-shell's main branch, installed by Pi from git instead.
+        # release = "main";
+
         profiles.cheap.orchestrator = {
           provider = "anthropic";
           model = "claude-haiku";
@@ -81,7 +84,18 @@
       permissions.enable = true;
       sdd.enable = true;
       theme.enable = true;
-      engram.enable = true;
+      engram = {
+        enable = true;
+
+        # `stable` is the newest tagged release, and the default. `main` tracks
+        # the tip of Engram's default branch, and has Pi install the plugin
+        # built from that same revision.
+        # release = "main";
+
+        # The binary this flake packages, unless you point it elsewhere. The
+        # plugin above still follows `release`.
+        # package = myEngramBuild;
+      };
     };
 
     # Naming no skill installs every one Gentle AI ships. Entries are only for

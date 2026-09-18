@@ -40,15 +40,24 @@ let
 
   engramReleases = import ../packages/engram-versions.nix;
 
-  selectedEngramRelease = engramReleases.${cfg.engramRelease};
+  selectedEngramRelease = engramReleases.${cfg.components.engram.release};
 
   defaultEngramPackage = pkgs.callPackage ../packages/engram.nix {
     release = selectedEngramRelease;
   };
 
+  # `components.engram.package` is an override, not a default: the option
+  # defaults to null so that the generic key means nothing on a component that
+  # does not read it, and an unset key resolves to the release's own build.
+  selectedEngramPackage =
+    if cfg.components.engram.package != null then
+      cfg.components.engram.package
+    else
+      defaultEngramPackage;
+
   # Engram's Pi plugin, built only when it is actually wanted: Nix's laziness
   # means this derivation is never evaluated, let alone built, unless
-  # `engramRelease` is off stable and Pi is enabled, the one case
+  # `components.engram.release` is off stable and Pi is enabled, the one case
   # `pluginPackagesFor` below reads it in.
   gentleEngramPiPackage = pkgs.callPackage ../packages/gentle-engram-pi.nix {
     release = selectedEngramRelease;
@@ -80,6 +89,23 @@ let
     lib.filterAttrs (name: provider: name != "pi" && provider.modelProviders != { }) enabledProviders
   );
 
+  # `release` is the third option only Pi reads -- the same refusal as
+  # `packages` and `modelProviders` above, naming the providers at fault.
+  nonPiProvidersWithRelease = lib.attrNames (
+    lib.filterAttrs (name: provider: name != "pi" && provider.release != "stable") enabledProviders
+  );
+
+  # The engram component's channel options are read by that component alone;
+  # a component that sets either is named here so the assertion below can
+  # point at it. Deliberately over every declared component rather than only
+  # the enabled ones: the option is meaningless either way, and a value that
+  # only takes effect once something else is switched on is worse to debug.
+  componentsWithEngramChannelOptions = lib.attrNames (
+    lib.filterAttrs (
+      name: component: name != "engram" && (component.release != "stable" || component.package != null)
+    ) cfg.components
+  );
+
   # Mirrors gentle-nix provision's own ValidSource
   # (internal/provision/source.go): a Pi install source is only an
   # `npm:`, `git:`, `https://`, or `ssh://` reference with a non-empty
@@ -109,12 +135,16 @@ let
   );
 
   # The plugin is only worth linking into the tree for the one case it is
-  # ever installed from: Pi enabled, and `engramRelease` off the npm default.
-  embedGentleEngramPiPlugin = piEnabled && cfg.engramRelease != "stable";
+  # ever installed from: Pi enabled, and the Engram release off the npm
+  # default. Deliberately not also gated on the engram component: the release
+  # decides which build of the plugin Pi gets, while whether Pi gets one at all
+  # follows `providers.pi.enable`, so a Pi installation pointed at a remote
+  # Engram still gets the plugin without a local binary.
+  embedGentleEngramPiPlugin = piEnabled && cfg.components.engram.release != "stable";
 
   gentlePiReleases = import ../packages/pi-versions.nix;
 
-  selectedGentlePiRelease = gentlePiReleases.${cfg.gentlePiRelease};
+  selectedGentlePiRelease = gentlePiReleases.${cfg.providers.pi.release};
 
   # gentle-pi is not a derivation this flake builds: Pi installs it itself
   # from whatever source string this resolves to. `stable` already names one
@@ -131,7 +161,7 @@ let
   # this flake supports, while main pins its commit SHA. Neither source travels
   # through the rendered document.
   pluginPackagesFor =
-    optionalAttrs (selectedGentlePiRelease ? source || cfg.gentlePiRelease != "stable") {
+    optionalAttrs (selectedGentlePiRelease ? source || cfg.providers.pi.release != "stable") {
       gentle-pi = gentlePiSource selectedGentlePiRelease;
     }
     // {
@@ -141,7 +171,10 @@ let
       # Pi's fixed sequence installs the bare npm source, which is npm's
       # moving `latest`.
       gentle-engram =
-        if cfg.engramRelease != "stable" then gentleEngramPiHomePath else gentleEngramNpmDefault;
+        if cfg.components.engram.release != "stable" then
+          gentleEngramPiHomePath
+        else
+          gentleEngramNpmDefault;
     };
 
   # The npm package names `gentle-nix provision`'s Pi adapter always installs
@@ -394,6 +427,27 @@ let
           '';
         };
 
+        release = mkOption {
+          type = types.enum (lib.attrNames gentlePiReleases);
+          default = "stable";
+          description = ''
+            Which gentle-pi release Pi installs, by channel.
+
+            `stable` is the exact published npm release this flake supports,
+            installed explicitly so a switch cannot silently follow npm's
+            latest tag. `main` is the tip of gentle-pi's main branch pinned to
+            a revision, installed from git instead of npm -- the same "a pin
+            is how a flake expresses a branch" argument
+            `programs.gentle-ai.release` makes for Gentle AI's own beta
+            channel. `pi-versions.nix` is the table these names index.
+
+            gentle-pi is not a package this flake builds: Nix only supplies
+            the install source Pi's `pi install` uses at activation. Only Pi
+            reads this; a provider other than pi setting it is refused at
+            eval.
+          '';
+        };
+
         packages = mkOption {
           type = types.attrsOf types.str;
           default = { };
@@ -407,9 +461,10 @@ let
             is itself an npm (or git) package, installed the same way as
             gentle-pi's own harness, so this is where one is declared.
 
-            `gentle-pi` and `gentle-engram` are managed by `gentlePiRelease`
-            and `engramRelease` instead, and are refused here at eval; use
-            those options to choose where those two come from. A key naming
+            `gentle-pi` and `gentle-engram` are managed by a channel instead:
+            `providers.pi.release` and `components.engram.release`. Both are
+            refused here at eval, so use those options to choose where the two
+            come from. A key naming
             one of Pi's own other fixed packages (`pi-mcp-adapter`,
             `@juicesharp/rpiv-ask-user-question`, `pi-web-access`, `pi-btw`)
             overrides that package's install source in place rather than
@@ -1646,7 +1701,7 @@ let
   # first is what keeps that failure costing only a missed retirement instead
   # of the harness itself.
   displacedPiRules =
-    lib.optional (cfg.gentlePiRelease != "stable") {
+    lib.optional (cfg.providers.pi.release != "stable") {
       type = "npm";
       name = "gentle-pi";
       wanted = pluginPackagesFor.gentle-pi;
@@ -1656,7 +1711,7 @@ let
     # package, so it displaces the same way a user-declared package's own
     # source change does, and is retired the same way -- by package identity,
     # keeping only the exact source this generation declared.
-    ++ lib.optional (cfg.gentlePiRelease != "stable") {
+    ++ lib.optional (cfg.providers.pi.release != "stable") {
       type = "package";
       keep = pluginPackagesFor.gentle-pi;
       wanted = pluginPackagesFor.gentle-pi;
@@ -1666,12 +1721,12 @@ let
     # recognize the legacy source after that rename. Retire it only after Pi
     # confirms the canonical source is installed; a failed provisioning leaves
     # the working legacy plugin in place.
-    ++ lib.optional (cfg.gentlePiRelease != "stable") {
+    ++ lib.optional (cfg.providers.pi.release != "stable") {
       type = "git";
       name = "gentle-pi";
       wanted = pluginPackagesFor.gentle-pi;
     }
-    ++ lib.optional (cfg.gentlePiRelease == "stable") {
+    ++ lib.optional (cfg.providers.pi.release == "stable") {
       # Stable is pinned too: a bare npm source, an older npm version, or a
       # prior gentle-pi Git revision all name gentle-pi, but only this exact
       # source is retained after Pi confirms it installed the pinned replacement.
@@ -1682,12 +1737,12 @@ let
     # The stable package rule above covers old gentle-pi spellings. Canonical
     # gentle-shell has a distinct source-derived identity, so retire it through
     # its own guarded Git rule without duplicating the old-source transition.
-    ++ lib.optional (cfg.gentlePiRelease == "stable") {
+    ++ lib.optional (cfg.providers.pi.release == "stable") {
       type = "git";
       name = "gentle-shell";
       wanted = gentlePiNpmStable;
     }
-    ++ lib.optional (cfg.engramRelease != "stable") {
+    ++ lib.optional (cfg.components.engram.release != "stable") {
       type = "npm";
       name = "gentle-engram";
       wanted = gentleEngramPiHomePath;
@@ -1706,7 +1761,7 @@ let
           ];
         }
         // (
-          if cfg.engramRelease != "stable" then
+          if cfg.components.engram.release != "stable" then
             {
               # The one local entry this generation still wants kept, off
               # stable. On stable there is none to except: every local entry,
@@ -2017,24 +2072,27 @@ let
     ) cfg.customProviders
   );
 
-  engramEnabled = cfg.components ? engram && cfg.components.engram.enable;
+  engramEnabled = cfg.components.engram.enable;
 
   enabledCommunityToolPackages = lib.mapAttrsToList (_: tool: tool.package) (
     lib.filterAttrs (_: tool: tool.enable) cfg.communityTools
   );
 
   packages = builtins.filter (package: package != null) (
-    [ cfg.package ] ++ lib.optional engramEnabled cfg.engramPackage ++ enabledCommunityToolPackages
+    [ cfg.package ] ++ lib.optional engramEnabled selectedEngramPackage ++ enabledCommunityToolPackages
   );
 
   enableGroup =
-    what:
+    what: extra:
     mkOption {
       type = types.attrsOf (
         types.submodule (
           { name, ... }:
           {
-            options.enable = mkEnableOption "the ${name} ${what}";
+            options = {
+              enable = mkEnableOption "the ${name} ${what}";
+            }
+            // extra;
           }
         )
       );
@@ -2078,66 +2136,6 @@ in
       '';
     };
 
-    engramPackage = mkOption {
-      type = types.nullOr types.package;
-      default = defaultEngramPackage;
-      defaultText = literalExpression "gentle-ai-nix.packages.\${pkgs.system}.engram";
-      description = ''
-        Engram package, installed when the engram component is enabled. The
-        component is what configures the clients to use it; this only puts the
-        binary on PATH, which Nix does rather than letting Gentle AI fetch it.
-
-        Defaults to `engramRelease`'s build; setting this directly overrides
-        that choice the same way `package` overrides `release`.
-      '';
-    };
-
-    gentlePiRelease = mkOption {
-      type = types.enum (lib.attrNames gentlePiReleases);
-      default = "stable";
-      description = ''
-        Which gentle-pi release Pi installs, by channel.
-
-        `stable` is the exact published npm release this flake supports,
-        installed explicitly so a switch cannot silently follow npm's latest
-        tag. `main` is the tip of gentle-pi's main branch pinned to a
-        revision, installed from git instead of npm --
-        the same "a pin is how a flake expresses a branch" argument
-        `release` above makes for Gentle AI's own beta channel.
-
-        gentle-pi is not a package this flake builds: Nix only supplies the
-        install source Pi's `pi install` uses at activation.
-      '';
-    };
-
-    engramRelease = mkOption {
-      type = types.enum (lib.attrNames engramReleases);
-      default = "stable";
-      description = ''
-        Which Engram release to build, by channel. Controls both the Engram
-        binary (`engramPackage`'s default) and, when Pi is enabled, which
-        build of Engram's Pi plugin Pi installs -- the two are one release
-        moving together, because a store with one Engram's wire format and
-        another's Pi plugin is not a configuration anyone chose on purpose.
-
-        `stable` is the newest tagged release, and Pi installs its plugin
-        from npm pinned to the exact version that release ships, so the
-        binary and the plugin are the pair this flake tested rather than
-        whatever `latest` resolves to. `main` tracks the tip of Engram's
-        default branch; choosing it has Pi install the plugin built from
-        that same revision instead of anything from npm, so the two can
-        never drift apart. The build is linked into the rendered tree at
-        `.pi/gentle-ai/plugins/gentle-engram`, a path stable across rebuilds,
-        rather than installed from its own store path directly: Pi records a
-        local source by its path, so the store path itself would change
-        identity on every rebuild and leave Pi holding two entries for what
-        is meant to be the same plugin.
-
-        Setting `engramPackage` directly overrides the binary this resolves
-        to, but not which plugin build Pi installs.
-      '';
-    };
-
     schemaVersion = mkOption {
       type = types.str;
       default = "v1";
@@ -2165,7 +2163,56 @@ in
       description = "Clients to configure, keyed by Gentle AI's own provider id.";
     };
 
-    components = enableGroup "component";
+    components = enableGroup "component" {
+      # Declared for every component and read by one. The generator that
+      # renders this module's reference instantiates a submodule without
+      # providing `name`, so an option set selected by `name` cannot be
+      # declared at all: forcing `name` there is an infinite recursion. The
+      # cost is the wildcard the reference shows; the guard is the assertion
+      # that refuses a value on a component which does not read it.
+      release = mkOption {
+        type = types.enum (lib.attrNames engramReleases);
+        default = "stable";
+        description = ''
+          Which Engram release this component installs, by channel, and so
+          which build of Engram's Pi plugin Pi installs when that release is
+          off the npm default. `engram-versions.nix` is the table these names
+          index.
+
+          One option controls both because the two are one release moving
+          together: a store with one Engram's wire format and another's Pi
+          plugin is not a configuration anyone chose on purpose. `stable` is
+          the newest tagged release, and Pi installs its plugin from npm pinned
+          to the exact version that release ships, so the binary and the plugin
+          are the pair this flake tested rather than whatever `latest`
+          resolves to. `main` tracks the tip of Engram's default branch;
+          choosing it has Pi install the plugin built from that same revision
+          instead of anything from npm, linked into the rendered tree at
+          `.pi/gentle-ai/plugins/gentle-engram`, a path stable across rebuilds
+          rather than the store path underneath it, because Pi records a local
+          source by its path.
+
+          Only the engram component reads this; another component setting it is
+          refused at eval.
+        '';
+      };
+
+      package = mkOption {
+        type = types.nullOr types.package;
+        default = null;
+        defaultText = literalExpression "gentle-ai-nix.packages.\${pkgs.system}.engram";
+        description = ''
+          The Engram binary to install in place of the one `release` builds,
+          which is what null selects. The component is what configures the
+          clients to use it; this only puts the binary on PATH, which Nix does
+          rather than letting Gentle AI fetch it. It overrides the release for
+          the binary alone: the Pi plugin above still follows `release`.
+
+          Only the engram component reads this; another component setting it is
+          refused at eval.
+        '';
+      };
+    };
 
     skills = mkOption {
       type = types.attrsOf (
@@ -2248,7 +2295,7 @@ in
         know rather than ignoring it, so a tool it gains works the day it ships.
       '';
     };
-    openCodePlugins = enableGroup "OpenCode plugin";
+    openCodePlugins = enableGroup "OpenCode plugin" { };
 
     persona = mkOption {
       type = types.nullOr types.str;
@@ -2600,7 +2647,7 @@ in
         message = "programs.gentle-ai.providers must enable at least one client to configure";
       }
       {
-        # gentlePiRelease's and engramRelease's own `types.enum` already
+        # The channels' own `types.enum` already
         # refuses an unknown channel the moment something reads the option
         # -- but now that pluginPackagesFor (and so selectedGentlePiRelease
         # / selectedEngramRelease) is only read from gentle-nix provision's
@@ -2609,12 +2656,12 @@ in
         # provisions would otherwise never force that read at all. These
         # two force it unconditionally, the way embedding `packages` in the
         # document unconditionally used to.
-        assertion = lib.elem cfg.gentlePiRelease (lib.attrNames gentlePiReleases);
-        message = "programs.gentle-ai.gentlePiRelease = \"${cfg.gentlePiRelease}\" is not a known channel";
+        assertion = lib.elem cfg.providers.pi.release (lib.attrNames gentlePiReleases);
+        message = "programs.gentle-ai.providers.pi.release = \"${cfg.providers.pi.release}\" is not a known channel";
       }
       {
-        assertion = lib.elem cfg.engramRelease (lib.attrNames engramReleases);
-        message = "programs.gentle-ai.engramRelease = \"${cfg.engramRelease}\" is not a known channel";
+        assertion = lib.elem cfg.components.engram.release (lib.attrNames engramReleases);
+        message = "programs.gentle-ai.components.engram.release = \"${cfg.components.engram.release}\" is not a known channel";
       }
       {
         assertion = unknownSourceProviders == [ ];
@@ -2663,8 +2710,8 @@ in
         message = "programs.gentle-ai.backgroundSubagents declares an intent for a client this installation does not enable; enable programs.gentle-ai.providers.<name> or drop the intent";
       }
       {
-        # gentle-pi and gentle-engram are the two entries gentlePiRelease and
-        # engramRelease already manage; accepting them here too would let a
+        # gentle-pi and gentle-engram are the two entries the channel options
+        # already manage; accepting them here too would let a
         # channel choice and a hand-written source silently disagree about
         # which one Pi actually installs.
         assertion =
@@ -2675,7 +2722,7 @@ in
               "gentle-engram"
             ]
           ) (lib.attrNames (cfg.providers.pi.packages or { })));
-        message = "programs.gentle-ai.providers.pi.packages must not name gentle-pi or gentle-engram; use programs.gentle-ai.gentlePiRelease and programs.gentle-ai.engramRelease to choose where those come from";
+        message = "programs.gentle-ai.providers.pi.packages must not name gentle-pi or gentle-engram; use programs.gentle-ai.providers.pi.release and programs.gentle-ai.components.engram.release to choose where those come from";
       }
       {
         # Pi is what reads this; a provider other than pi setting it is a
@@ -2692,6 +2739,21 @@ in
         # Pi is what reads this too; the same refusal as `packages` above.
         assertion = nonPiProvidersWithModelProviders == [ ];
         message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithModelProviders}.modelProviders is refused: only providers.pi reads modelProviders";
+      }
+      {
+        # And the third: a provider other than pi choosing a gentle-pi channel
+        # is a channel choice nothing reads, so it is named rather than left
+        # looking like it did something.
+        assertion = nonPiProvidersWithRelease == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithRelease}.release is refused: only providers.pi reads release";
+      }
+      {
+        # The engram component's own channel options, refused on a component
+        # that does not install anything: `components.<name>.release` and
+        # `.package` are declared for every component because the reference
+        # generator cannot enumerate a submodule's options by name.
+        assertion = componentsWithEngramChannelOptions == [ ];
+        message = "programs.gentle-ai.components.${lib.concatStringsSep ", " componentsWithEngramChannelOptions}.release or .package is refused: only components.engram reads them";
       }
       {
         # Mirrors the pinned fork's own `config.role.unsupported-adapter`
@@ -2720,6 +2782,16 @@ in
     ];
 
     programs.gentle-ai = {
+      # The two channel options live under a key that is otherwise absent --
+      # `components` and `providers` are attribute sets of submodules, so a key
+      # nothing mentions does not exist and reading its options would be an
+      # evaluation error rather than a default. Declaring both here is what lets
+      # the reads above resolve to the option defaults. `enable` stays false, so
+      # neither key reaches the document or Pi's provisioning until a
+      # configuration turns one on.
+      components.engram = lib.mkDefault { };
+      providers.pi = lib.mkDefault { };
+
       inherit document rendered;
       inherit piProvisionOverrides piProvisionExtra;
     };

@@ -285,6 +285,74 @@ true
 
 
 
+## programs\.gentle-ai\.components\.\<name>\.package
+
+
+
+The Engram binary to install in place of the one ` release ` builds,
+which is what null selects\. The component is what configures the
+clients to use it; this only puts the binary on PATH, which Nix does
+rather than letting Gentle AI fetch it\. It overrides the release for
+the binary alone: the Pi plugin above still follows ` release `\.
+
+Only the engram component reads this; another component setting it is
+refused at eval\.
+
+
+
+*Type:*
+null or package
+
+
+
+*Default:*
+
+```nix
+gentle-ai-nix.packages.${pkgs.system}.engram
+```
+
+
+
+## programs\.gentle-ai\.components\.\<name>\.release
+
+
+
+Which Engram release this component installs, by channel, and so
+which build of Engram’s Pi plugin Pi installs when that release is
+off the npm default\. ` engram-versions.nix ` is the table these names
+index\.
+
+One option controls both because the two are one release moving
+together: a store with one Engram’s wire format and another’s Pi
+plugin is not a configuration anyone chose on purpose\. ` stable ` is
+the newest tagged release, and Pi installs its plugin from npm pinned
+to the exact version that release ships, so the binary and the plugin
+are the pair this flake tested rather than whatever ` latest `
+resolves to\. ` main ` tracks the tip of Engram’s default branch;
+choosing it has Pi install the plugin built from that same revision
+instead of anything from npm, linked into the rendered tree at
+` .pi/gentle-ai/plugins/gentle-engram `, a path stable across rebuilds
+rather than the store path underneath it, because Pi records a local
+source by its path\.
+
+Only the engram component reads this; another component setting it is
+refused at eval\.
+
+
+
+*Type:*
+one of “main”, “stable”
+
+
+
+*Default:*
+
+```nix
+"stable"
+```
+
+
+
 ## programs\.gentle-ai\.customProviders
 
 
@@ -536,73 +604,6 @@ attribute set of anything *(read only)*
 
 
 
-## programs\.gentle-ai\.engramPackage
-
-
-
-Engram package, installed when the engram component is enabled\. The
-component is what configures the clients to use it; this only puts the
-binary on PATH, which Nix does rather than letting Gentle AI fetch it\.
-
-Defaults to ` engramRelease `’s build; setting this directly overrides
-that choice the same way ` package ` overrides ` release `\.
-
-
-
-*Type:*
-null or package
-
-
-
-*Default:*
-
-```nix
-gentle-ai-nix.packages.${pkgs.system}.engram
-```
-
-
-
-## programs\.gentle-ai\.engramRelease
-
-
-
-Which Engram release to build, by channel\. Controls both the Engram
-binary (` engramPackage `’s default) and, when Pi is enabled, which
-build of Engram’s Pi plugin Pi installs – the two are one release
-moving together, because a store with one Engram’s wire format and
-another’s Pi plugin is not a configuration anyone chose on purpose\.
-
-` stable ` is the newest tagged release, and Pi installs its plugin
-from npm pinned to the exact version that release ships, so the
-binary and the plugin are the pair this flake tested rather than
-whatever ` latest ` resolves to\. ` main ` tracks the tip of Engram’s
-default branch; choosing it has Pi install the plugin built from
-that same revision instead of anything from npm, so the two can
-never drift apart\. The build is linked into the rendered tree at
-` .pi/gentle-ai/plugins/gentle-engram `, a path stable across rebuilds,
-rather than installed from its own store path directly: Pi records a
-local source by its path, so the store path itself would change
-identity on every rebuild and leave Pi holding two entries for what
-is meant to be the same plugin\.
-
-Setting ` engramPackage ` directly overrides the binary this resolves
-to, but not which plugin build Pi installs\.
-
-
-
-*Type:*
-one of “main”, “stable”
-
-
-
-*Default:*
-
-```nix
-"stable"
-```
-
-
-
 ## programs\.gentle-ai\.extraFiles
 
 
@@ -764,37 +765,6 @@ list of string
 
 ```nix
 [ "hooks.SessionStart" ]
-```
-
-
-
-## programs\.gentle-ai\.gentlePiRelease
-
-
-
-Which gentle-pi release Pi installs, by channel\.
-
-` stable ` is the exact published npm release this flake supports,
-installed explicitly so a switch cannot silently follow npm’s latest
-tag\. ` main ` is the tip of gentle-pi’s main branch pinned to a
-revision, installed from git instead of npm –
-the same “a pin is how a flake expresses a branch” argument
-` release ` above makes for Gentle AI’s own beta channel\.
-
-gentle-pi is not a package this flake builds: Nix only supplies the
-install source Pi’s ` pi install ` uses at activation\.
-
-
-
-*Type:*
-one of “main”, “stable”
-
-
-
-*Default:*
-
-```nix
-"stable"
 ```
 
 
@@ -1403,9 +1373,10 @@ name missing its ` npm: ` prefix, is refused at eval\. A Pi extension
 is itself an npm (or git) package, installed the same way as
 gentle-pi’s own harness, so this is where one is declared\.
 
-` gentle-pi ` and ` gentle-engram ` are managed by ` gentlePiRelease `
-and ` engramRelease ` instead, and are refused here at eval; use
-those options to choose where those two come from\. A key naming
+` gentle-pi ` and ` gentle-engram ` are managed by a channel instead:
+` providers.pi.release ` and ` components.engram.release `\. Both are
+refused here at eval, so use those options to choose where the two
+come from\. A key naming
 one of Pi’s own other fixed packages (` pi-mcp-adapter `,
 ` @juicesharp/rpiv-ask-user-question `, ` pi-web-access `, ` pi-btw `)
 overrides that package’s install source in place rather than
@@ -2177,6 +2148,40 @@ boolean
 
 ```nix
 false
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.release
+
+
+
+Which gentle-pi release Pi installs, by channel\.
+
+` stable ` is the exact published npm release this flake supports,
+installed explicitly so a switch cannot silently follow npm’s
+latest tag\. ` main ` is the tip of gentle-pi’s main branch pinned to
+a revision, installed from git instead of npm – the same “a pin
+is how a flake expresses a branch” argument
+` programs.gentle-ai.release ` makes for Gentle AI’s own beta
+channel\. ` pi-versions.nix ` is the table these names index\.
+
+gentle-pi is not a package this flake builds: Nix only supplies
+the install source Pi’s ` pi install ` uses at activation\. Only Pi
+reads this; a provider other than pi setting it is refused at
+eval\.
+
+
+
+*Type:*
+one of “main”, “stable”
+
+
+
+*Default:*
+
+```nix
+"stable"
 ```
 
 
