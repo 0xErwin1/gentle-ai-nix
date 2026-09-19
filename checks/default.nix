@@ -919,14 +919,13 @@ in
         touch "$out"
       '';
 
-  # The two channel options living on a key that may not read them is the cost
-  # of declaring them for every key: the reference generator cannot enumerate
-  # a submodule's options by name, so an option set selected by `name` fails
-  # there before it can work in a configuration. Each one is therefore refused
-  # where it is not read, rather than sitting there looking like it did
-  # something.
-  channelOptionsRejectNonOwningKeys =
-    pkgs.runCommandLocal "gentle-ai-check-channel-options-reject-non-owning-keys" { }
+  # A provider-scoped option living on a key that may not read it is the cost of
+  # declaring it for every key: the reference generator cannot enumerate a
+  # submodule's options by name, so an option set selected by `name` fails there
+  # before it can work in a configuration. Each one is therefore refused where it
+  # is not read, rather than sitting there looking like it did something.
+  providerScopedOptionsRejectNonOwningKeys =
+    pkgs.runCommandLocal "gentle-ai-check-provider-scoped-options-reject-non-owning-keys" { }
       ''
         ${lib.optionalString
           (
@@ -993,6 +992,50 @@ in
           )
           ''
             echo "a non-engram component was allowed to set an Engram package" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers = {
+                    pi.enable = true;
+                    opencode = {
+                      enable = true;
+                      guardrails.autonomousMode = true;
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-pi provider was allowed to declare the runtime guard policy" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers = {
+                    pi.enable = true;
+                    opencode = {
+                      enable = true;
+                      quietTools = false;
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-pi provider was allowed to switch quiet tools off" >&2
             exit 1
           ''
         }
@@ -3104,4 +3147,111 @@ in
 
         touch "$out"
       '';
+
+  # The runtime guard policy is the one gentle-shell decision a declarative file
+  # can own outright: Pi reads it, no command of Pi's writes it, and a store
+  # symlink is therefore never in anything's way. This proves the declared
+  # policy reaches the exact path and shape Pi reads, and that declaring nothing
+  # leaves the file absent -- which is what keeps the harness's built-in
+  # confirmation in place rather than freezing a policy nobody chose.
+  piRuntimeGuardrailsAreRendered =
+    let
+      configurationFor =
+        extra:
+        evaluate [
+          {
+            programs.gentle-ai = lib.recursiveUpdate {
+              enable = true;
+              providers.pi.enable = true;
+            } extra;
+          }
+        ];
+      declared =
+        (configurationFor {
+          providers.pi.guardrails = {
+            autonomousMode = true;
+            guardedCommands.npmPublish = "allow";
+          };
+        }).config.programs.gentle-ai.rendered;
+      bare = (configurationFor { }).config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-runtime-guardrails"
+      {
+        inherit declared bare;
+      }
+      ''
+        set -euo pipefail
+
+        policy="$declared/tree/.pi/gentle-ai/runtime-guardrails.json"
+        test -f "$policy" || {
+          echo "the declared guard policy was not rendered" >&2
+          exit 1
+        }
+        ${pkgs.jq}/bin/jq -e '.autonomousMode == true and .guardedCommands.npmPublish == "allow"' "$policy" >/dev/null || {
+          echo "the rendered guard policy does not carry what was declared:" >&2
+          cat "$policy" >&2
+          exit 1
+        }
+
+        # Only the keys that were declared, in the shape Pi parses.
+        ${pkgs.jq}/bin/jq -e '(.guardedCommands | keys) == [ "npmPublish" ]' "$policy" >/dev/null || {
+          echo "the rendered guard policy carries keys nobody declared:" >&2
+          cat "$policy" >&2
+          exit 1
+        }
+
+        test -e "$bare/tree/.pi/gentle-ai/runtime-guardrails.json" && {
+          echo "an undeclared guard policy was rendered anyway" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
+  # Two of gentle-shell's switches are environment rather than a file, because
+  # the files they would otherwise live in are written by Pi's own commands and
+  # a read-only store symlink is not writable. This proves the declared value
+  # reaches the session, and that the defaults export nothing at all rather than
+  # a value that happens to match.
+  declaredGentleShellSwitchesReachTheSession =
+    let
+      configurationFor =
+        extra:
+        evaluate [
+          {
+            programs.gentle-ai = lib.recursiveUpdate {
+              enable = true;
+              providers.pi.enable = true;
+            } extra;
+          }
+        ];
+      declared =
+        (configurationFor {
+          telemetry.enable = false;
+          providers.pi.quietTools = false;
+        }).config.home.sessionVariables;
+      defaults = (configurationFor { }).config.home.sessionVariables;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-declared-switches-reach-the-session" { } ''
+      set -euo pipefail
+
+      ${lib.optionalString ((declared.GENTLE_AI_TELEMETRY or null) != "0") ''
+        echo "telemetry.enable = false did not export GENTLE_AI_TELEMETRY=0" >&2
+        exit 1
+      ''}
+      ${lib.optionalString ((declared.GENTLE_PI_QUIET_TOOLS or null) != "0") ''
+        echo "providers.pi.quietTools = false did not export GENTLE_PI_QUIET_TOOLS=0" >&2
+        exit 1
+      ''}
+      ${lib.optionalString (defaults ? GENTLE_AI_TELEMETRY) ''
+        echo "telemetry exported a value while it was enabled" >&2
+        exit 1
+      ''}
+      ${lib.optionalString (defaults ? GENTLE_PI_QUIET_TOOLS) ''
+        echo "quiet tools exported a value while they were on" >&2
+        exit 1
+      ''}
+
+      touch "$out"
+    '';
 }

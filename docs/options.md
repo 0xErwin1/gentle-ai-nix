@@ -1504,6 +1504,106 @@ null
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.guardrails
+
+
+
+The runtime guard policy Pi applies to itself, written to
+` .pi/gentle-ai/runtime-guardrails.json `\.
+
+Null leaves the file unwritten and the harness’s own default in
+place, which is the built-in confirmation for every guarded
+command\. Naming it here is what makes the policy declarative: the
+file is read-only at runtime and no command of Pi’s writes it, so
+a rendered copy is the only thing that answers\.
+
+Two things outrank it, in this order: a project’s own
+` .pi/gentle-ai/runtime-guardrails.json `, and
+` GENTLE_PI_AUTONOMOUS_MODE=1 ` in the environment, which forces the
+mode on regardless of this file\. Neither is exposed as an option,
+because two ways to say one thing is how a policy stops being
+readable\.
+
+Only Pi reads this; a provider other than pi setting it is refused
+at eval\.
+
+
+
+*Type:*
+null or (submodule)
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.guardrails\.autonomousMode
+
+
+
+Whether the guarded commands run without asking\. With it
+off, a guarded command falls back to the harness’s built-in
+confirmation; with it on, each one takes its action from
+` guardedCommands `, or the default for its key\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.guardrails\.guardedCommands
+
+
+
+What each guarded command does once ` autonomousMode ` is on,
+keyed by the command: ` gitPush `, ` gitRebase `,
+` gitBranchDeleteForce `, ` npmPublish ` or ` piRemove `\. An
+unknown key is refused rather than ignored, and a key left
+out keeps its default – allow for ` git push `, confirm for
+every other one, block for ` npm publish `\.
+
+` allow `, ` confirm ` and ` block ` are the whole domain: there
+is no way to say “ask unless this”, so a command left on
+` confirm ` is the one that keeps asking\.
+
+
+
+*Type:*
+attribute set of (one of “allow”, “confirm”, “block”)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{ npmPublish = "allow"; }
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.mcpServers
 
 
@@ -2197,6 +2297,33 @@ false
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.quietTools
+
+
+
+Whether Pi renders its own tool rows for the commands the harness
+already shows (` read `, ` bash `, ` ls `, ` find `, ` grep `) quietly\. With
+it off, ` GENTLE_PI_QUIET_TOOLS=0 ` is exported for the session so
+those rows come back\.
+
+Only Pi reads this; a provider other than pi setting it is refused
+at eval\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.release
 
 
@@ -2638,8 +2765,6 @@ null
 
 ## programs\.gentle-ai\.roles\.\<name>\.references
 
-
-
 Ids of the roles this one delegates to\.
 
 
@@ -2725,6 +2850,8 @@ string
 
 
 ## programs\.gentle-ai\.sdd\.mode
+
+
 
 SDD orchestrator mode\.
 
@@ -3014,6 +3141,36 @@ false
 
 
 *Example:*
+
+```nix
+true
+```
+
+
+
+## programs\.gentle-ai\.telemetry\.enable
+
+
+
+Whether Gentle AI and its Pi harness may send telemetry\. Setting it
+false exports ` GENTLE_AI_TELEMETRY=0 ` for the session, which is
+Gentle AI’s own switch and stops both the runtime usage events and the
+install/heartbeat trigger Pi would otherwise spawn\.
+
+Deliberately not ` DO_NOT_TRACK `: that is a standard variable every other
+program reads, so exporting it from here would be a much wider decision
+than the one this option names\. Export it yourself if that is what you
+want\. ` CI=true ` suppresses the same things, which is why an automated
+run is never counted as usage\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
 
 ```nix
 true

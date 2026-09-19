@@ -304,6 +304,38 @@ the rare file, like `.claude.json`, that a client keeps beside its root rather
 than inside it), and is the preferred spelling for a path that belongs to one
 client.
 
+**A decision the client reads but never writes** is the one shape this module can
+own outright, so it is declared instead of left to a command or a file you edit
+by hand:
+
+```nix
+providers.pi.guardrails = {
+  autonomousMode = true;
+  guardedCommands = { npmPublish = "allow"; gitPush = "confirm"; };
+};
+```
+
+That is the runtime guard policy: what Pi does with a guarded command once the
+mode is on. The actions are `allow`, `confirm` and `block`, over `gitPush`,
+`gitRebase`, `gitBranchDeleteForce`, `npmPublish` and `piRemove`, and the file
+lands at `.pi/gentle-ai/runtime-guardrails.json`. Left undeclared it stays
+absent and the harness's built-in confirmation stands. A project's own copy of
+that file and `GENTLE_PI_AUTONOMOUS_MODE=1` both outrank it; neither is exposed
+here, because two ways to say one thing is how a policy stops being readable.
+
+**Two switches are environment rather than a file**, because the files they
+would otherwise live in are written by Pi's own commands and a read-only store
+symlink is not writable:
+
+```nix
+telemetry.enable = false;           # exports GENTLE_AI_TELEMETRY=0
+providers.pi.quietTools = false;    # exports GENTLE_PI_QUIET_TOOLS=0
+```
+
+`DO_NOT_TRACK` is deliberately not exported: it is a standard variable every
+other program reads, so setting it from here would decide far more than the
+option's name says. Export it yourself if that is what you want.
+
 ## Reference
 
 Every option, with its type, default and example, is in [`docs/options.md`](docs/options.md). It is generated from the module itself and a check fails the build if the committed copy drifts, so it cannot describe an option the module does not have.

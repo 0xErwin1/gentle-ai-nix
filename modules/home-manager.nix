@@ -95,6 +95,17 @@ let
     lib.filterAttrs (name: provider: name != "pi" && provider.release != "stable") enabledProviders
   );
 
+  # The runtime guard policy and the quiet-tools switch are Pi's own too -- its
+  # extension reads them from Pi's config home and environment -- so they carry
+  # the same refusal as `release` above.
+  nonPiProvidersWithGuardrails = lib.attrNames (
+    lib.filterAttrs (name: provider: name != "pi" && provider.guardrails != null) enabledProviders
+  );
+
+  nonPiProvidersWithQuietTools = lib.attrNames (
+    lib.filterAttrs (name: provider: name != "pi" && provider.quietTools != true) enabledProviders
+  );
+
   # The engram component's channel options are read by that component alone;
   # a component that sets either is named here so the assertion below can
   # point at it. Deliberately over every declared component rather than only
@@ -470,6 +481,84 @@ let
             Nix never installs this: it is the render's evidence, not a
             delivered program. A client whose renderer does not interrogate it
             ignores the value.
+          '';
+        };
+
+        guardrails = mkOption {
+          type = types.nullOr (
+            types.submodule {
+              options = {
+                autonomousMode = mkOption {
+                  type = types.bool;
+                  default = false;
+                  description = ''
+                    Whether the guarded commands run without asking. With it
+                    off, a guarded command falls back to the harness's built-in
+                    confirmation; with it on, each one takes its action from
+                    `guardedCommands`, or the default for its key.
+                  '';
+                };
+
+                guardedCommands = mkOption {
+                  type = types.attrsOf (
+                    types.enum [
+                      "allow"
+                      "confirm"
+                      "block"
+                    ]
+                  );
+                  default = { };
+                  example = literalExpression ''{ npmPublish = "allow"; }'';
+                  description = ''
+                    What each guarded command does once `autonomousMode` is on,
+                    keyed by the command: `gitPush`, `gitRebase`,
+                    `gitBranchDeleteForce`, `npmPublish` or `piRemove`. An
+                    unknown key is refused rather than ignored, and a key left
+                    out keeps its default -- allow for `git push`, confirm for
+                    every other one, block for `npm publish`.
+
+                    `allow`, `confirm` and `block` are the whole domain: there
+                    is no way to say "ask unless this", so a command left on
+                    `confirm` is the one that keeps asking.
+                  '';
+                };
+              };
+            }
+          );
+          default = null;
+          description = ''
+            The runtime guard policy Pi applies to itself, written to
+            `.pi/gentle-ai/runtime-guardrails.json`.
+
+            Null leaves the file unwritten and the harness's own default in
+            place, which is the built-in confirmation for every guarded
+            command. Naming it here is what makes the policy declarative: the
+            file is read-only at runtime and no command of Pi's writes it, so
+            a rendered copy is the only thing that answers.
+
+            Two things outrank it, in this order: a project's own
+            `.pi/gentle-ai/runtime-guardrails.json`, and
+            `GENTLE_PI_AUTONOMOUS_MODE=1` in the environment, which forces the
+            mode on regardless of this file. Neither is exposed as an option,
+            because two ways to say one thing is how a policy stops being
+            readable.
+
+            Only Pi reads this; a provider other than pi setting it is refused
+            at eval.
+          '';
+        };
+
+        quietTools = mkOption {
+          type = types.bool;
+          default = true;
+          description = ''
+            Whether Pi renders its own tool rows for the commands the harness
+            already shows (`read`, `bash`, `ls`, `find`, `grep`) quietly. With
+            it off, `GENTLE_PI_QUIET_TOOLS=0` is exported for the session so
+            those rows come back.
+
+            Only Pi reads this; a provider other than pi setting it is refused
+            at eval.
           '';
         };
 
@@ -2377,6 +2466,23 @@ in
       '';
     };
 
+    telemetry.enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether Gentle AI and its Pi harness may send telemetry. Setting it
+        false exports `GENTLE_AI_TELEMETRY=0` for the session, which is
+        Gentle AI's own switch and stops both the runtime usage events and the
+        install/heartbeat trigger Pi would otherwise spawn.
+
+        Deliberately not `DO_NOT_TRACK`: that is a standard variable every other
+        program reads, so exporting it from here would be a much wider decision
+        than the one this option names. Export it yourself if that is what you
+        want. `CI=true` suppresses the same things, which is why an automated
+        run is never counted as usage.
+      '';
+    };
+
     backgroundSubagents =
       let
         intent =
@@ -2794,6 +2900,14 @@ in
         message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithRelease}.release is refused: only providers.pi reads release";
       }
       {
+        assertion = nonPiProvidersWithGuardrails == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithGuardrails}.guardrails is refused: only providers.pi reads guardrails";
+      }
+      {
+        assertion = nonPiProvidersWithQuietTools == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithQuietTools}.quietTools is refused: only providers.pi reads quietTools";
+      }
+      {
         # The engram component's own channel options, refused on a component
         # that does not install anything: `components.<name>.release` and
         # `.package` are declared for every component because the reference
@@ -2838,9 +2952,31 @@ in
       components.engram = lib.mkDefault { };
       providers.pi = lib.mkDefault { };
 
+      # Pi's runtime guard policy travels as a file rather than through the
+      # document: it is Pi's own, read from Pi's config home, and no command of
+      # Pi's writes it, so a rendered copy is what answers. An absent policy
+      # leaves the file unwritten and the harness's built-in confirmation in
+      # place.
+      extraFiles = lib.mkIf (cfg.providers.pi.guardrails != null) {
+        pi-runtime-guardrails = {
+          target = ".pi/gentle-ai/runtime-guardrails.json";
+          text = builtins.toJSON {
+            inherit (cfg.providers.pi.guardrails) autonomousMode guardedCommands;
+          };
+        };
+      };
+
       inherit document rendered;
       inherit piProvisionOverrides piProvisionExtra;
     };
+
+    # The switches that are environment rather than a file, for the same reason
+    # an environment variable is the only thing that can carry them: the two
+    # files they would otherwise live in are written by Pi's own commands, and a
+    # store symlink is not writable.
+    home.sessionVariables =
+      lib.optionalAttrs (!cfg.telemetry.enable) { GENTLE_AI_TELEMETRY = "0"; }
+      // lib.optionalAttrs (!cfg.providers.pi.quietTools) { GENTLE_PI_QUIET_TOOLS = "0"; };
 
     home.packages = packages;
 
