@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.3.0";
+    version = "3.4.0";
     owner = "Gentleman-Programming";
-    rev = "v3.3.0";
-    hash = "sha256-an8AMBCojIdigvb/3+THNOIwJqk2ZyHlb4Xc0PzzcEc=";
+    rev = "v3.4.0";
+    hash = "sha256-m3IUKAVkVcC2ZPpAXgyvut1MZc3CN9E6k2OUlFsAPUE=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,14 +29,15 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.3.0 was tagged from the tip of main, and main has moved since, so the tag
-  # and the commit are different revisions that fetch to different store paths --
-  # the tag is the last release, not the branch.
+  # v3.4.0 is the tip of main and this pin is that commit, so the tag and the
+  # commit are the same revision that fetches to the same store path. When the
+  # next release is tagged from a main that has moved on, the tag and the
+  # commit separate again -- the tag is the last release, the branch is the tip.
   beta = {
-    version = "3.3.0-main.b626a1fd";
+    version = "3.4.0-main.82a6de96";
     owner = "Gentleman-Programming";
-    rev = "b626a1fdeda85f19b702d461201e3647d7c64a0b";
-    hash = "sha256-FKZcekN/TAenpDWJUhULFnBalDphRBs66dxOI/SuFzA=";
+    rev = "82a6de96ca6e1cb4f6bf603fe0c08ef1c2039833";
+    hash = "sha256-m3IUKAVkVcC2ZPpAXgyvut1MZc3CN9E6k2OUlFsAPUE=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -63,10 +64,10 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "3.3.0-main.08712268-declarative-config";
+    version = "3.4.0-main.0551c7cb-declarative-config";
     owner = "0xErwin1";
-    rev = "08712268898a8ea99ae5ddb303541f8cda25ff27";
-    hash = "sha256-2F7klK7wEcPsstVWF/ATO/aJ9/SCFwb00Tuastd0hvc=";
+    rev = "0551c7cbb60759a4f2c598546198a516fe9124dd";
+    hash = "sha256-xVBeaqfUixXylVCPSZVt3jeNw99ZVq0m7zhumKsWvhA=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };

@@ -14,27 +14,30 @@
 # Refresh main with:
 #   git ls-remote https://github.com/Gentleman-Programming/gentle-shell main
 #
-# `stable` is npm's `gentle-pi@3.2.1`. Pinning the npm source makes a switch
+# `stable` is npm's `gentle-pi@3.3.0`. Pinning the npm source makes a switch
 # converge on the release this flake tested, rather than whatever `latest`
 # resolves to when Pi runs its installer.
 {
   stable = {
-    source = "npm:gentle-pi@3.2.1";
+    source = "npm:gentle-pi@3.3.0";
   };
 
   # Tracks gentle-shell's main the same way versions.nix's beta channel tracks
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # v3.2.1 was tagged from the tip of main, so this revision is also the release;
-  # a later push to main moves this entry alone.
+  # This revision is the tip of main. The `v3.3.0` tag was cut from the commit
+  # before it, so the branch is one commit ahead of the release -- that is what
+  # tracking a branch means. The `-main.` prerelease label keeps a build from
+  # here from being mistaken for the release: `package.json` at the tip still
+  # reads `3.3.0`.
   #
-  # That release pins Gentle AI v3.2.1 through `INSTALLER_VERSION` in its
+  # The release pins Gentle AI v3.4.0 through `INSTALLER_VERSION` in its
   # `scripts/gentle-ai-installer.mjs` -- the exact release this flake builds, so
   # the copy of Gentle AI the plugin downloads for itself and the package a
-  # switch puts on PATH are now the same one. v3.2.0 trailed it by a release.
+  # switch puts on PATH are the same one.
   main = {
-    version = "3.2.1-main.dce87468";
-    rev = "dce8746852788837fb69545d9fbb5552f07cb307";
+    version = "3.3.0-main.c7fd2e26";
+    rev = "c7fd2e26d93988627ff67aa08657898cd1f66fde";
   };
 }
