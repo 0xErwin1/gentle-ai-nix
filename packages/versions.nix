@@ -58,16 +58,22 @@
   # carries that feature and nothing else, so nothing from outside the
   # declarative configuration contract justifies a commit here.
   #
+  # This generation also stages the injections no component owns, starting with
+  # the always-on routing guidance that carries the mandatory ODD protocol:
+  # before that, a declaratively rendered tree was missing guidance every
+  # imperative install writes. See the fork's
+  # `feat/declarative-config-9-routing-guidance`.
+  #
   # Rendering through it needs the clients Gentle AI interrogates. v3.3.0 taught
   # the renderer to run `opencode --version` and choose between the v1 and v2
   # managed assets, which a build sandbox cannot answer on its own: that is what
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "3.4.0-main.0551c7cb-declarative-config";
+    version = "3.4.0-main.b242cf32-declarative-config";
     owner = "0xErwin1";
-    rev = "0551c7cbb60759a4f2c598546198a516fe9124dd";
-    hash = "sha256-xVBeaqfUixXylVCPSZVt3jeNw99ZVq0m7zhumKsWvhA=";
+    rev = "b242cf321ca04e44c03423b53cda4bd5fe323bc1";
+    hash = "sha256-HMCTv58/q4q+NQtNjI5cnhot3TYk2laf67Ul2qy1T+0=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
