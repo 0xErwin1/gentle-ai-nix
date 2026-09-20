@@ -3041,13 +3041,21 @@ in
     # Copied rather than linked, for the clients that refuse to read through a
     # symbolic link. The copy is authoritative: each target is replaced on every
     # activation, so an edit under it does not survive.
+    #
+    # A mapped asset the source does not have is not a failure: the mapping says
+    # which assets this client carries, and a client whose declared set leaves one
+    # empty has nothing to copy rather than a broken activation. The target is
+    # still removed first, so an asset that disappears from the declaration
+    # disappears from the home directory too.
     home.activation.gentleAiCustomProviders = lib.mkIf (copiedTargets != [ ]) (
       lib.hm.dag.entryAfter [ "writeBoundary" ] (
         lib.concatMapStringsSep "\n" (entry: ''
           run rm -rf ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
-          run mkdir -p "$(dirname ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"})"
-          run cp -rL --no-preserve=mode,ownership ${lib.escapeShellArg entry.source} ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
-          run chmod -R u+w ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
+          if [ -e ${lib.escapeShellArg entry.source} ]; then
+            run mkdir -p "$(dirname ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"})"
+            run cp -rL --no-preserve=mode,ownership ${lib.escapeShellArg entry.source} ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
+            run chmod -R u+w ${lib.escapeShellArg "${config.home.homeDirectory}/${entry.target}"}
+          fi
         '') copiedTargets
       )
     );

@@ -3339,4 +3339,53 @@ in
 
         touch "$out"
       '';
+
+  # A custom provider's `assets` mapping names what a client carries, not what
+  # the source must contain: a client whose declared set leaves a directory empty
+  # has nothing to copy there. The copy is a plain `cp -rL` at activation, so an
+  # asset the source does not have used to fail the whole switch -- which is
+  # exactly what happened the first time a consumer removed the last file from
+  # one of those directories. The guard is asserted here rather than trusted,
+  # because the failure only shows up on a machine that has such a client.
+  customProviderAssetMissingFromTheSourceIsSkipped =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.opencode.enable = true;
+            customProviders.probe = {
+              root = ".probe";
+              from = "opencode";
+              delivery = "copy";
+              assets = {
+                "AGENTS.md" = "AGENTS.md";
+                # Never rendered, which is the case this check exists for.
+                "commands" = "commands";
+              };
+            };
+          };
+        }
+      ];
+      activation = configuration.config.home.activationPackage;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-custom-provider-missing-asset" { inherit activation; } ''
+      set -euo pipefail
+
+      script="$activation/activate"
+      test -f "$script" || { echo "the activation script was not produced" >&2; exit 1; }
+
+      # The absent asset is still named, and reaching it is guarded.
+      grep -qF '.probe/commands' "$script" || {
+        echo "the declared asset is missing from the activation script" >&2
+        exit 1
+      }
+      grep -B 2 'cp -rL' "$script" | grep -q 'if \[ -e ' || {
+        echo "the copy of a mapped asset is not guarded by the source's existence" >&2
+        grep -n -B 3 'cp -rL' "$script" >&2
+        exit 1
+      }
+
+      touch "$out"
+    '';
 }
