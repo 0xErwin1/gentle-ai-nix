@@ -418,6 +418,8 @@ Adding a release is one entry in [`packages/versions.nix`](packages/versions.nix
 
 This flake calls `gentle-ai config render`, the declarative configuration contract from [Gentle AI issue #3248](https://github.com/Gentleman-Programming/gentle-ai/issues/3248). It is not in an upstream release yet, which is what the `contract` channel above exists for. Once it merges, drop that entry from `packages/versions.nix` and set `providesContract = true` on the release that carries it; nothing else changes.
 
+A rendered tree is what an install would write for the same declaration, including the injections no component owns. The one worth knowing about is the routing guidance: ODD is installed for every selected agent that reads a system prompt, whether or not the SDD component is selected, so the mandatory ODD protocol reaches Claude Code, Codex, OpenCode and the rest through the render. Pi is the exception on both paths, because `gentle-pi` owns the Pi parent's instructions and an install only retires legacy blocks from them. The `routingGuidanceReachesEverySelectedAgent` check fails if a render ever stops carrying it.
+
 ## Checklist
 
 - [ ] `nix flake check` passes against your pinned Gentle AI package.

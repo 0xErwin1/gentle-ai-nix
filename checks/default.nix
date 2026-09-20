@@ -3254,4 +3254,89 @@ in
 
       touch "$out"
     '';
+
+  # ODD is not a component. The routing guidance is installed for every selected
+  # agent that reads a system prompt, whether or not the SDD component is
+  # selected, and it is what carries the mandatory ODD protocol. A render that
+  # staged components only wrote a tree no install would ever produce, so this
+  # check pins the behaviour in all three delivery shapes -- the prompt file, the
+  # settings-document orchestrator prompt, and the Pi exception.
+  routingGuidanceReachesEverySelectedAgent =
+    let
+      selected = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers = {
+              claude-code.enable = true;
+              codex.enable = true;
+              opencode.enable = true;
+            };
+          };
+        }
+      ];
+      piOnly = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi.enable = true;
+          };
+        }
+      ];
+    in
+    pkgs.runCommandLocal "gentle-ai-check-routing-guidance-render-through"
+      {
+        selected = selected.config.programs.gentle-ai.rendered;
+        piOnly = piOnly.config.programs.gentle-ai.rendered;
+      }
+      ''
+        set -euo pipefail
+
+        # The prompt-file delivery every plain adapter uses.
+        for prompt in "$selected/tree/.claude/CLAUDE.md" "$selected/tree/.codex/AGENTS.md"; do
+          test -f "$prompt" || { echo "$prompt was not rendered" >&2; exit 1; }
+          grep -qF '<!-- gentle-ai:agent-routing -->' "$prompt" || {
+            echo "$prompt carries no routing section" >&2
+            exit 1
+          }
+          grep -qF 'Organic Driven Development (ODD) is the predefined workflow of this orchestrator.' "$prompt" || {
+            echo "$prompt does not state that ODD is the default workflow" >&2
+            exit 1
+          }
+          grep -qF '### ODD protocol (MANDATORY, in this order, on every request)' "$prompt" || {
+            echo "$prompt does not carry the ODD protocol" >&2
+            exit 1
+          }
+          grep -qF 'odd/tasks/<feature-name>.md' "$prompt" || {
+            echo "$prompt does not name the feature task document" >&2
+            exit 1
+          }
+        done
+
+        # OpenCode reads its always-on instructions from the managed orchestrator
+        # agent definition inside its settings document, not from a prompt file,
+        # so guidance written anywhere else would never reach the model.
+        opencode="$selected/tree/.config/opencode/opencode.json"
+        test -f "$opencode" || { echo "opencode's settings were not rendered" >&2; exit 1; }
+        ${pkgs.jq}/bin/jq -e '[.. | strings | select(contains("gentle-ai:agent-routing"))] | length > 0' "$opencode" >/dev/null || {
+          echo "opencode's orchestrator prompt carries no routing guidance:" >&2
+          cat "$opencode" >&2
+          exit 1
+        }
+        ${pkgs.jq}/bin/jq -e '[.. | strings | select(contains("### ODD protocol"))] | length > 0' "$opencode" >/dev/null || {
+          echo "opencode's orchestrator prompt does not carry the ODD protocol" >&2
+          exit 1
+        }
+
+        # Pi is the exception on both paths: gentle-pi owns the Pi parent's
+        # instructions, so an install writes no guidance for it and a render must
+        # not invent one.
+        if grep -rlF '<!-- gentle-ai:agent-routing -->' "$piOnly/tree" >/dev/null 2>&1; then
+          echo "a Pi-only render staged routing guidance no install would write:" >&2
+          grep -rlF '<!-- gentle-ai:agent-routing -->' "$piOnly/tree" >&2
+          exit 1
+        fi
+
+        touch "$out"
+      '';
 }
