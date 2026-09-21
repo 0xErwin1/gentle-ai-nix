@@ -26,18 +26,17 @@
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # This revision is the tip of main. The `v3.3.0` tag was cut from the commit
-  # before it, so the branch is one commit ahead of the release -- that is what
-  # tracking a branch means. The `-main.` prerelease label keeps a build from
-  # here from being mistaken for the release: `package.json` at the tip still
-  # reads `3.3.0`.
+  # This revision is the tip of main. The branch is twelve commits ahead of
+  # the `v3.3.0` release -- that is what tracking a branch means. The `-main.`
+  # prerelease label keeps a build from here from being mistaken for the
+  # release: `package.json` at the tip still reads `3.3.0`.
   #
   # The release pins Gentle AI v3.4.0 through `INSTALLER_VERSION` in its
   # `scripts/gentle-ai-installer.mjs` -- the exact release this flake builds, so
   # the copy of Gentle AI the plugin downloads for itself and the package a
   # switch puts on PATH are the same one.
   main = {
-    version = "3.3.0-main.c7fd2e26";
-    rev = "c7fd2e26d93988627ff67aa08657898cd1f66fde";
+    version = "3.3.0-main.40740437";
+    rev = "407404372516ac0e27fc63e22ed08344f3f64c90";
   };
 }

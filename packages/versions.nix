@@ -29,15 +29,14 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.4.0 is the tip of main and this pin is that commit, so the tag and the
-  # commit are the same revision that fetches to the same store path. When the
-  # next release is tagged from a main that has moved on, the tag and the
-  # commit separate again -- the tag is the last release, the branch is the tip.
+  # v3.4.0 was tagged from a main that has moved on since, so the tag and the
+  # commit are different revisions that fetch to different store paths -- the tag
+  # is the last release, the branch is the tip.
   beta = {
-    version = "3.4.0-main.82a6de96";
+    version = "3.4.0-main.134409f6";
     owner = "Gentleman-Programming";
-    rev = "82a6de96ca6e1cb4f6bf603fe0c08ef1c2039833";
-    hash = "sha256-m3IUKAVkVcC2ZPpAXgyvut1MZc3CN9E6k2OUlFsAPUE=";
+    rev = "134409f6a9d55c0e8577dd06f7191a8c7c89fddf";
+    hash = "sha256-hoAqBO/16MoiwLGPagxZv2vM5WShBITEzPcjfkoG6qE=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -70,10 +69,10 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "3.4.0-main.b242cf32-declarative-config";
+    version = "3.4.0-main.95a41cf1-declarative-config";
     owner = "0xErwin1";
-    rev = "b242cf321ca04e44c03423b53cda4bd5fe323bc1";
-    hash = "sha256-HMCTv58/q4q+NQtNjI5cnhot3TYk2laf67Ul2qy1T+0=";
+    rev = "95a41cf11d9f84e33881c46ce08c17099e3a106e";
+    hash = "sha256-bQ6Z1dVF7hOH3lNjZjz2/PMD8pUUkq1yP2xGuHg5+Cc=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
