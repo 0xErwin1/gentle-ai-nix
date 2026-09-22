@@ -1863,7 +1863,9 @@ let
   allSecretPaths = lib.unique (cfg.secrets.paths ++ providerSecretPaths);
   allMergeTargets = mergeTargets ++ providerMergeTargets;
 
-  withheld = allSecretPaths ++ map (entry: entry.path) allMergeTargets;
+  withheld = lib.unique (
+    allSecretPaths ++ cfg.runtimeWritablePaths ++ map (entry: entry.path) allMergeTargets
+  );
 
   # gentle-nix is the one Go binary this repository builds from its own
   # source (cmd/gentle-nix, internal/...), replacing four of the five
@@ -2815,6 +2817,27 @@ in
       };
     };
 
+    runtimeWritablePaths = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      example = literalExpression ''[ ".pi/gentle-ai/profiles.json" ]'';
+      description = ''
+        Rendered paths the client rewrites at runtime. Like `secrets.paths`
+        they are kept out of the projection and written as real files at
+        activation, but without placeholder substitution: what the client
+        needs here is not a credential but a file it can write, and a store
+        symlink can be neither written nor kept through the
+        temp-file-and-rename such a write goes through.
+
+        The declaration is a seed: it is rewritten on every activation, so
+        what the client changes at runtime lasts until the next switch. An
+        entry naming a path the render does not produce fails at activation,
+        naming the path.
+
+        Every entry is relative to the home directory.
+      '';
+    };
+
     extraFiles = mkOption {
       type = types.attrsOf extraFileType;
       default = { };
@@ -3128,6 +3151,19 @@ in
             --target ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"} \
             ${secretArguments}
         '') allSecretPaths
+      )
+    );
+
+    # The sibling of the secrets step above, for paths the client rewrites at
+    # runtime: the same replace, deliberately without `secretArguments`, since
+    # what these need is writability, not a credential.
+    home.activation.gentleAiRuntimeWritableFiles = lib.mkIf (cfg.runtimeWritablePaths != [ ]) (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] (
+        lib.concatMapStringsSep "\n" (path: ''
+          run ${lib.getExe merger} --replace \
+            --fragment ${lib.escapeShellArg "${rendered}/tree/${path}"} \
+            --target ${lib.escapeShellArg "${config.home.homeDirectory}/${path}"}
+        '') cfg.runtimeWritablePaths
       )
     );
 

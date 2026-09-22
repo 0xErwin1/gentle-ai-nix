@@ -3017,6 +3017,117 @@ in
         touch "$out"
       '';
 
+  # A runtime-writable path is the non-secret sibling of a secret path: the
+  # same withholding and the same activation-time replace, minus the secret
+  # arguments. The path checked here is `.pi/gentle-ai/profiles.json`, which
+  # the render really produces once Pi declares profiles -- `gentle-nix pi
+  # routing` writes gentle-pi's profile store there -- and the check asserts
+  # the rendered tree carries it rather than assuming, so a renderer that
+  # ever stops producing it fails here instead of vacuously passing the
+  # withholding assertion below.
+  runtimeWritablePathIsWrittenAtActivationAndWithheld =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
+              enable = true;
+              profiles.cheap.orchestrator = {
+                provider = "anthropic";
+                model = "claude-haiku";
+              };
+              activeProfile = "cheap";
+            };
+            runtimeWritablePaths = [ ".pi/gentle-ai/profiles.json" ];
+          };
+        }
+      ];
+      activation = configuration.config.home.activationPackage;
+      delivered = configuration.config.home.file.gentle-ai.source;
+      rendered = configuration.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-runtime-writable-path"
+      { inherit activation delivered rendered; }
+      ''
+        set -euo pipefail
+
+        test -e "$rendered/tree/.pi/gentle-ai/profiles.json" || {
+          echo "the render did not produce .pi/gentle-ai/profiles.json" >&2
+          exit 1
+        }
+
+        test ! -e "$delivered/.pi/gentle-ai/profiles.json" || {
+          echo "a runtime-writable path was still projected as a store symlink" >&2
+          exit 1
+        }
+
+        step=$(grep -B1 -A2 -F -- "--fragment $rendered/tree/.pi/gentle-ai/profiles.json" "$activation/activate" || true)
+        [ -n "$step" ] || {
+          echo "the runtime-writable path was not written at activation" >&2
+          cat "$activation/activate" >&2
+          exit 1
+        }
+        echo "$step" | grep -qF -- '--replace' || {
+          echo "the runtime-writable path was not written with a replace" >&2
+          echo "$step" >&2
+          exit 1
+        }
+        echo "$step" | grep -qF -- '--target /home/test-user/.pi/gentle-ai/profiles.json' || {
+          echo "the runtime-writable path did not resolve to the home-relative path it names" >&2
+          echo "$step" >&2
+          exit 1
+        }
+        ! echo "$step" | grep -q -- '--secret\|--env-file' || {
+          echo "the runtime-writable step carried secret arguments it must not take" >&2
+          echo "$step" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
+  # Left at its default the option must do nothing: no activation step may
+  # write for it, and the rendered file keeps its place in the projection,
+  # exactly as before the option existed.
+  runtimeWritablePathsDefaultLeavesTheProjectionAlone =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
+              enable = true;
+              profiles.cheap.orchestrator = {
+                provider = "anthropic";
+                model = "claude-haiku";
+              };
+              activeProfile = "cheap";
+            };
+          };
+        }
+      ];
+      activation = configuration.config.home.activationPackage;
+      delivered = configuration.config.home.file.gentle-ai.source;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-runtime-writable-paths-default"
+      { inherit activation delivered; }
+      ''
+        set -euo pipefail
+
+        test -e "$delivered/.pi/gentle-ai/profiles.json" || {
+          echo "the default withheld a path no runtimeWritablePaths entry named" >&2
+          exit 1
+        }
+        ! grep -qF -- '--target /home/test-user/.pi/gentle-ai/profiles.json' "$activation/activate" || {
+          echo "the default still wrote a runtime-writable path at activation" >&2
+          grep -B1 -A2 -F -- '--target /home/test-user/.pi/gentle-ai/profiles.json' "$activation/activate" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   # `providers.<name>.secrets` is resolved against `providerRoots`, so a
   # client Gentle AI has no adapter for -- or a typo -- has nothing to resolve
   # it against and must be refused rather than silently rendering nothing.

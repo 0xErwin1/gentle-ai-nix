@@ -347,6 +347,23 @@ absent and the harness's built-in confirmation stands. A project's own copy of
 that file and `GENTLE_PI_AUTONOMOUS_MODE=1` both outrank it; neither is exposed
 here, because two ways to say one thing is how a policy stops being readable.
 
+**A file the client rewrites at runtime** needs the same escape hatch minus the
+credential. Pi keeps state it rewrites itself — the profile store, model
+routing, personas, the background-subagent table — in `~/.pi/gentle-ai/*.json`,
+and a store symlink can be neither written nor kept through the
+temp-file-and-rename such a write goes through: the symlink is silently
+replaced and the file falls out of Home Manager's hands. Declaring the path
+holds it back from the projection and writes the rendered copy as a real file
+at activation, with no placeholder substitution:
+
+```nix
+runtimeWritablePaths = [ ".pi/gentle-ai/profiles.json" ];
+```
+
+The declaration is a seed, not a lease: it is rewritten on every activation, so
+what the client changed at runtime lasts until the next switch. An entry naming
+a path the render does not produce fails at activation, naming the path.
+
 **Two switches are environment rather than a file**, because the files they
 would otherwise live in are written by Pi's own commands and a read-only store
 symlink is not writable:

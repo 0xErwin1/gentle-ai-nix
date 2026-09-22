@@ -2923,6 +2923,47 @@ null
 
 
 
+## programs\.gentle-ai\.runtimeWritablePaths
+
+
+
+Rendered paths the client rewrites at runtime\. Like ` secrets.paths `
+they are kept out of the projection and written as real files at
+activation, but without placeholder substitution: what the client
+needs here is not a credential but a file it can write, and a store
+symlink can be neither written nor kept through the
+temp-file-and-rename such a write goes through\.
+
+The declaration is a seed: it is rewritten on every activation, so
+what the client changes at runtime lasts until the next switch\. An
+entry naming a path the render does not produce fails at activation,
+naming the path\.
+
+Every entry is relative to the home directory\.
+
+
+
+*Type:*
+list of string
+
+
+
+*Default:*
+
+```nix
+[ ]
+```
+
+
+
+*Example:*
+
+```nix
+[ ".pi/gentle-ai/profiles.json" ]
+```
+
+
+
 ## programs\.gentle-ai\.schemaVersion
 
 
