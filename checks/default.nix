@@ -1039,6 +1039,50 @@ in
             exit 1
           ''
         }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers = {
+                    pi.enable = true;
+                    opencode = {
+                      enable = true;
+                      launcher.enable = true;
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-pi provider was allowed to enable the standalone launcher" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers = {
+                    pi.enable = true;
+                    opencode = {
+                      enable = true;
+                      launcher.package = pkgs.hello;
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-pi provider was allowed to override the launcher package" >&2
+            exit 1
+          ''
+        }
         touch "$out"
       '';
 
@@ -1538,6 +1582,76 @@ in
       }
       "$package/bin/pi-engram" --help >/dev/null || {
         echo "bin/pi-engram does not start the CLI in gentle-engram-pi" >&2
+        exit 1
+      }
+      touch "$out"
+    '';
+
+  # The standalone launcher package itself: the binary `providers.pi.launcher`
+  # puts on PATH. `--help` short-circuits before any Pi resolution, so this
+  # can answer in a sandbox that deliberately carries no `pi` on PATH -- the
+  # launcher resolves `pi` itself at boot and reports a missing one.
+  gentleShellLauncherAnswersHelpWithoutPi =
+    let
+      launcher = self.packages.${system}.gentle-shell;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-help"
+      { nativeBuildInputs = [ launcher ]; }
+      ''
+        set -euo pipefail
+
+        if command -v pi >/dev/null 2>&1; then
+          echo "the check sandbox unexpectedly has a pi on PATH" >&2
+          exit 1
+        fi
+
+        output="$(gentle-shell --help 2>&1)"
+        printf '%s\n' "$output" | head -n 1 | grep -q '^Usage: gentle-shell' || {
+          echo "gentle-shell --help did not open with its usage line:" >&2
+          printf '%s\n' "$output" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
+  # The launcher option is opt-in in both directions: enabling it puts the
+  # launcher in home.packages (through the module's existing assembly), and
+  # leaving it at its default puts nothing there. Both halves are asserted at
+  # eval time, where the packages are derivations to compare rather than
+  # paths to guess; the runCommand then proves the selected entry is really
+  # the executable the launcher ships.
+  gentleShellLauncherOptionControlsHomePackages =
+    let
+      configurationFor =
+        extra:
+        evaluate [
+          {
+            programs.gentle-ai = lib.recursiveUpdate {
+              enable = true;
+            } extra;
+          }
+        ];
+
+      launcherOf =
+        configuration:
+        lib.findSingle (
+          package: (package.pname or "") == "gentle-shell"
+        ) null null configuration.config.home.packages;
+
+      enabled = configurationFor {
+        providers.pi.enable = true;
+        providers.pi.launcher.enable = true;
+      };
+      disabled = configurationFor { providers.pi.enable = true; };
+
+      selected = launcherOf enabled;
+    in
+    assert launcherOf disabled == null;
+    assert selected != null;
+    pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-option" { inherit selected; } ''
+      test -x "$selected/bin/gentle-shell" || {
+        echo "the launcher entry in home.packages has no executable bin/gentle-shell" >&2
         exit 1
       }
       touch "$out"

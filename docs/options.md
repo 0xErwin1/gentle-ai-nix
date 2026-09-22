@@ -1604,6 +1604,104 @@ attribute set of (one of “allow”, “confirm”, “block”)
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.launcher
+
+
+
+The standalone ` gentle-shell ` launcher this installation puts on
+PATH\. See ` enable ` and ` package ` inside\.
+
+Only Pi reads this; a provider other than pi setting it is refused
+at eval\.
+
+
+
+*Type:*
+submodule
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.launcher\.enable
+
+
+
+Put the standalone ` gentle-shell ` launcher on PATH\.
+
+gentle-shell is its own entry point: it resolves the Pi
+runtime from PATH (and reports a missing one rather than
+asking this module for it), applies the version gate, and
+boots the session in its own home
+(` ~/.gentle-shell/agent `) unless ` --link ` – or
+` gentle-shell home link ` – reuses ` ~/.pi/agent `\. That
+distinction matters here: this module renders into
+` ~/.pi/agent `, so a launcher left on its default home runs
+without anything this flake renders\. Linking the two homes
+is what makes them meet, and it is a runtime decision the
+launcher owns, not a file this module writes\.
+
+It is off by default: the binary is only worth building for
+an installation that actually launches it, and enabling it
+does not require ` providers.pi.enable ` – the launcher is
+standalone and resolves its own runtime\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+false
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.launcher\.package
+
+
+
+Which gentle-shell build to put on PATH\.
+
+Null resolves to this flake’s own build of the channel
+` providers.pi.release ` selects (` packages/gentle-shell.nix `,
+built from the repository archive with the dependencies its
+pnpm lockfile pins)\. An installation that wants a different
+build – a locally patched one, say – names it here\.
+
+
+
+*Type:*
+null or package
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+pkgs.gentle-shell
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.mcpServers
 
 
@@ -2718,8 +2816,6 @@ null
 
 ## programs\.gentle-ai\.roles\.\<name>\.model\.model
 
-
-
 Model id within the provider\.
 
 
@@ -2764,6 +2860,8 @@ null
 
 
 ## programs\.gentle-ai\.roles\.\<name>\.references
+
+
 
 Ids of the roles this one delegates to\.
 
