@@ -3087,6 +3087,85 @@ in
         touch "$out"
       '';
 
+  # The structural check above only proves the activation script names the
+  # write. This one runs it: the same `--replace` command the activation entry
+  # carries, against a target inside this build's own directory, asserted to
+  # leave a regular file -- not a symlink, since a store symlink is what the
+  # client could neither rewrite nor keep through its own temp-file-and-rename
+  # -- that is writable and byte-identical to the rendered fragment.
+  runtimeWritablePathWriteProducesARealWritableFile =
+    let
+      configuration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
+              enable = true;
+              profiles.cheap.orchestrator = {
+                provider = "anthropic";
+                model = "claude-haiku";
+              };
+              activeProfile = "cheap";
+            };
+            runtimeWritablePaths = [ ".pi/gentle-ai/profiles.json" ];
+          };
+        }
+      ];
+      activation = configuration.config.home.activationPackage;
+      rendered = configuration.config.programs.gentle-ai.rendered;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-runtime-writable-write-behaviour"
+      { inherit activation rendered; }
+      ''
+        set -euo pipefail
+
+        fragment="$rendered/tree/.pi/gentle-ai/profiles.json"
+        test -e "$fragment" || {
+          echo "the render did not produce .pi/gentle-ai/profiles.json" >&2
+          exit 1
+        }
+
+        # Take the merger from the activation command line itself, so the
+        # check runs exactly the binary the activation step would run rather
+        # than resolving the merger a second time and trusting both to agree.
+        # The script wraps the command across lines with the binary on the
+        # `run` line above `--fragment`, so the step is taken as a block.
+        step=$(grep -B1 -A2 -F -- "--fragment $rendered/tree/.pi/gentle-ai/profiles.json" "$activation/activate")
+        merger=$(printf '%s\n' "$step" \
+          | grep -oE '/nix/store/[a-z0-9]+-gentle-ai-merge/bin/gentle-ai-merge' \
+          | head -n1)
+        [ -n "$merger" ] || {
+          echo "the activation script does not carry the gentle-ai-merge binary path" >&2
+          cat "$activation/activate" >&2
+          exit 1
+        }
+        test -x "$merger" || {
+          echo "the merger extracted from the activation script is not executable: $merger" >&2
+          exit 1
+        }
+
+        target="$PWD/.pi/gentle-ai/profiles.json"
+        "$merger" --replace --fragment "$fragment" --target "$target"
+
+        test -f "$target" && test ! -L "$target" || {
+          echo "the write did not leave a regular file (symlinks and directories are both wrong here)" >&2
+          ls -la "$PWD/.pi/gentle-ai/" >&2
+          exit 1
+        }
+        test -w "$target" || {
+          echo "the written file is not writable by its owner, so the client could not rewrite it" >&2
+          ls -la "$target" >&2
+          exit 1
+        }
+        cmp -s "$fragment" "$target" || {
+          echo "the written file is not byte-identical to the rendered fragment" >&2
+          cmp -l "$fragment" "$target" | head >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   # Left at its default the option must do nothing: no activation step may
   # write for it, and the rendered file keeps its place in the projection,
   # exactly as before the option existed.

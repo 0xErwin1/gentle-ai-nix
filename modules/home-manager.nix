@@ -1867,6 +1867,17 @@ let
     allSecretPaths ++ cfg.runtimeWritablePaths ++ map (entry: entry.path) allMergeTargets
   );
 
+  # A path named in both the secret list and the runtime-writable list is
+  # written by two activation steps -- `gentleAiSecrets` below with placeholder
+  # substitution, `gentleAiRuntimeWritableFiles` without -- so only the order
+  # between them would decide its final content. `allSecretPaths` already
+  # normalises the provider-scoped secret paths to their home-relative
+  # spelling, so the comparison here covers every spelling a secret can be
+  # declared in against every home-relative runtime-writable entry.
+  overlappingRuntimeWritableSecretPaths = lib.unique (
+    lib.intersectLists cfg.runtimeWritablePaths allSecretPaths
+  );
+
   # gentle-nix is the one Go binary this repository builds from its own
   # source (cmd/gentle-nix, internal/...), replacing four of the five
   # writePython3Bin helpers that used to be wrapped here. Each is exposed
@@ -2949,6 +2960,19 @@ in
             entry: "${entry.name}.secrets: `${entry.path}`"
           ) escapedProviderSecretPaths
         }";
+      }
+      {
+        # Both `gentleAiSecrets` and `gentleAiRuntimeWritableFiles` below write
+        # their paths as real files at activation -- one with placeholder
+        # substitution, one without -- so a path declared in both lists would
+        # end up with whichever step ran last deciding its content. The
+        # provider-scoped `providers.<name>.secrets` paths count here too:
+        # they are resolved to the same home-relative spelling before the
+        # comparison, and land on the same absolute target in the home.
+        assertion = overlappingRuntimeWritableSecretPaths == [ ];
+        message = "programs.gentle-ai.runtimeWritablePaths and programs.gentle-ai.secrets.paths (or a provider's secrets) both declare ${
+          lib.concatMapStringsSep ", " (path: "`${path}`") overlappingRuntimeWritableSecretPaths
+        }; both are written as real files at activation and only the order between the steps would decide the content -- keep each path in only one of the lists";
       }
       {
         assertion = lib.all (entry: (entry.text == null) != (entry.source == null)) (
