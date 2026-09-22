@@ -8,7 +8,7 @@
 let
   lib = pkgs.lib;
   module = self.homeManagerModules.default;
-  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@407404372516ac0e27fc63e22ed08344f3f64c90";
+  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@a1470f74a723ec1386e3440b49611ffef82399e5";
 
   evaluate =
     extraModules:
@@ -311,7 +311,7 @@ in
     in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
-    assert defaultOverrides.gentle-pi == "npm:gentle-pi@3.3.0";
+    assert defaultOverrides.gentle-pi == "npm:gentle-pi@3.4.0";
     # Stable pins the plugin to the version the release ships, never npm's
     # moving `latest`, which is already ahead of it.
     assert defaultOverrides.gentle-engram == "npm:gentle-engram@0.1.13";
@@ -356,7 +356,7 @@ in
           echo "main did not render the guarded legacy gentle-pi Git migration rule" >&2
           exit 1
         }
-        grep -qF '"name":"gentle-shell","type":"git","wanted":"npm:gentle-pi@3.3.0"' "$stableActivation/activate" || {
+        grep -qF '"name":"gentle-shell","type":"git","wanted":"npm:gentle-pi@3.4.0"' "$stableActivation/activate" || {
           echo "stable did not render the guarded canonical gentle-shell Git retirement rule" >&2
           exit 1
         }
@@ -457,7 +457,7 @@ in
         gentle-nix provision --manifest "$PWD/overridden.manifest.json" --agent pi \
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > overridden.commands
 
-        for want in "pi install npm:gentle-pi@3.3.0" "pi install npm:gentle-engram@0.1.13"; do
+        for want in "pi install npm:gentle-pi@3.4.0" "pi install npm:gentle-engram@0.1.13"; do
           grep -qxF "$want" default.commands || {
             echo "the default configuration no longer runs: $want" >&2
             cat default.commands >&2
@@ -466,7 +466,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-shell@407404372516ac0e27fc63e22ed08344f3f64c90" \
+          "pi install git:github.com/Gentleman-Programming/gentle-shell@a1470f74a723ec1386e3440b49611ffef82399e5" \
           "pi install ${gentleEngramPiPath}" \
           "${gentleEngramPiPath}/bin/pi-engram init"
         do
@@ -1062,7 +1062,7 @@ in
         packages = [
           "npm:gentle-pi"
           "npm:gentle-pi@2.4.0"
-          "npm:gentle-pi@3.3.0"
+          "npm:gentle-pi@3.4.0"
           "git:github.com/Gentleman-Programming/gentle-pi@abc123"
           "git:github.com/Gentleman-Programming/gentle-shell@def456"
           "npm:gentle-engram"
@@ -1126,12 +1126,12 @@ in
       canonicalGentleShellGitRetirement = builtins.toJSON {
         type = "git";
         name = "gentle-shell";
-        wanted = "npm:gentle-pi@3.3.0";
+        wanted = "npm:gentle-pi@3.4.0";
       };
       packageRuleKeepingStableGentlePi = builtins.toJSON {
         type = "package";
-        keep = "npm:gentle-pi@3.3.0";
-        wanted = "npm:gentle-pi@3.3.0";
+        keep = "npm:gentle-pi@3.4.0";
+        wanted = "npm:gentle-pi@3.4.0";
       };
 
       # Pinning one of Pi's own fixed packages (here pi-btw) retires the bare
@@ -1266,7 +1266,7 @@ in
           [
             "npm:gentle-pi"
             "npm:gentle-pi@2.4.0"
-            "npm:gentle-pi@3.3.0"
+            "npm:gentle-pi@3.4.0"
             "git:github.com/Gentleman-Programming/gentle-pi@abc123"
             "npm:gentle-engram"
             "npm:gentle-engram@0.1.12"

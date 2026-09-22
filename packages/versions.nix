@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.4.0";
+    version = "3.5.0";
     owner = "Gentleman-Programming";
-    rev = "v3.4.0";
-    hash = "sha256-m3IUKAVkVcC2ZPpAXgyvut1MZc3CN9E6k2OUlFsAPUE=";
+    rev = "v3.5.0";
+    hash = "sha256-ESEE5v1B7xEslumdbbauHDE099xoeI+pq1jrxLE2IhA=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,14 +29,14 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.4.0 was tagged from a main that has moved on since, so the tag and the
+  # v3.5.0 was tagged from a main that has moved on since, so the tag and the
   # commit are different revisions that fetch to different store paths -- the tag
   # is the last release, the branch is the tip.
   beta = {
-    version = "3.4.0-main.134409f6";
+    version = "3.5.0-main.7a1af77f";
     owner = "Gentleman-Programming";
-    rev = "134409f6a9d55c0e8577dd06f7191a8c7c89fddf";
-    hash = "sha256-hoAqBO/16MoiwLGPagxZv2vM5WShBITEzPcjfkoG6qE=";
+    rev = "7a1af77f0fd3dc2b12258d10523cd03b0c3c6a2e";
+    hash = "sha256-HEgUwJipIVTfKNGRdVuBL7V78tD+CvrPXG20k71YpKk=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -69,10 +69,10 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "3.4.0-main.95a41cf1-declarative-config";
+    version = "3.5.0-main.9bd3b8e1-declarative-config";
     owner = "0xErwin1";
-    rev = "95a41cf11d9f84e33881c46ce08c17099e3a106e";
-    hash = "sha256-bQ6Z1dVF7hOH3lNjZjz2/PMD8pUUkq1yP2xGuHg5+Cc=";
+    rev = "9bd3b8e130a2ecf9c2b2c157a7bb8875bc242e5a";
+    hash = "sha256-Sux3TJ4HkE0V16sxztAHhmRe/fuC+4sS+hQXw0TTTuI=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
