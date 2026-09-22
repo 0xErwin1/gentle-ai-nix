@@ -1867,15 +1867,21 @@ let
     allSecretPaths ++ cfg.runtimeWritablePaths ++ map (entry: entry.path) allMergeTargets
   );
 
-  # A path named in both the secret list and the runtime-writable list is
-  # written by two activation steps -- `gentleAiSecrets` below with placeholder
-  # substitution, `gentleAiRuntimeWritableFiles` without -- so only the order
-  # between them would decide its final content. `allSecretPaths` already
-  # normalises the provider-scoped secret paths to their home-relative
-  # spelling, so the comparison here covers every spelling a secret can be
-  # declared in against every home-relative runtime-writable entry.
-  overlappingRuntimeWritableSecretPaths = lib.unique (
-    lib.intersectLists cfg.runtimeWritablePaths allSecretPaths
+  # A path named in both the runtime-writable list and one of the two other
+  # lists written at activation is written twice, and only the order between
+  # the steps would decide its final content -- `gentleAiSecrets` replaces it
+  # with placeholder substitution, `gentleAiMergedSecrets` merges the rendered
+  # fragment into whatever is live, `gentleAiRuntimeWritableFiles` replaces it
+  # without substitution. Naming it in two of those lists is a declaration
+  # mistake rather than a precedence question, so it is refused.
+  #
+  # `allSecretPaths` already normalises the provider-scoped secret paths to
+  # their home-relative spelling, and `allMergeTargets` carries the paths the
+  # merge steps write, so this covers every spelling either can be declared in.
+  overlappingRuntimeWritablePaths = lib.unique (
+    lib.intersectLists cfg.runtimeWritablePaths (
+      allSecretPaths ++ map (entry: entry.path) allMergeTargets
+    )
   );
 
   # gentle-nix is the one Go binary this repository builds from its own
@@ -2962,17 +2968,17 @@ in
         }";
       }
       {
-        # Both `gentleAiSecrets` and `gentleAiRuntimeWritableFiles` below write
-        # their paths as real files at activation -- one with placeholder
-        # substitution, one without -- so a path declared in both lists would
-        # end up with whichever step ran last deciding its content. The
-        # provider-scoped `providers.<name>.secrets` paths count here too:
-        # they are resolved to the same home-relative spelling before the
-        # comparison, and land on the same absolute target in the home.
-        assertion = overlappingRuntimeWritableSecretPaths == [ ];
-        message = "programs.gentle-ai.runtimeWritablePaths and programs.gentle-ai.secrets.paths (or a provider's secrets) both declare ${
-          lib.concatMapStringsSep ", " (path: "`${path}`") overlappingRuntimeWritableSecretPaths
-        }; both are written as real files at activation and only the order between the steps would decide the content -- keep each path in only one of the lists";
+        # Three steps write their paths as real files at activation --
+        # `gentleAiMergedSecrets` merges, `gentleAiSecrets` replaces with
+        # placeholder substitution, `gentleAiRuntimeWritableFiles` replaces
+        # without -- so a path declared in two of those lists would end up with
+        # whichever step ran last deciding its content. The provider-scoped
+        # spellings count here too: they resolve to the same home-relative
+        # target before the comparison.
+        assertion = overlappingRuntimeWritablePaths == [ ];
+        message = "programs.gentle-ai.runtimeWritablePaths names ${
+          lib.concatMapStringsSep ", " (path: "`${path}`") overlappingRuntimeWritablePaths
+        }, which programs.gentle-ai.secrets (or a provider's secrets, or a merge target) also writes at activation; both write the same file and only the order between the steps would decide the content -- keep each path in only one of the lists";
       }
       {
         assertion = lib.all (entry: (entry.text == null) != (entry.source == null)) (
