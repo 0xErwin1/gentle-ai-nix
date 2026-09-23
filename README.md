@@ -249,30 +249,6 @@ working install. Removing a package from `packages` entirely does not retire
 it on its own: the module has no record of what an earlier generation
 declared, only what this one does, so that still needs a manual `pi remove`.
 
-**The standalone launcher** is the other way to reach the session, and the one
-Pi's provisioning cannot provide. gentle-shell ships its own `gentle-shell`
-binary: it resolves the Pi runtime from PATH, applies the version gate, and
-boots the session in its own home (`~/.gentle-shell/agent`) unless `--link` —
-or `gentle-shell home link` — reuses `~/.pi/agent`. That binary lives in the
-package Pi installs, which is not on PATH and, with `release = "main"`, is a
-git checkout Pi manages itself. This flake builds it from the same channel
-table instead (`packages/gentle-shell.nix`, from the repository archive with
-the dependencies its pnpm lockfile pins) and puts it on PATH when you opt in:
-
-```nix
-providers.pi.launcher.enable = true;   # defaults to false
-providers.pi.launcher.package = null;  # override for a different build
-```
-
-One caveat decides how the two paths meet: this module renders into
-`~/.pi/agent`, while the launcher's default home is `~/.gentle-shell/agent`.
-A launcher left on its default home runs without anything this flake renders —
-passing `--link` when launching it, or running `gentle-shell home link` once,
-is what reuses `~/.pi/agent` and makes the two the same session. The launcher
-resolves `pi` from PATH itself, so nothing here injects a runtime into it; if
-neither Pi nor another provider put one there, the launcher reports what is
-missing.
-
 **A file that has to carry a credential** cannot be a store symlink — the store
 is world-readable and read-only. Those paths are held back from the projection
 and written at activation with the placeholder replaced:

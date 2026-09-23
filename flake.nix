@@ -40,8 +40,6 @@
           engram = engramFor engramReleases.stable;
           codegraph = pkgs.callPackage ./packages/codegraph.nix { release = codegraphReleases.stable; };
           gentle-nix = pkgs.callPackage ./packages/gentle-nix.nix { };
-          gentlePiReleases = import ./packages/pi-versions.nix;
-          gentleShellFor = release: pkgs.callPackage ./packages/gentle-shell.nix { inherit release; };
         in
         {
           inherit
@@ -68,12 +66,6 @@
           gentle-engram-pi = pkgs.callPackage ./packages/gentle-engram-pi.nix {
             release = engramReleases.main;
           };
-
-          # The standalone gentle-shell launcher, built from the stable
-          # channel's revision. `providers.pi.launcher.package` defaults to a
-          # build of whichever channel that option selects; this attribute is
-          # the name `nix build` can reach it by.
-          gentle-shell = gentleShellFor gentlePiReleases.stable;
 
           # Reference documentation for every option this module declares.
           # Regenerate the committed copy with:
