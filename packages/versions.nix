@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.6.1";
+    version = "3.7.0";
     owner = "Gentleman-Programming";
-    rev = "v3.6.1";
-    hash = "sha256-VYudi7wiKr2N6pYkUbupPHVVPJeKHqZSxTiP5h6xXlk=";
+    rev = "v3.7.0";
+    hash = "sha256-I7WFMonFGsrEftEBFkQezNa0LKn5TYWVfwULw9EmjJc=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,16 +29,16 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.6.1 was tagged from a main that has moved on since, so the tag and the
+  # v3.7.0 was tagged from a main that has moved on since, so the tag and the
   # commit are different revisions that fetch to different store paths -- the tag
-  # is the last release, the branch is the tip. The release now carries the Pi
-  # package retirement that 3.6.0 lacked, so every channel stops installing
+  # is the last release, the branch is the tip. Every channel carries the Pi
+  # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "3.6.1-main.6dee8f83";
+    version = "3.7.0-main.c5da5fd0";
     owner = "Gentleman-Programming";
-    rev = "6dee8f833aec9e46015759c5065a9035795d9af1";
-    hash = "sha256-I7WFMonFGsrEftEBFkQezNa0LKn5TYWVfwULw9EmjJc=";
+    rev = "c5da5fd0f5f0a0b34cfc9bca0a8b5dd5a46213a8";
+    hash = "sha256-cwVOJwTISVWiiG2vkxPq0JXsVoAXXhlW9wfq41kxzqY=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -71,7 +71,7 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "3.6.1-main.6f4b461d-declarative-config";
+    version = "3.7.0-main.6f4b461d-declarative-config";
     owner = "0xErwin1";
     rev = "6f4b461dccdfe5ed32bfdece937d4821cd0a9c1d";
     hash = "sha256-ZoGfIIR2DSMLBuHnQ1lFIl8KfB/R+oP2+w6Bv8ApP8k=";
