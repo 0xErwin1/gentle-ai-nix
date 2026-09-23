@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "3.6.0";
+    version = "3.6.1";
     owner = "Gentleman-Programming";
-    rev = "v3.6.0";
-    hash = "sha256-6/LsubVvh95Fd4SGCTh44fzfuuafTZMciMxEMh0AgI8=";
+    rev = "v3.6.1";
+    hash = "sha256-VYudi7wiKr2N6pYkUbupPHVVPJeKHqZSxTiP5h6xXlk=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,17 +29,16 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v3.6.0 was tagged from a main that has moved on since, so the tag and the
+  # v3.6.1 was tagged from a main that has moved on since, so the tag and the
   # commit are different revisions that fetch to different store paths -- the tag
-  # is the last release, the branch is the tip. Note that this release does *not*
-  # carry the Pi package retirement that main does: `stable` still installs
-  # `@juicesharp/rpiv-ask-user-question`, which Pi cannot load next to gentle-pi's
-  # own `ask_user_question`. The channels built from main are the ones that fix it.
+  # is the last release, the branch is the tip. The release now carries the Pi
+  # package retirement that 3.6.0 lacked, so every channel stops installing
+  # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "3.6.0-main.1682c05c";
+    version = "3.6.1-main.6dee8f83";
     owner = "Gentleman-Programming";
-    rev = "1682c05c3d2ef501aaa0989e31b627dfebbfa07f";
-    hash = "sha256-VmDF0b+mjiCIv+B/UgnVz+fde7gXx6KB4NlX4s/hrhA=";
+    rev = "6dee8f833aec9e46015759c5065a9035795d9af1";
+    hash = "sha256-I7WFMonFGsrEftEBFkQezNa0LKn5TYWVfwULw9EmjJc=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -72,10 +71,10 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "3.6.0-main.957097fa-declarative-config";
+    version = "3.6.1-main.6f4b461d-declarative-config";
     owner = "0xErwin1";
-    rev = "957097faf081f38f33e5a42be2a5825ef6bdddfa";
-    hash = "sha256-oKbOraHzVRNChEQ7n01rT/vGsltFdg3tM5Dmcy2+vLk=";
+    rev = "6f4b461dccdfe5ed32bfdece937d4821cd0a9c1d";
+    hash = "sha256-ZoGfIIR2DSMLBuHnQ1lFIl8KfB/R+oP2+w6Bv8ApP8k=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
