@@ -1835,14 +1835,10 @@ let
   gentlePiNpmStable = gentlePiSource gentlePiReleases.stable;
 
   # gentle-engram's stable npm source, pinned the same way and for the same
-  # reason. npm's `latest` here is not the version the Engram release ships:
-  # 2.0.0 carries `gentle-engram@0.1.13` while `latest` already resolves to
-  # 0.1.14, whose `mem_list_projects` calls a route the 2.0.0 binary does not
-  # serve. Pinning is what makes a switch converge on the pair this flake
-  # tested, rather than on whatever `latest` happens to be. Off stable the
-  # plugin is a local path instead, built from the same revision as the
-  # binary.
-  gentleEngramNpmDefault = "npm:gentle-engram@0.1.13";
+  # reason. Engram 2.2.0 carries `gentle-engram@0.1.15`; pinning keeps
+  # the plugin paired with that binary even if npm's `latest` moves. Off
+  # stable the plugin is built from the same revision as the binary.
+  gentleEngramNpmDefault = "npm:gentle-engram@0.1.15";
 
   # Every rule below carries a `wanted` spelling: the exact entry (or, for a
   # local path, the location it resolves to) that has to already be present

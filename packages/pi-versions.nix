@@ -36,7 +36,7 @@
   # the copy of Gentle AI the plugin downloads for itself and the package a
   # switch puts on PATH are the same one.
   main = {
-    version = "3.7.0-main.be2d7b1a";
-    rev = "be2d7b1ab7eebda4bdfe1256adaf8373b9047552";
+    version = "3.7.0-main.42d96764";
+    rev = "42d96764263d14da8e9070f5efa6814add222d67";
   };
 }

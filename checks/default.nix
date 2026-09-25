@@ -8,7 +8,7 @@
 let
   lib = pkgs.lib;
   module = self.homeManagerModules.default;
-  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@be2d7b1ab7eebda4bdfe1256adaf8373b9047552";
+  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@42d96764263d14da8e9070f5efa6814add222d67";
 
   evaluate =
     extraModules:
@@ -313,8 +313,8 @@ in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
     assert defaultOverrides.gentle-pi == "npm:gentle-pi@3.7.0";
     # Stable pins the plugin to the version the release ships, never npm's
-    # moving `latest`, which is already ahead of it.
-    assert defaultOverrides.gentle-engram == "npm:gentle-engram@0.1.13";
+    # moving `latest`, even when it currently matches.
+    assert defaultOverrides.gentle-engram == "npm:gentle-engram@0.1.15";
     assert overriddenOverrides.gentle-pi == gentleShellMainSource;
     # A store path here would change identity on every rebuild and leave Pi
     # holding two entries for the same plugin, so the source Pi is given is
@@ -457,7 +457,7 @@ in
         gentle-nix provision --manifest "$PWD/overridden.manifest.json" --agent pi \
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > overridden.commands
 
-        for want in "pi install npm:gentle-pi@3.7.0" "pi install npm:gentle-engram@0.1.13"; do
+        for want in "pi install npm:gentle-pi@3.7.0" "pi install npm:gentle-engram@0.1.15"; do
           grep -qxF "$want" default.commands || {
             echo "the default configuration no longer runs: $want" >&2
             cat default.commands >&2
@@ -466,7 +466,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-shell@be2d7b1ab7eebda4bdfe1256adaf8373b9047552" \
+          "pi install git:github.com/Gentleman-Programming/gentle-shell@42d96764263d14da8e9070f5efa6814add222d67" \
           "pi install ${gentleEngramPiPath}" \
           "${gentleEngramPiPath}/bin/pi-engram init"
         do
