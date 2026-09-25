@@ -48,7 +48,6 @@ let
         components = {
           skills.enable = true;
           persona.enable = true;
-          sdd.enable = true;
         };
 
         persona = "neutral";
@@ -3279,15 +3278,10 @@ in
       touch "$out"
     '';
 
-  # Gentle AI chooses between its v1 and v2 managed OpenCode assets by running
-  # the client, and it does that on every render rather than only on the ones
-  # that use OpenCode: the default component set stages the OpenCode logo
-  # plugin, so even a configuration that never mentions OpenCode needs an
-  # answer. A build sandbox has no client of its own, which is what the
-  # module's `providers.<name>.package` and its `pkgs.opencode` fallback are
-  # for. This proves the seam resolves and that the staged asset set follows
-  # the client that answered.
-  openCodeRuntimeProbeResolvesThroughTheDeclaredClient =
+  # The default component set renders the OpenCode logo, and enabling skills
+  # renders the skill registry as a skill. Neither tree should stage the
+  # retired OpenCode plugin directories.
+  openCodeRenderUsesDeclaredClientWithoutRetiredAssets =
     let
       configurationFor =
         extra:
@@ -3305,35 +3299,32 @@ in
       defaultComponents = (configurationFor { }).config.programs.gentle-ai.rendered;
       declaredComponents =
         (configurationFor {
-          components.sdd.enable = true;
+          components.skills.enable = true;
         }).config.programs.gentle-ai.rendered;
     in
-    pkgs.runCommandLocal "gentle-ai-check-opencode-runtime-probe"
+    pkgs.runCommandLocal "gentle-ai-check-opencode-render-without-retired-assets"
       {
         inherit defaultComponents declaredComponents;
       }
       ''
         set -euo pipefail
 
-        # The default component set is why a configuration that names no
-        # component needs a client at all: without the seam this tree is not
-        # produced.
-        test -d "$defaultComponents/tree" || {
-          echo "the default component set did not render" >&2
+        test -f "$defaultComponents/tree/.config/opencode/tui-plugins/gentle-logo.tsx" || {
+          echo "the default OpenCode logo was not staged" >&2
           exit 1
         }
-
-        # nixpkgs' OpenCode is a v1 build, so the v1 directory is the one the
-        # probe has to select.
-        plugins="$declaredComponents/tree/.config/opencode/plugins"
-        test -f "$plugins/skill-registry.ts" || {
-          echo "the v1 managed SDD plugin was not staged" >&2
+        test -f "$declaredComponents/tree/.config/opencode/skills/skill-registry/SKILL.md" || {
+          echo "the declared OpenCode skill registry was not staged" >&2
           exit 1
         }
-        test -d "$declaredComponents/tree/.config/opencode/plugins-v2" && {
-          echo "the v2 asset set was staged for a v1 client" >&2
-          exit 1
-        }
+        for tree in "$defaultComponents/tree" "$declaredComponents/tree"; do
+          for directory in plugins plugins-v2; do
+            test ! -d "$tree/.config/opencode/$directory" || {
+              echo "retired OpenCode $directory directory was staged" >&2
+              exit 1
+            }
+          done
+        done
 
         touch "$out"
       '';
