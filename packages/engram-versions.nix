@@ -7,12 +7,12 @@
 #   nix-prefetch-url --unpack https://github.com/Gentleman-Programming/engram/archive/<ref>.tar.gz
 #   nix hash convert --hash-algo sha256 --to sri <hash>
 {
-  # The newest tagged release. Its Pi plugin is `gentle-engram@0.1.15`,
+  # The newest tagged release. Its Pi plugin is `gentle-engram@0.1.16`,
   # the exact npm version the module pins for this channel.
   stable = {
-    version = "2.2.0";
-    rev = "v2.2.0";
-    hash = "sha256-jKj4x75I7CWbcdS/uP0O1YdWqlcQyj7Mvv5GrKTH8cw=";
+    version = "2.2.1";
+    rev = "v2.2.1";
+    hash = "sha256-unN6bMnxVJAq3S3DsJCq2rUUddycwkYHGFs92hc+tQU=";
     vendorHash = "sha256-gDGy1s4JcX/6bI2eoycfsWJTbU2L0RAi3xCJ3AzFwYU=";
   };
 
@@ -26,9 +26,9 @@
   # The version carries the `-main.` prerelease tag so a build from here is
   # never mistaken for a release.
   main = {
-    version = "2.2.0-main.c72dd99d";
-    rev = "c72dd99db901945d9bfece6b5cc675037eecf83e";
-    hash = "sha256-P1mRe0kTWCFf1M+T5ElaeyNlJ5uBXWEjA9o7Ko1HvBY=";
+    version = "2.2.1-main.c61f601e";
+    rev = "c61f601ee9cc3a9cba6abbedd6bef2382318eada";
+    hash = "sha256-m0g8yIfH7m8qghlgEEPrMkexyGHIssaez6mTwxuZZQ8=";
     vendorHash = "sha256-gDGy1s4JcX/6bI2eoycfsWJTbU2L0RAi3xCJ3AzFwYU=";
   };
 }
