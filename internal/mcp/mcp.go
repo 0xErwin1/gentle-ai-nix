@@ -301,7 +301,7 @@ func writeAgent(tree, agent string, servers map[string]Server, paths map[string]
 	case "kiro-ide":
 		return mergePlain(filepath.Join(tree, ".kiro", "settings", "mcp.json"), servers)
 	case "pi":
-		return mergePlain(filepath.Join(tree, ".pi", "agent", "mcp.json"), servers)
+		return mergePlain(filepath.Join(tree, ".pi", "agent", "mcp-adapter.json"), servers)
 	case "gemini-cli", "qwen-code", "openclaw":
 		path, ok := settings.ResolvePath(tree, agent)
 		if !ok {

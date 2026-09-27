@@ -1898,7 +1898,7 @@ in
       grep -q '"type": "local"' "$opencode" || { echo "opencode's entry is not OpenCode-shaped" >&2; exit 1; }
       grep -q '"enabled": true' "$opencode" || { echo "opencode's entry must always carry enabled" >&2; exit 1; }
 
-      pi="$mcpRendered/tree/.pi/agent/mcp.json"
+      pi="$mcpRendered/tree/.pi/agent/mcp-adapter.json"
       test -f "$pi" || { echo "Pi's MCP file was not rendered" >&2; exit 1; }
       grep -q '"atlas"' "$pi" || { echo "Pi did not get the flat server" >&2; exit 1; }
 
