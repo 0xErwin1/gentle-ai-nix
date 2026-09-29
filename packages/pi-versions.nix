@@ -31,12 +31,12 @@
   # prerelease label keeps a build from here from being mistaken for the
   # release: `package.json` at the tip reads `3.7.0`.
   #
-  # The release pins Gentle AI v3.7.0 through `INSTALLER_VERSION` in its
-  # `scripts/gentle-ai-installer.mjs` -- the exact release this flake builds, so
-  # the copy of Gentle AI the plugin downloads for itself and the package a
-  # switch puts on PATH are the same one.
+  # The plugin still installs Gentle AI v3.7.0 through `INSTALLER_VERSION` in
+  # `scripts/gentle-ai-installer.mjs`. That matches this flake's stable channel;
+  # selecting the separately pinned beta channel does not change the plugin's
+  # installer target.
   main = {
-    version = "3.7.0-main.b756b4f3";
-    rev = "b756b4f34193eeb566d670f90ffc1c85e4fda601";
+    version = "3.7.0-main.08de420c";
+    rev = "08de420ca29be16b6f6bee725a30b599b061df16";
   };
 }
