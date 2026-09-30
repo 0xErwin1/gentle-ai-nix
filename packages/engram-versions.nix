@@ -26,9 +26,9 @@
   # The version carries the `-main.` prerelease tag so a build from here is
   # never mistaken for a release.
   main = {
-    version = "2.2.1-main.c61f601e";
-    rev = "c61f601ee9cc3a9cba6abbedd6bef2382318eada";
-    hash = "sha256-m0g8yIfH7m8qghlgEEPrMkexyGHIssaez6mTwxuZZQ8=";
+    version = "2.2.1-main.a65917f3";
+    rev = "a65917f3072ab4f26780bcf52427eba3963bef46";
+    hash = "sha256-l02GGtp3mdWIVB2Sr8AfSaHa02fjcTOr9HFkpVdTiYo=";
     vendorHash = "sha256-gDGy1s4JcX/6bI2eoycfsWJTbU2L0RAi3xCJ3AzFwYU=";
   };
 }
