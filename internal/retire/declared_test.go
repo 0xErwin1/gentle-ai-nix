@@ -66,6 +66,16 @@ func TestDroppedDeclaredNames(t *testing.T) {
 			want:     nil,
 		},
 		{
+			// pi-mcp-adapter is no longer one of Pi's own fixed packages: the
+			// native MCP file replaced it, so a dropped declaration has no
+			// harness default to fall back to and is retired like any other
+			// dropped package.
+			name:     "pi-mcp-adapter is retired when its declaration is dropped",
+			previous: DeclaredPackages{"pi-mcp-adapter": "npm:pi-mcp-adapter"},
+			current:  DeclaredPackages{},
+			want:     []string{"pi-mcp-adapter"},
+		},
+		{
 			name:     "first run has no previous record at all",
 			previous: nil,
 			current:  DeclaredPackages{"pi-foo": "npm:pi-foo"},
@@ -216,6 +226,32 @@ func TestRunExcludesAFixedHarnessNameFromDeclaredSetRetirement(t *testing.T) {
 	if len(remover.removed) != 0 {
 		t.Fatalf("dropping a fixed-name override retired the harness default: %v", remover.removed)
 	}
+}
+
+// TestRunRetiresADroppedPiMCPAdapterDeclaration is the Run-level twin of
+// the exclusion test above: pi-mcp-adapter left the fixed harness set, so
+// dropping its declaration retires the installed entry instead of leaving
+// the retired legacy MCP transport behind.
+func TestRunRetiresADroppedPiMCPAdapterDeclaration(t *testing.T) {
+	dir := t.TempDir()
+	settings := writeSettings(t, dir, []string{"npm:pi-mcp-adapter"})
+
+	declaredPath := filepath.Join(dir, "declared.json")
+	writeDeclaredJSON(t, declaredPath, DeclaredPackages{})
+
+	recordPath := filepath.Join(dir, "state", "pi-declared-packages.json")
+	writeDeclaredJSON(t, recordPath, DeclaredPackages{"pi-mcp-adapter": "npm:pi-mcp-adapter"})
+
+	remover := &fakeRemover{present: true}
+	if _, err := Run(Options{
+		Settings:       settings,
+		Declared:       declaredPath,
+		DeclaredRecord: recordPath,
+	}, remover); err != nil {
+		t.Fatal(err)
+	}
+
+	assertEntries(t, remover.removed, []string{"npm:pi-mcp-adapter"})
 }
 
 func TestRunFirstRunOnlyRecordsAndRetiresNothing(t *testing.T) {

@@ -15,10 +15,15 @@ import (
 // independent package -- so dropping such a key from the set is not a
 // removal, it is going back to the harness's own default source, and none
 // of these names is ever retired through the declared-set diff below.
+//
+// pi-mcp-adapter is deliberately absent: the legacy MCP adapter is retired,
+// not defaulted. The native mcp.json file replaced it, so a dropped
+// declaration of that name retires the installed entry exactly like any
+// other dropped package (see the Nix mirror for the eval-side refusal that
+// keeps it out of providers.pi.packages in the first place).
 var fixedPiPackageNames = map[string]bool{
 	"gentle-pi":                          true,
 	"gentle-engram":                      true,
-	"pi-mcp-adapter":                     true,
 	"@juicesharp/rpiv-ask-user-question": true,
 	"pi-web-access":                      true,
 	"pi-btw":                             true,

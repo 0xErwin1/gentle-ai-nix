@@ -302,18 +302,33 @@ in
         providers.pi.release = "main";
         components.engram.release = "main";
       };
+      # Pi's Engram channel defaults to main, so the stable 0.1.16 npm pin
+      # is only observable from a configuration that does not enable Pi.
+      nonPiConfiguration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.opencode.enable = true;
+          };
+        }
+      ];
 
       defaultDocument = defaultConfiguration.config.programs.gentle-ai.document;
       overriddenDocument = overriddenConfiguration.config.programs.gentle-ai.document;
       defaultOverrides = defaultConfiguration.config.programs.gentle-ai.piProvisionOverrides;
       overriddenOverrides = overriddenConfiguration.config.programs.gentle-ai.piProvisionOverrides;
+      nonPiOverrides = nonPiConfiguration.config.programs.gentle-ai.piProvisionOverrides;
     in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
     assert defaultOverrides.gentle-pi == "npm:gentle-pi@3.7.0";
-    # Stable pins the plugin to the version the release ships, never npm's
-    # moving `latest`, even when it currently matches.
-    assert defaultOverrides.gentle-engram == "npm:gentle-engram@0.1.16";
+    # Pi enabled defaults the Engram channel to main, so the override is
+    # the stable home path the native plugin is linked into, never a store
+    # path or npm's moving `latest`.
+    assert defaultOverrides.gentle-engram == "/home/test-user/.pi/gentle-ai/plugins/gentle-engram";
+    # Without Pi the channel keeps its stable default, and with it the
+    # exact npm pin the stable release ships -- never `latest`.
+    assert nonPiOverrides.gentle-engram == "npm:gentle-engram@0.1.16";
     assert overriddenOverrides.gentle-pi == gentleShellMainSource;
     # A store path here would change identity on every rebuild and leave Pi
     # holding two entries for the same plugin, so the source Pi is given is
@@ -321,6 +336,58 @@ in
     # the store path underneath it.
     assert overriddenOverrides.gentle-engram == "/home/test-user/.pi/gentle-ai/plugins/gentle-engram";
     pkgs.runCommandLocal "gentle-ai-check-pi-packages-document-shape" { } ''touch "$out"'';
+
+  # Pi 0.99 serves MCP from its native mcp.json, which only Engram's main
+  # plugin (0.1.17) handles: enabling Pi must default the Engram channel to
+  # main without touching non-Pi installations, and the one combination the
+  # default cannot cover -- Pi enabled, stable named explicitly, whose
+  # 0.1.16 npm plugin still drives the legacy pi-mcp-adapter transport --
+  # must be refused at eval rather than quietly reinstating the adapter.
+  piEngramChannelDefaultsFollowPi =
+    let
+      # The component is enabled explicitly here: the channel default has to
+      # survive an operator turning Engram on, not only an untouched component.
+      piConfiguration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi.enable = true;
+            components.engram.enable = true;
+          };
+        }
+      ];
+      nonPiConfiguration = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.opencode.enable = true;
+          };
+        }
+      ];
+    in
+    assert piConfiguration.config.programs.gentle-ai.components.engram.release == "main";
+    assert nonPiConfiguration.config.programs.gentle-ai.components.engram.release == "stable";
+    assert rejected [
+      {
+        programs.gentle-ai = {
+          enable = true;
+          providers.pi.enable = true;
+          components.engram.release = "stable";
+        };
+      }
+    ];
+    # An explicit `main` on a non-Pi installation is still a choice the
+    # operator can make; only the Pi-enabled stable combination refuses.
+    assert accepted [
+      {
+        programs.gentle-ai = {
+          enable = true;
+          providers.opencode.enable = true;
+          components.engram.release = "main";
+        };
+      }
+    ];
+    pkgs.runCommandLocal "gentle-ai-check-pi-engram-channel-defaults-follow-pi" { } ''touch "$out"'';
 
   # A repository rename changes the source-derived package name, so the
   # generic `package` rule cannot retire a former gentle-pi Git source once
@@ -402,6 +469,7 @@ in
       overriddenOverrides = overriddenConfiguration.config.programs.gentle-ai.piProvisionOverrides;
 
       gentleEngramPiPath = overriddenOverrides.gentle-engram;
+      defaultEngramPiPath = defaultOverrides.gentle-engram;
 
       defaultOverrideArguments = lib.concatMapStringsSep " " (
         name: "--override ${lib.escapeShellArg "${name}=${defaultOverrides.${name}}"}"
@@ -456,7 +524,14 @@ in
         gentle-nix provision --manifest "$PWD/overridden.manifest.json" --agent pi \
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > overridden.commands
 
-        for want in "pi install npm:gentle-pi@3.7.0" "pi install npm:gentle-engram@0.1.16"; do
+        # The default configuration's Engram channel follows Pi to main, so
+        # both the install source and the init step are the stable home path
+        # the native plugin is linked into, not npm's 0.1.16 pin.
+        for want in \
+          "pi install npm:gentle-pi@3.7.0" \
+          "pi install ${defaultEngramPiPath}" \
+          "${defaultEngramPiPath}/bin/pi-engram init"
+        do
           grep -qxF "$want" default.commands || {
             echo "the default configuration no longer runs: $want" >&2
             cat default.commands >&2
@@ -472,6 +547,16 @@ in
           grep -qxF "$want" overridden.commands || {
             echo "the overridden configuration does not run: $want" >&2
             cat overridden.commands >&2
+            exit 1
+          }
+        done
+
+        # The adapter is retired, not provisioned: no rewritten command may
+        # reinstall it over Pi's native mcp.json.
+        for commands in default.commands overridden.commands; do
+          grep -qxF "pi install npm:pi-mcp-adapter" "$commands" && {
+            echo "$commands still installs the retired pi-mcp-adapter:" >&2
+            cat "$commands" >&2
             exit 1
           }
         done
@@ -569,7 +654,20 @@ in
         }
       ];
       document = configuration.config.programs.gentle-ai.document;
+      overrides = configuration.config.programs.gentle-ai.piProvisionOverrides;
       extra = configuration.config.programs.gentle-ai.piProvisionExtra;
+      # Pi enabled defaults the Engram channel to main, so the fixed
+      # sequence's gentle-engram entry and its init step are rewritten to
+      # the stable home path the native plugin is linked into. But the
+      # renderer only rewrites it when the configuration's overrides
+      # travel with the command -- the same way piPackagesRenderThrough
+      # passes them -- so the expected source below is only asserted
+      # against the invocation that carries it.
+      engramPiPath = overrides.gentle-engram;
+
+      overrideArguments = lib.concatMapStringsSep " " (
+        name: "--override ${lib.escapeShellArg "${name}=${overrides.${name}}"}"
+      ) (lib.attrNames overrides);
 
       extraArguments = lib.concatMapStringsSep " " (source: "--extra ${lib.escapeShellArg source}") extra;
     in
@@ -602,11 +700,11 @@ in
           > manifest.json
 
         gentle-nix provision --manifest manifest.json --agent pi \
-          --stamp-dir "$PWD/stamps" --print ${extraArguments} > commands
+          --stamp-dir "$PWD/stamps" --print ${overrideArguments} ${extraArguments} > commands
 
         count=$(wc -l < commands)
-        [ "$count" -eq 7 ] || {
-          echo "expected the fixed 6-command sequence plus 1 extra, got $count:" >&2
+        [ "$count" -eq 6 ] || {
+          echo "expected the fixed 5-command sequence plus 1 extra, got $count:" >&2
           cat commands >&2
           exit 1
         }
@@ -617,7 +715,13 @@ in
           exit 1
         }
 
-        for want in "pi install npm:gentle-pi" "pi install npm:gentle-engram" "pi install npm:pi-mcp-adapter" "npm exec --yes --package gentle-engram@latest -- pi-engram init" "pi install npm:pi-web-access" "pi install npm:pi-btw"; do
+        for want in \
+          "pi install npm:gentle-pi" \
+          "pi install ${engramPiPath}" \
+          "${engramPiPath}/bin/pi-engram init" \
+          "pi install npm:pi-web-access" \
+          "pi install npm:pi-btw"
+        do
           grep -qxF "$want" commands || {
             echo "the fixed sequence did not run: $want" >&2
             cat commands >&2
@@ -625,8 +729,167 @@ in
           }
         done
 
+        # The override's Engram source renders exactly once as the install
+        # and once as the init step: the overrides must drive the fixed
+        # sequence's rewrite without duplicating its entries.
+        for want in "pi install ${engramPiPath}" "${engramPiPath}/bin/pi-engram init"; do
+          count=$(grep -cxF "$want" commands)
+          [ "$count" -eq 1 ] || {
+            echo "expected exactly one '$want', got $count:" >&2
+            cat commands >&2
+            exit 1
+          }
+        done
+
+        # The adapter is retired, not part of the fixed sequence: the
+        # contract no longer installs it, and nothing may ride back in.
+        grep -qxF "pi install npm:pi-mcp-adapter" commands && {
+          echo "the fixed sequence still installs the retired pi-mcp-adapter:" >&2
+          cat commands >&2
+          exit 1
+        }
+
         touch "$out"
       '';
+
+  # The native MCP file a rendered Pi server set produces is written where
+  # Pi and the migration both need to write it -- never projected as a
+  # read-only store symlink. It is withheld from the tree and merged into
+  # the live file at activation like any other merge target, auto-added
+  # when nothing declares it and never duplicated when an operator already
+  # did.
+  piNativeMCPRenderedBecomesMergedSecretTarget =
+    let
+      configurationFor =
+        overrides:
+        evaluate [
+          {
+            programs.gentle-ai = lib.recursiveUpdate {
+              enable = true;
+              providers.pi.enable = true;
+              mcpServers.atlas.command = "atlas";
+            } overrides;
+          }
+        ];
+
+      plain = configurationFor { };
+      operatorDeclared = configurationFor {
+        providers.pi.secrets.merge = [ "agent/mcp.json" ];
+      };
+
+      # The tree the home directory is projected from: the withheld path
+      # must not be in it.
+      plainDelivered = plain.config.home.file.gentle-ai.source;
+
+      bare = evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi.enable = true;
+          };
+        }
+      ];
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-native-mcp-merge-target"
+      {
+        inherit plainDelivered;
+        plainActivation = plain.config.home.activationPackage;
+        operatorDeclaredActivation = operatorDeclared.config.home.activationPackage;
+        bareActivation = bare.config.home.activationPackage;
+      }
+      ''
+        set -euo pipefail
+
+        # The rendered file is withheld: nothing at that path in the
+        # delivered tree, so the live file is never a store symlink.
+        [ ! -e "$plainDelivered/.pi/agent/mcp.json" ] || {
+          echo "the native mcp.json was not withheld from the delivered tree" >&2
+          exit 1
+        }
+
+        # Exactly one merge step targets the live file -- the auto-added one
+        # when nothing declares it, the operator's own when they already
+        # did -- and it merges the rendered copy into the live file.
+        # `''${!name}` is bash's indirection: the loop variable names the
+        # derivation attr, and the attr holds the store path, so the
+        # activation script is read through the attr's own value.
+        for name in plainActivation operatorDeclaredActivation; do
+          count=$(grep -cF -- '--target /home/test-user/.pi/agent/mcp.json' "''${!name}/activate" || true)
+          [ "$count" -eq 1 ] || {
+            echo "$name: expected exactly one merge step for .pi/agent/mcp.json, got $count" >&2
+            exit 1
+          }
+        done
+
+        # No declared servers, no merge target: the live file stays what
+        # `gentle-nix mcp migrate-pi` and Pi itself make of it.
+        count=$(grep -cF -- '--target /home/test-user/.pi/agent/mcp.json' "$bareActivation/activate" || true)
+        [ "$count" -eq 0 ] || {
+          echo "a configuration with no declared Pi servers still merges .pi/agent/mcp.json" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
+  # The legacy adapter's servers must be carried into the native mcp.json
+  # after the secret merge and after provisioning, and before retirement:
+  # a migration that fails aborts the switch (the activation script runs
+  # under set -eu), so the retirer never runs behind a failed migration and
+  # the working adapter stays installed. The retirement itself only fires
+  # once the native Engram plugin is present, via the rule's `wanted`
+  # guard.
+  piMCPMigrationRunsBetweenProvisioningAndRetirement =
+    let
+      activation = (evaluate [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.pi = {
+              enable = true;
+              provisionPackages = true;
+            };
+          };
+        }
+      ]).config.home.activationPackage;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-pi-mcp-migration-ordering" { inherit activation; } ''
+      set -euo pipefail
+
+      script="$activation/activate"
+
+      grep -qF -- 'mcp migrate-pi --agent-dir /home/test-user/.pi/agent' "$script" || {
+        echo "no migrate-pi step in the activation script" >&2
+        exit 1
+      }
+
+      provision_line=$(grep -n 'gentle-ai-provision' "$script" | head -1 | cut -d: -f1)
+      migrate_line=$(grep -n 'mcp migrate-pi' "$script" | head -1 | cut -d: -f1)
+      retire_line=$(grep -n 'gentle-ai-retire' "$script" | head -1 | cut -d: -f1)
+
+      test -n "$provision_line" && test -n "$migrate_line" && test -n "$retire_line" || {
+        echo "a Pi provisioning/migration/retirement step is missing" >&2
+        exit 1
+      }
+
+      [ "$provision_line" -lt "$migrate_line" ] || {
+        echo "migrate-pi does not run after provisioning" >&2
+        exit 1
+      }
+      [ "$migrate_line" -lt "$retire_line" ] || {
+        echo "migrate-pi does not run before retirement" >&2
+        exit 1
+      }
+
+      # The adapter is retired by an npm rule guarded on the native Engram
+      # plugin's stable home path being present first.
+      grep -qF '"name":"pi-mcp-adapter","type":"npm","wanted":"/home/test-user/.pi/gentle-ai/plugins/gentle-engram"' "$script" || {
+        echo "no wanted-guarded pi-mcp-adapter retirement rule in the activation script" >&2
+        exit 1
+      }
+
+      touch "$out"
+    '';
 
   # An `--extra` source missing its scheme is exactly the mistake
   # piPackagesRejectUnsupportedSourceAtEval catches for the module's own
@@ -781,6 +1044,8 @@ in
   # entries; accepting them here too would let a channel choice and a
   # hand-written source silently disagree about which one Pi actually
   # installs, so both are refused at eval rather than left to collide later.
+  # pi-mcp-adapter is the retired legacy MCP transport: accepting it would
+  # reinstall the adapter over Pi's native mcp.json, so it is refused too.
   piPackagesRejectManagedKeysAtEval =
     pkgs.runCommandLocal "gentle-ai-check-pi-packages-reject-managed-keys" { }
       ''
@@ -819,6 +1084,25 @@ in
           )
           ''
             echo "a providers.pi.packages.gentle-engram entry was accepted" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi = {
+                    enable = true;
+                    packages.pi-mcp-adapter = "npm:pi-mcp-adapter@9.9.9";
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a providers.pi.packages.pi-mcp-adapter entry was accepted" >&2
             exit 1
           ''
         }
@@ -1069,6 +1353,7 @@ in
           "../../../../nix/store/xyz-gentle-engram-pi-2.0.0-rc.9"
           "../gentle-ai/plugins/gentle-engram"
           "npm:pi-mcp-adapter"
+          "npm:unrelated"
         ];
       };
 
@@ -1080,12 +1365,22 @@ in
 
       # The same fixture after a "main" channel's own rules have already
       # converged it once: every entry a rerun of those rules would displace
-      # is already gone, so a rerun must remove nothing.
+      # is already gone -- the retired adapter included -- so a rerun must
+      # remove nothing.
       convergedFixture = {
         packages = [
           "git:github.com/Gentleman-Programming/gentle-shell@abc123"
           "../gentle-ai/plugins/gentle-engram"
+        ];
+      };
+
+      # The adapter is installed but the native Engram plugin that replaces
+      # it is not: provisioning failed, so the wanted guard must keep the
+      # working adapter in place.
+      adapterWithoutPluginFixture = {
+        packages = [
           "npm:pi-mcp-adapter"
+          "npm:unrelated"
         ];
       };
 
@@ -1173,7 +1468,12 @@ in
       # one more rule excepting this scenario's own plugin path -- built at
       # shell runtime, since only the sandbox knows what `$PWD` resolves to,
       # never baked in as a Nix string the way the other, path-free rules are.
-      scenario = name: settingsFile: rules: keepCurrentPlugin: expected: ''
+      # `retireAdapter`, when true, adds the module's own wanted-guarded
+      # pi-mcp-adapter npm rule, also built at shell runtime: its `wanted` is
+      # the native Engram plugin's home path, so the rule only ever fires
+      # when that plugin is already installed.
+      scenario =
+        name: settingsFile: rules: keepCurrentPlugin: retireAdapter: expected: ''
         mkdir -p ${name}/.pi/agent ${name}/bin
         cp ${settingsFile} ${name}/.pi/agent/settings.json
         cat > ${name}/bin/pi <<'SH'
@@ -1199,6 +1499,12 @@ in
             --arg except "$current_plugin_path" \
             '{type: "local", patterns: $patterns, except: $except}')
           displaced_args+=(--displaced "$local_rule")
+        ''}
+        ${lib.optionalString retireAdapter ''
+          adapter_rule=$(jq -n \
+            --arg wanted "$PWD/${name}/.pi/gentle-ai/plugins/gentle-engram" \
+            '{type: "npm", name: "pi-mcp-adapter", wanted: $wanted}')
+          displaced_args+=(--displaced "$adapter_rule")
         ''}
 
         PATH="$PWD/${name}/bin:$PATH" gentle-ai-retire \
@@ -1238,6 +1544,9 @@ in
         pinnedFixedPackageFixtureFile = pkgs.writeText "gentle-ai-pi-settings-pinned-fixed.json" (
           builtins.toJSON pinnedFixedPackageFixture
         );
+        adapterWithoutPluginFixtureFile = pkgs.writeText "gentle-ai-pi-settings-adapter-without-plugin.json" (
+          builtins.toJSON adapterWithoutPluginFixture
+        );
         partialFailureFixtureFile = pkgs.writeText "gentle-ai-pi-settings-partial-failure.json" (
           builtins.toJSON {
             packages = [
@@ -1253,7 +1562,9 @@ in
         # A channel off stable: gentle-pi installs from git, so every npm
         # gentle-pi entry is displaced; gentle-engram installs from npm, so
         # every local gentle-engram entry is displaced except the plugin path
-        # this generation still wants.
+        # this generation still wants; and the legacy MCP adapter is retired
+        # once that native plugin path is present -- the unrelated package is
+        # never touched.
         ${scenario "main" "$displacedFixtureFile"
           [
             npmGentlePi
@@ -1261,6 +1572,7 @@ in
             packageRuleKeepingCurrentGentlePi
             legacyGentlePiGitMigration
           ]
+          true
           true
           [
             "npm:gentle-pi"
@@ -1270,6 +1582,7 @@ in
             "npm:gentle-engram"
             "npm:gentle-engram@0.1.12"
             "../../../../nix/store/xyz-gentle-engram-pi-2.0.0-rc.9"
+            "npm:pi-mcp-adapter"
           ]
         }
 
@@ -1283,6 +1596,7 @@ in
             canonicalGentleShellGitRetirement
             localWithNoException
           ]
+          false
           false
           [
             "npm:gentle-pi"
@@ -1303,6 +1617,7 @@ in
             legacyGentlePiGitMigration
           ]
           false
+          false
           [ ]
         }
 
@@ -1313,21 +1628,27 @@ in
           npmGentleEngram
           packageRuleKeepingConvergedGentlePi
           legacyGentlePiGitMigration
-        ] true [ ]}
+        ] true true [ ]}
 
         # A "package" rule matches the source's own package name, not the
         # attribute key the document declared it under: the stale rev1 entry
         # is retired, and the already-current rev2 entry is left alone.
         ${scenario "package-rule" "$packageRuleFixtureFile" [
           packageRuleKeepingRev2
-        ] false [ "git:github.com/x/y@rev1" ]}
+        ] false false [ "git:github.com/x/y@rev1" ]}
 
         # Pinning pi-btw retires the fixed sequence's own bare entry and
         # keeps the pinned one -- the fixed sequence installs the pinned
         # spelling in its place, so nothing reinstalls the bare entry.
         ${scenario "pinned-fixed-package" "$pinnedFixedPackageFixtureFile" [
           packageRuleKeepingPinnedPiBtw
-        ] false [ "npm:pi-btw" ]}
+        ] false false [ "npm:pi-btw" ]}
+
+        # The adapter stays installed while its native replacement is
+        # missing: a failed provisioning (or a migration that aborted the
+        # switch before retirement) must never remove the working adapter.
+        ${scenario "adapter-without-plugin" "$adapterWithoutPluginFixtureFile" [
+        ] false true [ ]}
 
         # A settings.json this step cannot parse degrades to "nothing
         # installed" rather than failing the switch over a file it does not

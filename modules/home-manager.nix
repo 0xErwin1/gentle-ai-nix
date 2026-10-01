@@ -191,14 +191,16 @@ let
   # The npm package names `gentle-nix provision`'s Pi adapter always installs
   # -- a name naming one of these overrides that package's install source in
   # place; any other name is an additional package appended after the fixed
-  # sequence. Mirrored from fixedPiPackageNames in the pinned fork's Pi
-  # adapter (internal/agents/pi/adapter.go), because the split between
-  # `--override` and `--extra` gentle-nix provision needs has to agree with
-  # exactly the same set the fork itself used to read out of the document.
+  # sequence. Mirrored from fixedPiPackageNames in internal/retire
+  # (gentle-nix's own declared-set retirement mirror), because the split
+  # between `--override` and `--extra` gentle-nix provision needs has to
+  # agree with exactly the same set. pi-mcp-adapter is deliberately absent:
+  # the legacy MCP transport is retired, never re-defaulted, and a declared
+  # key of that name is refused outright (the assertion below) so no
+  # `pi install npm:pi-mcp-adapter` can ride back in as an extra.
   fixedPiPackageNames = [
     "gentle-pi"
     "gentle-engram"
-    "pi-mcp-adapter"
     "@juicesharp/rpiv-ask-user-question"
     "pi-web-access"
     "pi-btw"
@@ -577,12 +579,14 @@ let
 
             `gentle-pi` and `gentle-engram` are managed by a channel instead:
             `providers.pi.release` and `components.engram.release`. Both are
-            refused here at eval, so use those options to choose where the two
-            come from. A key naming
-            one of Pi's own other fixed packages (`pi-mcp-adapter`,
-            `@juicesharp/rpiv-ask-user-question`, `pi-web-access`, `pi-btw`)
-            overrides that package's install source in place rather than
-            adding a second entry alongside it.
+            refused here at eval, and so is `pi-mcp-adapter`: it is the
+            retired legacy MCP transport, its servers live in Pi's native
+            `mcp.json` now, and declaring it would reintroduce the adapter
+            this module retires. A key naming
+            one of Pi's own remaining fixed packages
+            (`@juicesharp/rpiv-ask-user-question`, `pi-web-access`,
+            `pi-btw`) overrides that package's install source in place
+            rather than adding a second entry alongside it.
 
             Removing a package from this set retires its installed entry on
             the next switch, the same way changing its source while the name
@@ -592,7 +596,7 @@ let
             behavior was added has no earlier declaration to compare
             against, so a package already removed before that switch still
             needs one manual `pi remove`; every removal after it is
-            automatic. A dropped key naming one of Pi's own other fixed
+            automatic. A dropped key naming one of Pi's own remaining fixed
             packages goes back to that package's harness default instead of
             being removed, since the key only ever overrode its source.
 
@@ -1778,7 +1782,41 @@ let
   # costs nothing and keeps `withheld` next to the option it is withholding
   # against.
   allSecretPaths = lib.unique (cfg.secrets.paths ++ providerSecretPaths);
-  allMergeTargets = mergeTargets ++ providerMergeTargets;
+
+  # Pi's native MCP file, where `gentle-nix mcp` writes every declared
+  # server and `gentle-nix mcp migrate-pi` carries a legacy adapter's
+  # servers into. Both write it where it lives in the home directory, so it
+  # can never be a store symlink: projected as one, it would be read-only
+  # (Pi could not write to it at runtime) and MigratePi would refuse it, so
+  # a rendered copy is withheld and merged at activation instead -- the same
+  # shape any credential-carrying file already takes.
+  piNativeMCPPath = ".pi/agent/mcp.json";
+
+  # Whether the render actually produces it: Pi is enabled and something is
+  # declared for it -- either a flat server (delivered to every enabled
+  # client) or a Pi-scoped one. When nothing is declared, no merge target is
+  # added and the live file stays exactly what `gentle-nix mcp migrate-pi`
+  # and Pi itself make of it.
+  piNativeMCPRendered = piEnabled && (cfg.mcpServers != { } || cfg.providers.pi.mcpServers != { });
+
+  piNativeMCPMergeTarget = {
+    path = piNativeMCPPath;
+    unionLists = [ ];
+  };
+
+  # An operator who already declared the same path -- top-level or through
+  # `providers.pi.secrets.merge`, resolved to the same home-relative
+  # spelling -- keeps their own entry: the auto-add must never produce two
+  # merge steps writing one file.
+  piNativeMCPMergeTargetDeclared =
+    lib.any (entry: entry.path == piNativeMCPPath) (mergeTargets ++ providerMergeTargets);
+
+  allMergeTargets =
+    mergeTargets
+    ++ providerMergeTargets
+    ++ lib.optionals (piNativeMCPRendered && !piNativeMCPMergeTargetDeclared) [
+      piNativeMCPMergeTarget
+    ];
 
   withheld = lib.unique (
     allSecretPaths ++ cfg.runtimeWritablePaths ++ map (entry: entry.path) allMergeTargets
@@ -1895,6 +1933,19 @@ let
     ++ lib.optional (cfg.components.engram.release != "stable") {
       type = "npm";
       name = "gentle-engram";
+      wanted = gentleEngramPiHomePath;
+    }
+    # The legacy MCP adapter is retired, not defaulted: its servers were
+    # carried into Pi's native mcp.json by `gentle-nix mcp migrate-pi`, and
+    # the plugin that replaces it is the native Engram plugin the npm rule
+    # above wants. The `wanted` spelling is that plugin's stable home path:
+    # until Pi confirms it is installed -- a failed provisioning degraded to
+    # a logged line and exit 0, or a migration that failed and aborted the
+    # switch before this step ever ran -- the working adapter stays in
+    # place.
+    ++ lib.optional (cfg.components.engram.release != "stable") {
+      type = "npm";
+      name = "pi-mcp-adapter";
       wanted = gentleEngramPiHomePath;
     }
     ++ [
@@ -2341,6 +2392,13 @@ in
           `.pi/gentle-ai/plugins/gentle-engram`, a path stable across rebuilds
           rather than the store path underneath it, because Pi records a local
           source by its path.
+
+          The default is `stable`, unless Pi is enabled: Pi 0.99 reads its MCP
+          servers from the native `.pi/agent/mcp.json`, which only the `main`
+          plugin serves, so enabling Pi defaults this option to `main`. The
+          stable npm plugin (0.1.16) still drives the legacy `pi-mcp-adapter`
+          transport and would reinstall the adapter this module retires, so
+          naming `stable` while Pi is enabled is refused at eval.
 
           Only the engram component reads this; another component setting it is
           refused at eval.
@@ -2852,6 +2910,14 @@ in
         message = "programs.gentle-ai.components.engram.release = \"${cfg.components.engram.release}\" is not a known channel";
       }
       {
+        # The stable npm plugin still ships the legacy MCP transport and
+        # would reinstall pi-mcp-adapter over Pi's native mcp.json, undoing
+        # both the migration and the retirement this module renders. Fail
+        # closed rather than letting a switch walk that back in.
+        assertion = !(piEnabled && cfg.components.engram.release == "stable");
+        message = "programs.gentle-ai.components.engram.release = \"stable\" is refused while providers.pi is enabled: the stable npm plugin (gentle-engram@0.1.16) drives the legacy pi-mcp-adapter transport and would reinstall the adapter this module retires over Pi's native mcp.json; keep the main release (the default for Pi), whose Engram main build ships the native-only plugin";
+      }
+      {
         assertion = unknownSourceProviders == [ ];
         message = "programs.gentle-ai.customProviders.${lib.concatStringsSep ", " unknownSourceProviders} takes its harness from a client that is not enabled, or that has no known directory";
       }
@@ -2914,16 +2980,20 @@ in
         # gentle-pi and gentle-engram are the two entries the channel options
         # already manage; accepting them here too would let a
         # channel choice and a hand-written source silently disagree about
-        # which one Pi actually installs.
+        # which one Pi actually installs. pi-mcp-adapter is the retired
+        # legacy MCP transport: accepting it would install the adapter this
+        # module retires and reintroduce the collision with Pi's native
+        # mcp.json that the migration exists to remove.
         assertion =
           !(lib.any (
             name:
             lib.elem name [
               "gentle-pi"
               "gentle-engram"
+              "pi-mcp-adapter"
             ]
           ) (lib.attrNames (cfg.providers.pi.packages or { })));
-        message = "programs.gentle-ai.providers.pi.packages must not name gentle-pi or gentle-engram; use programs.gentle-ai.providers.pi.release and programs.gentle-ai.components.engram.release to choose where those come from";
+        message = "programs.gentle-ai.providers.pi.packages must not name gentle-pi, gentle-engram, or pi-mcp-adapter; use programs.gentle-ai.providers.pi.release and programs.gentle-ai.components.engram.release to choose where the first two come from, and pi-mcp-adapter is the retired legacy MCP transport -- declare the server in programs.gentle-ai.mcpServers (or providers.pi.mcpServers) instead";
       }
       {
         # Pi is what reads this; a provider other than pi setting it is a
@@ -2998,7 +3068,25 @@ in
       # the reads above resolve to the option defaults. `enable` stays false, so
       # neither key reaches the document or Pi's provisioning until a
       # configuration turns one on.
-      components.engram = lib.mkDefault { };
+      # Enabling Pi moves the Engram channel to main by default: Pi 0.99's
+      # native `.pi/agent/mcp.json` is served by the main plugin only, and
+      # the stable npm plugin (0.1.16) still drives the legacy
+      # pi-mcp-adapter transport this module retires. `mkDefault` keeps an
+      # operator's explicit channel choice winning, and the assertion below
+      # refuses the one combination this default cannot paper over (Pi
+      # enabled, stable named explicitly). Non-Pi installations keep the
+      # stable default and their 0.1.16 npm pin.
+      # The default rides on the `release` field itself, not on the
+      # component's attribute set: a `mkDefault` wrapping the whole set is
+      # discarded as a unit once the operator states any field of the
+      # component at normal priority (`components.engram.enable = true`),
+      # silently dropping the channel default with it. Declared per field,
+      # it survives an explicit enable, and with Pi off the `mkIf` disables
+      # the definition while the component key still exists, so the reads
+      # above keep resolving to the option's own stable default.
+      components.engram = {
+        release = lib.mkIf piEnabled (lib.mkDefault "main");
+      };
       providers.pi = lib.mkDefault { };
 
       # Pi's runtime guard policy travels as a file rather than through the
@@ -3133,7 +3221,7 @@ in
     # failed to install leaves the previous, working entry in place instead
     # of removing it into nothing.
     home.activation.gentleAiRetireDisplacedPiPackages = lib.mkIf piProvisionsPackages (
-      lib.hm.dag.entryAfter [ "writeBoundary" "gentleAiProvisionPackages" ] ''
+      lib.hm.dag.entryAfter [ "writeBoundary" "gentleAiProvisionPackages" "gentleAiMigratePiMCP" ] ''
         PATH=${lib.escapeShellArg "${config.home.profileDirectory}/bin"}:"$PATH" \
           run ${lib.getExe retirer} \
             --settings ${lib.escapeShellArg piSettingsPath} \
@@ -3143,6 +3231,26 @@ in
               rule: "--displaced ${lib.escapeShellArg (builtins.toJSON rule)}"
             ) displacedPiRules}
       ''
+    );
+
+    # Between provisioning and retirement: `gentle-nix mcp migrate-pi`
+    # carries a legacy adapter's mcp-adapter.json servers into Pi's native
+    # mcp.json before anything is allowed to remove the adapter. It runs
+    # after the secret merge has delivered a real (never symlinked) native
+    # file to merge into, and after provisioning has had its chance to
+    # install the native Engram plugin. `run` fails the switch on a nonzero
+    # exit, so a migration that cannot complete -- malformed config, an
+    # unwritable native file -- aborts here: retirement never runs, and the
+    # working adapter stays installed. The retirer's own `wanted` guard (the
+    # native plugin must already be present) covers the other direction,
+    # provisioning having degraded a failed install to a logged line and
+    # exit 0.
+    home.activation.gentleAiMigratePiMCP = lib.mkIf piProvisionsPackages (
+      lib.hm.dag.entryAfter
+        [ "writeBoundary" "gentleAiMergedSecrets" "gentleAiProvisionPackages" ]
+        ''
+          run ${lib.getExe gentleNix} mcp migrate-pi --agent-dir ${lib.escapeShellArg "${config.home.homeDirectory}/.pi/agent"}
+        ''
     );
 
     # Last, because it is the only step that reaches a network: everything a
