@@ -335,6 +335,13 @@ instead of anything from npm, linked into the rendered tree at
 rather than the store path underneath it, because Pi records a local
 source by its path\.
 
+The default is ` stable `, unless Pi is enabled: Pi 0\.99 reads its MCP
+servers from the native ` .pi/agent/mcp.json `, which only the ` main `
+plugin serves, so enabling Pi defaults this option to ` main `\. The
+stable npm plugin (0\.1\.16) still drives the legacy ` pi-mcp-adapter `
+transport and would reinstall the adapter this module retires, so
+naming ` stable ` while Pi is enabled is refused at eval\.
+
 Only the engram component reads this; another component setting it is
 refused at eval\.
 
@@ -1420,12 +1427,14 @@ gentle-pi’s own harness, so this is where one is declared\.
 
 ` gentle-pi ` and ` gentle-engram ` are managed by a channel instead:
 ` providers.pi.release ` and ` components.engram.release `\. Both are
-refused here at eval, so use those options to choose where the two
-come from\. A key naming
-one of Pi’s own other fixed packages (` pi-mcp-adapter `,
-` @juicesharp/rpiv-ask-user-question `, ` pi-web-access `, ` pi-btw `)
-overrides that package’s install source in place rather than
-adding a second entry alongside it\.
+refused here at eval, and so is ` pi-mcp-adapter `: it is the
+retired legacy MCP transport, its servers live in Pi’s native
+` mcp.json ` now, and declaring it would reintroduce the adapter
+this module retires\. A key naming
+one of Pi’s own remaining fixed packages
+(` @juicesharp/rpiv-ask-user-question `, ` pi-web-access `,
+` pi-btw `) overrides that package’s install source in place
+rather than adding a second entry alongside it\.
 
 Removing a package from this set retires its installed entry on
 the next switch, the same way changing its source while the name
@@ -1435,7 +1444,7 @@ previous switch declared, the same way a channel change retires
 behavior was added has no earlier declaration to compare
 against, so a package already removed before that switch still
 needs one manual ` pi remove `; every removal after it is
-automatic\. A dropped key naming one of Pi’s own other fixed
+automatic\. A dropped key naming one of Pi’s own remaining fixed
 packages goes back to that package’s harness default instead of
 being removed, since the key only ever overrode its source\.
 

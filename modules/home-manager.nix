@@ -1808,8 +1808,9 @@ let
   # `providers.pi.secrets.merge`, resolved to the same home-relative
   # spelling -- keeps their own entry: the auto-add must never produce two
   # merge steps writing one file.
-  piNativeMCPMergeTargetDeclared =
-    lib.any (entry: entry.path == piNativeMCPPath) (mergeTargets ++ providerMergeTargets);
+  piNativeMCPMergeTargetDeclared = lib.any (entry: entry.path == piNativeMCPPath) (
+    mergeTargets ++ providerMergeTargets
+  );
 
   allMergeTargets =
     mergeTargets
@@ -1838,6 +1839,18 @@ let
       allSecretPaths ++ map (entry: entry.path) allMergeTargets
     )
   );
+
+  # A rendered native mcp.json is merged into the live file at activation;
+  # declaring the same path under secrets.paths makes the secret step replace
+  # it first -- destroying the rendered server set -- and the merge step then
+  # merges into whatever the replace left, so only the order between the
+  # steps would decide the content and neither order is what either
+  # declaration means. That is a declaration mistake rather than a precedence
+  # question, so it is refused (assertion below) instead of silently
+  # performing replace+merge. With the render silent there is nothing to
+  # merge and the replace is the one writer, so declaring the path alone
+  # stays legal.
+  piNativeMCPAlsoDeclaredAsSecret = piNativeMCPRendered && lib.elem piNativeMCPPath allSecretPaths;
 
   # gentle-nix is the one Go binary this repository builds from its own
   # source (cmd/gentle-nix, internal/...), replacing four of the five
@@ -2954,6 +2967,15 @@ in
         }, which programs.gentle-ai.secrets (or a provider's secrets, or a merge target) also writes at activation; both write the same file and only the order between the steps would decide the content -- keep each path in only one of the lists";
       }
       {
+        # With the render producing the native mcp.json, the merge step is
+        # auto-added for it; a secrets.paths entry for the same file makes the
+        # secret step replace it first, so the content would depend only on
+        # which step ran last. Refuse the combination instead of silently
+        # performing replace+merge.
+        assertion = !piNativeMCPAlsoDeclaredAsSecret;
+        message = "programs.gentle-ai.secrets.paths (or providers.pi.secrets.paths) declares ${piNativeMCPPath}, but the rendered configuration also produces that file: the secret step would replace it -- dropping the rendered servers -- and the merge step would then merge into whatever the replace left, so only the order between the steps would decide the content; keep the path out of secrets.paths and let the rendered copy merge, or drop the rendered Pi servers if the replace is what you want";
+      }
+      {
         assertion = lib.all (entry: (entry.text == null) != (entry.source == null)) (
           lib.attrValues cfg.extraFiles
         );
@@ -3246,16 +3268,11 @@ in
     # provisioning having degraded a failed install to a logged line and
     # exit 0.
     home.activation.gentleAiMigratePiMCP = lib.mkIf piProvisionsPackages (
-      lib.hm.dag.entryAfter
-        [ "writeBoundary" "gentleAiMergedSecrets" "gentleAiProvisionPackages" ]
-        ''
-          run ${lib.getExe gentleNix} mcp migrate-pi --agent-dir ${lib.escapeShellArg "${config.home.homeDirectory}/.pi/agent"}
-        ''
+      lib.hm.dag.entryAfter [ "writeBoundary" "gentleAiMergedSecrets" "gentleAiProvisionPackages" ] ''
+        run ${lib.getExe gentleNix} mcp migrate-pi --agent-dir ${lib.escapeShellArg "${config.home.homeDirectory}/.pi/agent"}
+      ''
     );
 
-    # Last, because it is the only step that reaches a network: everything a
-    # switch can produce on its own is already in place when it runs, so a
-    # registry being down costs the packages rather than the whole activation.
     # Last, because it is the only step that reaches outside the store:
     # everything a switch can produce on its own is already in place when it
     # runs, so a registry being down costs the packages rather than the whole

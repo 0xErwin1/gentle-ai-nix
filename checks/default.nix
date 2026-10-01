@@ -664,6 +664,10 @@ in
       # passes them -- so the expected source below is only asserted
       # against the invocation that carries it.
       engramPiPath = overrides.gentle-engram;
+      # The stable channel pins gentle-pi to a versioned npm source, so the
+      # fixed sequence's first install asserts the module's computed override
+      # rather than a hard-coded spelling that the renderer may resolve.
+      piPiPath = overrides.gentle-pi;
 
       overrideArguments = lib.concatMapStringsSep " " (
         name: "--override ${lib.escapeShellArg "${name}=${overrides.${name}}"}"
@@ -716,7 +720,7 @@ in
         }
 
         for want in \
-          "pi install npm:gentle-pi" \
+          "pi install ${piPiPath}" \
           "pi install ${engramPiPath}" \
           "${engramPiPath}/bin/pi-engram init" \
           "pi install npm:pi-web-access" \
@@ -832,6 +836,78 @@ in
         touch "$out"
       '';
 
+  # Declaring the native mcp.json under secrets.paths while the render also
+  # produces it would make two activation steps write the same file: the
+  # secret step replaces it -- destroying the rendered server set -- and
+  # the merge step merges the rendered fragment into whatever the replace
+  # left. Only the order between the steps would decide the content, and
+  # neither order is what either declaration means, so the combination is
+  # refused at evaluation instead of silently performing replace+merge.
+  # Declaring the same path with the render silent stays legal: there is
+  # then nothing to merge, and the replace is the one writer. The normal
+  # merge cases -- auto-added and operator-declared -- are proven by
+  # piNativeMCPRenderedBecomesMergedSecretTarget above.
+  piNativeMCPRenderedRejectsSecretsPathReplace =
+    pkgs.runCommandLocal "gentle-ai-check-pi-native-mcp-rejects-secrets-path-replace" { }
+      ''
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi.enable = true;
+                  mcpServers.atlas.command = "atlas";
+                  secrets.paths = [ ".pi/agent/mcp.json" ];
+                };
+              }
+            ])
+          )
+          ''
+            echo "a rendered native mcp.json also declared under secrets.paths was accepted" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi = {
+                    enable = true;
+                    secrets.paths = [ "agent/mcp.json" ];
+                  };
+                  mcpServers.atlas.command = "atlas";
+                };
+              }
+            ])
+          )
+          ''
+            echo "a rendered native mcp.json also declared under providers.pi.secrets.paths was accepted" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(accepted [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers.pi.enable = true;
+                  secrets.paths = [ ".pi/agent/mcp.json" ];
+                };
+              }
+            ])
+          )
+          ''
+            echo "a secrets.paths replace of the native mcp.json with nothing rendered was rejected" >&2
+            exit 1
+          ''
+        }
+        touch "$out"
+      '';
+
   # The legacy adapter's servers must be carried into the native mcp.json
   # after the secret merge and after provisioning, and before retirement:
   # a migration that fails aborts the switch (the activation script runs
@@ -841,17 +917,18 @@ in
   # guard.
   piMCPMigrationRunsBetweenProvisioningAndRetirement =
     let
-      activation = (evaluate [
-        {
-          programs.gentle-ai = {
-            enable = true;
-            providers.pi = {
+      activation =
+        (evaluate [
+          {
+            programs.gentle-ai = {
               enable = true;
-              provisionPackages = true;
+              providers.pi = {
+                enable = true;
+                provisionPackages = true;
+              };
             };
-          };
-        }
-      ]).config.home.activationPackage;
+          }
+        ]).config.home.activationPackage;
     in
     pkgs.runCommandLocal "gentle-ai-check-pi-mcp-migration-ordering" { inherit activation; } ''
       set -euo pipefail
@@ -1020,8 +1097,13 @@ in
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > commands
 
         count=$(wc -l < commands)
-        [ "$count" -eq 6 ] || {
-          echo "pinning a fixed package changed the command count to $count:" >&2
+        [ "$count" -eq 5 ] || {
+          echo "pinning a fixed package changed the native Pi command count to $count:" >&2
+          cat commands >&2
+          exit 1
+        }
+        grep -qF 'pi install npm:pi-mcp-adapter' commands && {
+          echo "the retired MCP adapter returned to the fixed sequence:" >&2
           cat commands >&2
           exit 1
         }
@@ -1472,8 +1554,7 @@ in
       # pi-mcp-adapter npm rule, also built at shell runtime: its `wanted` is
       # the native Engram plugin's home path, so the rule only ever fires
       # when that plugin is already installed.
-      scenario =
-        name: settingsFile: rules: keepCurrentPlugin: retireAdapter: expected: ''
+      scenario = name: settingsFile: rules: keepCurrentPlugin: retireAdapter: expected: ''
         mkdir -p ${name}/.pi/agent ${name}/bin
         cp ${settingsFile} ${name}/.pi/agent/settings.json
         cat > ${name}/bin/pi <<'SH'
@@ -2219,9 +2300,13 @@ in
       grep -q '"type": "local"' "$opencode" || { echo "opencode's entry is not OpenCode-shaped" >&2; exit 1; }
       grep -q '"enabled": true' "$opencode" || { echo "opencode's entry must always carry enabled" >&2; exit 1; }
 
-      pi="$mcpRendered/tree/.pi/agent/mcp-adapter.json"
-      test -f "$pi" || { echo "Pi's MCP file was not rendered" >&2; exit 1; }
+      pi="$mcpRendered/tree/.pi/agent/mcp.json"
+      test -f "$pi" || { echo "Pi's native MCP file was not rendered" >&2; exit 1; }
       grep -q '"atlas"' "$pi" || { echo "Pi did not get the flat server" >&2; exit 1; }
+      test ! -e "$mcpRendered/tree/.pi/agent/mcp-adapter.json" || {
+        echo "Pi rendered the retired MCP adapter config" >&2
+        exit 1
+      }
 
       codex="$mcpRendered/tree/.codex/config.toml"
       test -f "$codex" || { echo "Codex's config.toml was not rendered" >&2; exit 1; }
