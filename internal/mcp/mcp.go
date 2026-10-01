@@ -301,7 +301,10 @@ func writeAgent(tree, agent string, servers map[string]Server, paths map[string]
 	case "kiro-ide":
 		return mergePlain(filepath.Join(tree, ".kiro", "settings", "mcp.json"), servers)
 	case "pi":
-		return mergePlain(filepath.Join(tree, ".pi", "agent", "mcp-adapter.json"), servers)
+		// Pi 0.99 reads its own native .pi/agent/mcp.json; the adapter's
+		// mcp-adapter.json is retired (see migrate_pi.go for the guarded
+		// carry-over of a host's legacy adapter config).
+		return mergePlain(filepath.Join(tree, ".pi", "agent", "mcp.json"), servers)
 	case "gemini-cli", "qwen-code", "openclaw":
 		path, ok := settings.ResolvePath(tree, agent)
 		if !ok {

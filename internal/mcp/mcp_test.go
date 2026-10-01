@@ -399,7 +399,7 @@ func TestWriteTreeKiroIDEAndPiAndKimiSharedPlainFiles(t *testing.T) {
 		want  string
 	}{
 		{"kiro-ide", filepath.Join(".kiro", "settings", "mcp.json")},
-		{"pi", filepath.Join(".pi", "agent", "mcp-adapter.json")},
+		{"pi", filepath.Join(".pi", "agent", "mcp.json")},
 		{"kimi", filepath.Join(".kimi", "mcp.json")},
 	}
 
