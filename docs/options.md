@@ -336,11 +336,12 @@ rather than the store path underneath it, because Pi records a local
 source by its path\.
 
 The default is ` stable `, unless Pi is enabled: Pi 0\.99 reads its MCP
-servers from the native ` .pi/agent/mcp.json `, which only the ` main `
-plugin serves, so enabling Pi defaults this option to ` main `\. The
-stable npm plugin (0\.1\.16) still drives the legacy ` pi-mcp-adapter `
-transport and would reinstall the adapter this module retires, so
-naming ` stable ` while Pi is enabled is refused at eval\.
+servers from the native ` .pi/agent/mcp.json `, which the module
+renders and retires against, and the ` main ` plugin is built from
+the same revision as the Engram binary, so enabling Pi defaults
+this option to ` main `\. Since ` gentle-engram@0.2.0 ` the stable npm
+plugin also serves the native transport, so naming ` stable `
+explicitly while Pi is enabled is an accepted choice\.
 
 Only the engram component reads this; another component setting it is
 refused at eval\.

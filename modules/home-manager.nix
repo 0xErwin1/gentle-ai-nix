@@ -1886,10 +1886,10 @@ let
   gentlePiNpmStable = gentlePiSource gentlePiReleases.stable;
 
   # gentle-engram's stable npm source, pinned the same way and for the same
-  # reason. Engram 2.2.1 carries `gentle-engram@0.1.16`; pinning keeps
+  # reason. Engram 3.1.0 carries `gentle-engram@0.2.0`; pinning keeps
   # the plugin paired with that binary even if npm's `latest` moves. Off
   # stable the plugin is built from the same revision as the binary.
-  gentleEngramNpmDefault = "npm:gentle-engram@0.1.16";
+  gentleEngramNpmDefault = "npm:gentle-engram@0.2.0";
 
   # Every rule below carries a `wanted` spelling: the exact entry (or, for a
   # local path, the location it resolves to) that has to already be present
@@ -2407,11 +2407,12 @@ in
           source by its path.
 
           The default is `stable`, unless Pi is enabled: Pi 0.99 reads its MCP
-          servers from the native `.pi/agent/mcp.json`, which only the `main`
-          plugin serves, so enabling Pi defaults this option to `main`. The
-          stable npm plugin (0.1.16) still drives the legacy `pi-mcp-adapter`
-          transport and would reinstall the adapter this module retires, so
-          naming `stable` while Pi is enabled is refused at eval.
+          servers from the native `.pi/agent/mcp.json`, which the module
+          renders and retires against, and the `main` plugin is built from
+          the same revision as the Engram binary, so enabling Pi defaults
+          this option to `main`. Since `gentle-engram@0.2.0` the stable npm
+          plugin also serves the native transport, so naming `stable`
+          explicitly while Pi is enabled is an accepted choice.
 
           Only the engram component reads this; another component setting it is
           refused at eval.
@@ -2923,14 +2924,6 @@ in
         message = "programs.gentle-ai.components.engram.release = \"${cfg.components.engram.release}\" is not a known channel";
       }
       {
-        # The stable npm plugin still ships the legacy MCP transport and
-        # would reinstall pi-mcp-adapter over Pi's native mcp.json, undoing
-        # both the migration and the retirement this module renders. Fail
-        # closed rather than letting a switch walk that back in.
-        assertion = !(piEnabled && cfg.components.engram.release == "stable");
-        message = "programs.gentle-ai.components.engram.release = \"stable\" is refused while providers.pi is enabled: the stable npm plugin (gentle-engram@0.1.16) drives the legacy pi-mcp-adapter transport and would reinstall the adapter this module retires over Pi's native mcp.json; keep the main release (the default for Pi), whose Engram main build ships the native-only plugin";
-      }
-      {
         assertion = unknownSourceProviders == [ ];
         message = "programs.gentle-ai.customProviders.${lib.concatStringsSep ", " unknownSourceProviders} takes its harness from a client that is not enabled, or that has no known directory";
       }
@@ -3091,13 +3084,13 @@ in
       # neither key reaches the document or Pi's provisioning until a
       # configuration turns one on.
       # Enabling Pi moves the Engram channel to main by default: Pi 0.99's
-      # native `.pi/agent/mcp.json` is served by the main plugin only, and
-      # the stable npm plugin (0.1.16) still drives the legacy
-      # pi-mcp-adapter transport this module retires. `mkDefault` keeps an
-      # operator's explicit channel choice winning, and the assertion below
-      # refuses the one combination this default cannot paper over (Pi
-      # enabled, stable named explicitly). Non-Pi installations keep the
-      # stable default and their 0.1.16 npm pin.
+      # native `.pi/agent/mcp.json` is what this module renders and retires
+      # against, and the main plugin is built from the same revision as the
+      # Engram binary. `mkDefault` keeps an operator's explicit channel
+      # choice winning, and since `gentle-engram@0.2.0` the stable npm
+      # plugin also serves the native transport, so naming `stable`
+      # explicitly is accepted. Non-Pi installations keep the stable
+      # default and their 0.2.0 npm pin.
       # The default rides on the `release` field itself, not on the
       # component's attribute set: a `mkDefault` wrapping the whole set is
       # discarded as a unit once the operator states any field of the
