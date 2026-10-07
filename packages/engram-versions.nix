@@ -10,10 +10,10 @@
   # The newest tagged release. Its Pi plugin is `gentle-engram@0.2.0`,
   # the exact npm version the module pins for this channel.
   stable = {
-    version = "3.1.0";
-    rev = "v3.1.0";
-    hash = "sha256-Dyzi/OH0XwT3Z1QfDM/Tvd6bYcXvQux/jff86st5t30=";
-    vendorHash = "sha256-gDGy1s4JcX/6bI2eoycfsWJTbU2L0RAi3xCJ3AzFwYU=";
+    version = "3.2.1";
+    rev = "v3.2.1";
+    hash = "sha256-t7YaSqglVDQYJ92kkH35KAT+VscUs+EKFZWQnHUWdGc=";
+    vendorHash = "sha256-9RTI+XAdIHDKPkW+s6htk1Me6/gaE0fpuCP0xTLtYio=";
   };
 
   # Tracks the tip of Engram's default branch the way versions.nix's beta tracks
@@ -26,9 +26,9 @@
   # The version carries the `-main.` prerelease tag so a build from here is
   # never mistaken for a release.
   main = {
-    version = "3.1.0-main.e5c2277f";
-    rev = "e5c2277f856a5ee8739f297a006cabf6432ba77d";
-    hash = "sha256-Dyzi/OH0XwT3Z1QfDM/Tvd6bYcXvQux/jff86st5t30=";
-    vendorHash = "sha256-gDGy1s4JcX/6bI2eoycfsWJTbU2L0RAi3xCJ3AzFwYU=";
+    version = "3.2.1-main.ee7cb292";
+    rev = "ee7cb292d54b3de77c6c347a81890be92683b490";
+    hash = "sha256-/rMy0XOTwW0ASaeuV+bM64w2WXmNIqkSI1VDVzl+Lv4=";
+    vendorHash = "sha256-9RTI+XAdIHDKPkW+s6htk1Me6/gaE0fpuCP0xTLtYio=";
   };
 }

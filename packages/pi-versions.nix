@@ -37,7 +37,7 @@
   # selecting the separately pinned beta channel does not change the plugin's
   # installer target.
   main = {
-    version = "4.0.0-main.7b9b3a08";
-    rev = "7b9b3a08e38189539e37c139c5ea28f3115906c9";
+    version = "4.0.0-main.f5a42a5d";
+    rev = "f5a42a5db7d531cd2214f9f00107e986f501f985";
   };
 }
