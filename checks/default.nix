@@ -527,12 +527,11 @@ in
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > overridden.commands
 
         # The default configuration's Engram channel follows Pi to main, so
-        # both the install source and the init step are the stable home path
-        # the native plugin is linked into, not npm's 0.2.0 pin.
+        # the install source is the stable home path the native plugin is
+        # linked into, not npm's 0.2.0 pin. Activation belongs to the package.
         for want in \
           "pi install npm:gentle-pi@4.0.0" \
-          "pi install ${defaultEngramPiPath}" \
-          "${defaultEngramPiPath}/bin/pi-engram init"
+          "pi install ${defaultEngramPiPath}"
         do
           grep -qxF "$want" default.commands || {
             echo "the default configuration no longer runs: $want" >&2
@@ -543,8 +542,7 @@ in
 
         for want in \
           "pi install git:github.com/Gentleman-Programming/gentle-shell@f5a42a5db7d531cd2214f9f00107e986f501f985" \
-          "pi install ${gentleEngramPiPath}" \
-          "${gentleEngramPiPath}/bin/pi-engram init"
+          "pi install ${gentleEngramPiPath}"
         do
           grep -qxF "$want" overridden.commands || {
             echo "the overridden configuration does not run: $want" >&2
@@ -556,6 +554,10 @@ in
         # The adapter is retired, not provisioned: no rewritten command may
         # reinstall it over Pi's native mcp.json.
         for commands in default.commands overridden.commands; do
+          if grep -qF "pi-engram init" "$commands"; then
+            echo "$commands still runs the retired Engram initializer" >&2
+            exit 1
+          fi
           grep -qxF "pi install npm:pi-mcp-adapter" "$commands" && {
             echo "$commands still installs the retired pi-mcp-adapter:" >&2
             cat "$commands" >&2
@@ -709,8 +711,8 @@ in
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} ${extraArguments} > commands
 
         count=$(wc -l < commands)
-        [ "$count" -eq 6 ] || {
-          echo "expected the fixed 5-command sequence plus 1 extra, got $count:" >&2
+        [ "$count" -eq 5 ] || {
+          echo "expected the fixed 4-command sequence plus 1 extra, got $count:" >&2
           cat commands >&2
           exit 1
         }
@@ -724,7 +726,6 @@ in
         for want in \
           "pi install ${piPiPath}" \
           "pi install ${engramPiPath}" \
-          "${engramPiPath}/bin/pi-engram init" \
           "pi install npm:pi-web-access" \
           "pi install npm:pi-btw"
         do
@@ -735,10 +736,13 @@ in
           }
         done
 
-        # The override's Engram source renders exactly once as the install
-        # and once as the init step: the overrides must drive the fixed
-        # sequence's rewrite without duplicating its entries.
-        for want in "pi install ${engramPiPath}" "${engramPiPath}/bin/pi-engram init"; do
+        # The override's Engram source renders once; package activation must
+        # not resurrect the retired initializer or float this configured pin.
+        if grep -qF "pi-engram init" commands; then
+          echo "the fixed sequence still runs the retired Engram initializer" >&2
+          exit 1
+        fi
+        for want in "pi install ${engramPiPath}"; do
           count=$(grep -cxF "$want" commands)
           [ "$count" -eq 1 ] || {
             echo "expected exactly one '$want', got $count:" >&2
@@ -1099,7 +1103,7 @@ in
           --stamp-dir "$PWD/stamps" --print ${overrideArguments} > commands
 
         count=$(wc -l < commands)
-        [ "$count" -eq 5 ] || {
+        [ "$count" -eq 4 ] || {
           echo "pinning a fixed package changed the native Pi command count to $count:" >&2
           cat commands >&2
           exit 1
@@ -1970,7 +1974,7 @@ in
         ]).config.programs.gentle-ai.document;
       cases = {
         profiles = {
-          code = "config.provider.profiles.unsupported-provider";
+          code = "config.provider.profiles.retired";
           document = documentFor {
             claude-code.enable = true;
             claude-code.profiles.cheap.orchestrator = {
@@ -3618,9 +3622,9 @@ in
 
   # `defaultEffort` says once what repeating a level on every assignment
   # said. This proves it reaches every assignment that states none -- in the
-  # document for a client whose profiles travel through it, and in the
-  # rendered tree for Pi, whose profiles do not -- and that an assignment
-  # which states its own effort still wins.
+  # legacy OpenCode document shape and in Pi's independently rendered
+  # profile overlay. The retired OpenCode profile declaration must not be
+  # sent to the renderer; an assignment with its own effort still wins.
   defaultEffortFillsProfileAssignmentsWithoutOverridingThem =
     let
       models = self.lib.models;
@@ -3628,21 +3632,22 @@ in
         codex = "openai-codex";
         nan = "nan";
       };
+      pi = {
+        enable = true;
+        activeProfile = "helpers";
+        profiles.helpers = {
+          defaultEffort = "high";
+          orchestrator = declared.onCodex "gpt-6-astra";
+          phases.sdd-apply = declared.onNan "glm5.3-flash";
+          phases.sdd-verify = models.effort.low (declared.onNan "glm5.3-flash");
+        };
+      };
       configuration = evaluate [
         {
           programs.gentle-ai = {
             enable = true;
             providers = {
-              pi = {
-                enable = true;
-                activeProfile = "helpers";
-                profiles.helpers = {
-                  defaultEffort = "high";
-                  orchestrator = declared.onCodex "gpt-6-astra";
-                  phases.sdd-apply = declared.onNan "glm5.3-flash";
-                  phases.sdd-verify = models.effort.low (declared.onNan "glm5.3-flash");
-                };
-              };
+              inherit pi;
               opencode = {
                 enable = true;
                 profiles.helpers = {
@@ -3658,7 +3663,15 @@ in
       ];
       opencodeHelpers =
         configuration.config.programs.gentle-ai.document.selection.providers.opencode.profiles.helpers;
-      rendered = configuration.config.programs.gentle-ai.rendered;
+      rendered =
+        (evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers = { inherit pi; };
+            };
+          }
+        ]).config.programs.gentle-ai.rendered;
       filled =
         opencodeHelpers.orchestrator.effort == "high"
         && opencodeHelpers.phaseAssignments.sdd-apply.effort == "high";
