@@ -35,10 +35,10 @@
   # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "4.0.0-main.a2601b5c";
+    version = "4.0.0-main.a52058c3a";
     owner = "Gentleman-Programming";
-    rev = "a2601b5ca0ace04a8565465c094b7b2925a18486";
-    hash = "sha256-qVESmAQX1dg875wHIXbTfMd6U/uxCb4t6ipa/XAsPNg=";
+    rev = "a52058c3a9fcaad8c29563450d1f0446754737d4";
+    hash = "sha256-E4iYnWXkKKVbSOCu/GE2H/feYxCDxL1sA6eZjUAj0Bo=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
