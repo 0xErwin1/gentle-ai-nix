@@ -7,15 +7,14 @@
 #   nix-prefetch-url --unpack https://github.com/Gentleman-Programming/engram/archive/<ref>.tar.gz
 #   nix hash convert --hash-algo sha256 --to sri <hash>
 {
-  # The newest tagged release. Its Pi plugin is `gentle-engram@0.3.0`,
-  # the exact npm version the module pins for this channel -- the plugin's
-  # own `pi-v0.4.0` tag is ahead of the core release and pairs with no
-  # core version, so the pair is read from the release's own
-  # `plugin/pi/package.json`, not from npm's `latest`.
+  # The newest tagged release. Its Pi plugin is `gentle-engram@0.4.1`,
+  # the exact npm version the module pins for this channel. The pair is read
+  # from the release's own `plugin/pi/package.json`, not from npm's `latest`:
+  # the plugin's own tags can run ahead of the core release.
   stable = {
-    version = "3.3.0";
-    rev = "v3.3.0";
-    hash = "sha256-+zEm5sFsAGGjEsBtwSAUlJHybXNYyj9ns7FlHjyvBhU=";
+    version = "3.3.2";
+    rev = "v3.3.2";
+    hash = "sha256-NpctH9oAOyGvzyfPMme3pzNZ4RqHSdquSkBA3PoEvaw=";
     vendorHash = "sha256-9RTI+XAdIHDKPkW+s6htk1Me6/gaE0fpuCP0xTLtYio=";
   };
 
@@ -27,11 +26,12 @@
   # the plugin is built from the same source and linked into the rendered tree.
   #
   # The version carries the `-main.` prerelease tag so a build from here is
-  # never mistaken for a release.
+  # never mistaken for a release. This revision is the commit `v3.3.2` tags,
+  # fetched by commit so it stays a distinct channel when main moves on.
   main = {
-    version = "3.3.0-main.ba23804f";
-    rev = "ba23804f64b8e6d21acd006bea5ce3831fd5337d";
-    hash = "sha256-UvDEXq9Hvez6NvjR7Or+tb+w5jH7Lz+A01enbI3igWk=";
+    version = "3.3.2-main.35d14520";
+    rev = "35d14520fdd3a4de24f989b835611f5585cdebb3";
+    hash = "sha256-NpctH9oAOyGvzyfPMme3pzNZ4RqHSdquSkBA3PoEvaw=";
     vendorHash = "sha256-9RTI+XAdIHDKPkW+s6htk1Me6/gaE0fpuCP0xTLtYio=";
   };
 }
