@@ -8,7 +8,7 @@
 let
   lib = pkgs.lib;
   module = self.homeManagerModules.default;
-  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@ad1acabb6d8df12fff5e9dd51d3b3aee239c187a";
+  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@79323b76aa900c1cb88135fb0d95c04899c1b9c0";
 
   evaluate =
     extraModules:
@@ -541,7 +541,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-shell@ad1acabb6d8df12fff5e9dd51d3b3aee239c187a" \
+          "pi install git:github.com/Gentleman-Programming/gentle-shell@79323b76aa900c1cb88135fb0d95c04899c1b9c0" \
           "pi install ${gentleEngramPiPath}"
         do
           grep -qxF "$want" overridden.commands || {

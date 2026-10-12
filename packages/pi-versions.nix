@@ -27,17 +27,17 @@
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # This revision is past the `v4.0.0` release: the tag peels to an earlier
-  # commit, so the pin no longer coincides with the release. The `-main.`
-  # prerelease label keeps a build from here from being mistaken for the
-  # release: `package.json` at the tip reads `4.0.0`.
+  # This revision is the commit the `v4.1.0` tag peels to, and `package.json`
+  # there reads `4.1.0`, but npm has not published `gentle-pi@4.1.0`: `stable`
+  # above stays on the newest published release. The `-main.` prerelease label
+  # keeps a build from here from being mistaken for either.
   #
-  # The plugin still installs Gentle AI v4.0.0 through `INSTALLER_VERSION` in
+  # The plugin installs Gentle AI v4.1.1 through `INSTALLER_VERSION` in
   # `scripts/gentle-ai-installer.mjs`. That matches this flake's stable channel;
   # selecting the separately pinned beta channel does not change the plugin's
   # installer target.
   main = {
-    version = "4.0.0-main.ad1acabb";
-    rev = "ad1acabb6d8df12fff5e9dd51d3b3aee239c187a";
+    version = "4.1.0-main.79323b76";
+    rev = "79323b76aa900c1cb88135fb0d95c04899c1b9c0";
   };
 }

@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "4.0.0";
+    version = "4.1.1";
     owner = "Gentleman-Programming";
-    rev = "v4.0.0";
-    hash = "sha256-H5NZs7Fv1QYGuRqkLM2Ye1T8NSNFh0JMr+HTBrUAGgs=";
+    rev = "v4.1.1";
+    hash = "sha256-d3QlYWeQgo9KyslKVMeI/BsT26FVmZf6Sa19Eh+rWok=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,16 +29,16 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # v4.0.0 was tagged from a main that has moved on since, so the tag and the
-  # commit are different revisions that fetch to different store paths -- the tag
-  # is the last release, the branch is the tip. Every channel carries the Pi
+  # At this pin the tip of main is the commit v4.1.1 tags, so both channels
+  # fetch the same tree; they stay separate entries because main moves on after
+  # a release and the tag does not. Every channel carries the Pi
   # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "4.0.0-main.25261cfe3";
+    version = "4.1.1-main.898d3976e";
     owner = "Gentleman-Programming";
-    rev = "25261cfe30ea59c778c768c0c40c327849f8f655";
-    hash = "sha256-Rb3Z0U2ibqtakZZYRGLYYC0qQK5cnCsqCe4EA7lXHLk=";
+    rev = "898d3976e8049a7238eaa7de60bff325c30d2b3d";
+    hash = "sha256-d3QlYWeQgo9KyslKVMeI/BsT26FVmZf6Sa19Eh+rWok=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
