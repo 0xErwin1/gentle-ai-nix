@@ -8,7 +8,7 @@
 let
   lib = pkgs.lib;
   module = self.homeManagerModules.default;
-  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@79323b76aa900c1cb88135fb0d95c04899c1b9c0";
+  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@c41ebd591358d393cf19c5ead981f67640a600ba";
 
   evaluate =
     extraModules:
@@ -302,7 +302,7 @@ in
         providers.pi.release = "main";
         components.engram.release = "main";
       };
-      # Pi's Engram channel defaults to main, so the stable 0.4.1 npm pin
+      # Pi's Engram channel defaults to main, so the stable 0.4.2 npm pin
       # is only observable from a configuration that does not enable Pi.
       nonPiConfiguration = evaluate [
         {
@@ -321,14 +321,14 @@ in
     in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
-    assert defaultOverrides.gentle-pi == "npm:gentle-pi@4.0.0";
+    assert defaultOverrides.gentle-pi == "npm:gentle-pi@4.2.0";
     # Pi enabled defaults the Engram channel to main, so the override is
     # the stable home path the native plugin is linked into, never a store
     # path or npm's moving `latest`.
     assert defaultOverrides.gentle-engram == "/home/test-user/.pi/gentle-ai/plugins/gentle-engram";
     # Without Pi the channel keeps its stable default, and with it the
     # exact npm pin the stable release ships -- never `latest`.
-    assert nonPiOverrides.gentle-engram == "npm:gentle-engram@0.4.1";
+    assert nonPiOverrides.gentle-engram == "npm:gentle-engram@0.4.2";
     assert overriddenOverrides.gentle-pi == gentleShellMainSource;
     # A store path here would change identity on every rebuild and leave Pi
     # holding two entries for the same plugin, so the source Pi is given is
@@ -366,7 +366,7 @@ in
     in
     assert piConfiguration.config.programs.gentle-ai.components.engram.release == "main";
     assert nonPiConfiguration.config.programs.gentle-ai.components.engram.release == "stable";
-    # gentle-engram@0.4.1, the plugin the stable release ships, serves Pi's
+    # gentle-engram@0.4.2, the plugin the stable release ships, serves Pi's
     # native `.pi/agent/mcp.json` itself, so naming `stable` while Pi is
     # enabled is an operator choice the module accepts rather than refuses.
     assert accepted [
@@ -424,7 +424,7 @@ in
           echo "main did not render the guarded legacy gentle-pi Git migration rule" >&2
           exit 1
         }
-        grep -qF '"name":"gentle-shell","type":"git","wanted":"npm:gentle-pi@4.0.0"' "$stableActivation/activate" || {
+        grep -qF '"name":"gentle-shell","type":"git","wanted":"npm:gentle-pi@4.2.0"' "$stableActivation/activate" || {
           echo "stable did not render the guarded canonical gentle-shell Git retirement rule" >&2
           exit 1
         }
@@ -528,9 +528,9 @@ in
 
         # The default configuration's Engram channel follows Pi to main, so
         # the install source is the stable home path the native plugin is
-        # linked into, not npm's 0.4.1 pin. Activation belongs to the package.
+        # linked into, not npm's 0.4.2 pin. Activation belongs to the package.
         for want in \
-          "pi install npm:gentle-pi@4.0.0" \
+          "pi install npm:gentle-pi@4.2.0" \
           "pi install ${defaultEngramPiPath}"
         do
           grep -qxF "$want" default.commands || {
@@ -541,7 +541,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-shell@79323b76aa900c1cb88135fb0d95c04899c1b9c0" \
+          "pi install git:github.com/Gentleman-Programming/gentle-shell@c41ebd591358d393cf19c5ead981f67640a600ba" \
           "pi install ${gentleEngramPiPath}"
         do
           grep -qxF "$want" overridden.commands || {
@@ -1434,7 +1434,7 @@ in
           "npm:gentle-pi"
           "npm:gentle-pi@2.4.0"
           "npm:gentle-pi@3.7.0"
-          "npm:gentle-pi@4.0.0"
+          "npm:gentle-pi@4.2.0"
           "git:github.com/Gentleman-Programming/gentle-pi@abc123"
           "git:github.com/Gentleman-Programming/gentle-shell@def456"
           "npm:gentle-engram"
@@ -1509,12 +1509,12 @@ in
       canonicalGentleShellGitRetirement = builtins.toJSON {
         type = "git";
         name = "gentle-shell";
-        wanted = "npm:gentle-pi@4.0.0";
+        wanted = "npm:gentle-pi@4.2.0";
       };
       packageRuleKeepingStableGentlePi = builtins.toJSON {
         type = "package";
-        keep = "npm:gentle-pi@4.0.0";
-        wanted = "npm:gentle-pi@4.0.0";
+        keep = "npm:gentle-pi@4.2.0";
+        wanted = "npm:gentle-pi@4.2.0";
       };
 
       # Pinning one of Pi's own fixed packages (here pi-btw) retires the bare
@@ -1666,7 +1666,7 @@ in
             "npm:gentle-pi"
             "npm:gentle-pi@2.4.0"
             "npm:gentle-pi@3.7.0"
-            "npm:gentle-pi@4.0.0"
+            "npm:gentle-pi@4.2.0"
             "git:github.com/Gentleman-Programming/gentle-pi@abc123"
             "npm:gentle-engram"
             "npm:gentle-engram@0.1.12"
