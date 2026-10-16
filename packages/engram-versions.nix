@@ -30,9 +30,9 @@
   # revision, and its Pi plugin is `gentle-engram@0.4.2` -- the same binary and
   # plugin pair the stable channel ships, ahead of it only in core commits.
   main = {
-    version = "3.4.0-main.f3f5aa78";
-    rev = "f3f5aa789b0fcc5fcb520b4a1b910bbf1611655c";
-    hash = "sha256-4d6xJoU088LjWcLd2he1OMN6kf882tjrtzUfBNcbNB4=";
+    version = "3.4.0-main.9c4382f6";
+    rev = "9c4382f60e2fb300c6cb877bb6ff295ecfbdf2ee";
+    hash = "sha256-V0FmvomJiRt/fCd2Y6HZUyPcyujuw+8lrDQUPF1/yqU=";
     vendorHash = "sha256-OYP0cZoGgsLWJ7BVvXDKBYoj6oGa1SoCnIB/2+sovx8=";
   };
 }
