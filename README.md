@@ -249,6 +249,44 @@ working install. Removing a package from `packages` entirely does not retire
 it on its own: the module has no record of what an earlier generation
 declared, only what this one does, so that still needs a manual `pi remove`.
 
+**The standalone launcher** is the other way to reach the session, and the one
+Pi's provisioning cannot provide. gentle-shell ships its own `gentle-shell`
+binary: it runs the Pi its package carries, applies the version gate, and
+boots the session in its own home (`~/.gentle-shell/agent`) unless `--link` —
+or `gentle-shell home link` — reuses `~/.pi/agent`. That binary lives in the
+package Pi installs, which is not on PATH and, with `release = "main"`, is a
+git checkout Pi manages itself. This flake builds it from the same channel
+table instead (`packages/gentle-shell.nix`, from the repository archive with
+the dependencies its pnpm lockfile pins) and puts it on PATH when you opt in:
+
+```nix
+providers.pi.launcher.enable = true;   # defaults to false
+providers.pi.launcher.package = null;  # override for a different build
+```
+
+One caveat decides how the two paths meet: this module renders into
+`~/.pi/agent`, while the launcher's default home is `~/.gentle-shell/agent`.
+A launcher left on its default home runs without anything this flake renders —
+passing `--link` when launching it, or running `gentle-shell home link` once,
+is what reuses `~/.pi/agent` and makes the two the same session. The launcher
+runs the Pi peer its pnpm lockfile pins, under the package's own Node, rather
+than a `pi` on PATH. That keeps the version its lockfile was tested with, and it
+is what lets gentle-pi's helper processes (its native notification audio among
+them) start: they are spawned through `process.execPath`, which under the
+standalone Pi binary is Pi itself rather than Node. `GENTLE_SHELL_PI` still
+selects a different Pi at runtime.
+
+Enabling the launcher also changes where Pi installs gentle-pi from: the
+launcher's own package root (`<launcher>/lib/gentle-shell` in the store)
+replaces the npm or git source the channel names. The launcher recognises a
+path declaration that resolves to itself and injects nothing, so plain `pi`
+and `gentle-shell --link` load the same copy instead of registering every
+gentle-pi tool twice. The build also carries the Gentle AI runtime the
+package's `postinstall` would have downloaded (`.gentle-ai/v<version>/`, with
+its integrity manifest), since a read-only store path cannot install one at
+boot. Turning the launcher off again restores the channel source and retires
+the launcher path once that source is installed.
+
 **A file that has to carry a credential** cannot be a store symlink — the store
 is world-readable and read-only. Those paths are held back from the projection
 and written at activation with the placeholder replaced:

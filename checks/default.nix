@@ -1410,6 +1410,50 @@ in
             exit 1
           ''
         }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers = {
+                    pi.enable = true;
+                    opencode = {
+                      enable = true;
+                      launcher.enable = true;
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-pi provider was allowed to enable the standalone launcher" >&2
+            exit 1
+          ''
+        }
+        ${lib.optionalString
+          (
+            !(rejected [
+              {
+                programs.gentle-ai = {
+                  enable = true;
+                  providers = {
+                    pi.enable = true;
+                    opencode = {
+                      enable = true;
+                      launcher.package = pkgs.hello;
+                    };
+                  };
+                };
+              }
+            ])
+          )
+          ''
+            echo "a non-pi provider was allowed to override the launcher package" >&2
+            exit 1
+          ''
+        }
         touch "$out"
       '';
 
@@ -1952,6 +1996,189 @@ in
       }
       touch "$out"
     '';
+
+  # The standalone launcher package itself: the binary `providers.pi.launcher`
+  # puts on PATH. `--help` short-circuits before any Pi resolution, so this
+  # can answer in a sandbox that deliberately carries no `pi` on PATH -- the
+  # launcher resolves `pi` itself at boot and reports a missing one.
+  gentleShellLauncherAnswersHelpWithoutPi =
+    let
+      launcher = self.packages.${system}.gentle-shell;
+    in
+    pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-help"
+      { nativeBuildInputs = [ launcher ]; }
+      ''
+        set -euo pipefail
+
+        if command -v pi >/dev/null 2>&1; then
+          echo "the check sandbox unexpectedly has a pi on PATH" >&2
+          exit 1
+        fi
+
+        # Since 4.3.0 the help opens with notes ahead of the usage line, so
+        # only the usage line's presence is asserted, not its position.
+        output="$(gentle-shell --help 2>&1)"
+        printf '%s\n' "$output" | grep -q '^Usage: gentle-shell' || {
+          echo "gentle-shell --help did not print its usage line:" >&2
+          printf '%s\n' "$output" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
+  # Both channel builds carry the Gentle AI runtime their package resolves
+  # without a download: `resolveGentleAiBinary()`, imported from the store
+  # exactly as the launcher imports it, returns the package-local binary
+  # rather than throwing package-local-binary-missing. The packages' own
+  # install checks prove the same at build time; this keeps it asserted
+  # against what the flake exports, and runs the binary it resolved.
+  gentleShellLauncherCarriesGentleAiRuntime =
+    pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-runtime"
+      {
+        nativeBuildInputs = [ pkgs.nodejs ];
+        launchers = [
+          self.packages.${system}.gentle-shell
+          self.packages.${system}.gentle-shell-main
+        ];
+      }
+      ''
+        set -euo pipefail
+        export HOME="$PWD/home"
+        mkdir -p "$HOME"
+
+        for launcher in $launchers; do
+          binary="$(node --input-type=module -e '
+            const { resolveGentleAiBinary } = await import(process.argv[1]);
+            process.stdout.write(resolveGentleAiBinary());
+          ' "$launcher/lib/gentle-shell/runtime/gentle-ai-binary.mjs")"
+          case "$binary" in
+            "$launcher"/lib/gentle-shell/.gentle-ai/v*/gentle-ai) ;;
+            *)
+              echo "$launcher resolved Gentle AI outside its package root: $binary" >&2
+              exit 1
+              ;;
+          esac
+          "$binary" version >/dev/null 2>&1 || "$binary" --version >/dev/null 2>&1 || {
+            echo "the resolved Gentle AI binary in $launcher does not run" >&2
+            exit 1
+          }
+        done
+
+        touch "$out"
+      '';
+
+  # The launcher option is opt-in in both directions: enabling it puts the
+  # launcher in home.packages (through the module's existing assembly), and
+  # leaving it at its default puts nothing there. Both halves are asserted at
+  # eval time, where the packages are derivations to compare rather than
+  # paths to guess; the runCommand then proves the selected entry is really
+  # the executable the launcher ships.
+  gentleShellLauncherOptionControlsHomePackages =
+    let
+      configurationFor =
+        extra:
+        evaluate [
+          {
+            programs.gentle-ai = lib.recursiveUpdate {
+              enable = true;
+            } extra;
+          }
+        ];
+
+      launcherOf =
+        configuration:
+        lib.findSingle (
+          package: (package.pname or "") == "gentle-shell"
+        ) null null configuration.config.home.packages;
+
+      enabled = configurationFor {
+        providers.pi.enable = true;
+        providers.pi.launcher.enable = true;
+      };
+      disabled = configurationFor { providers.pi.enable = true; };
+
+      selected = launcherOf enabled;
+    in
+    assert launcherOf disabled == null;
+    assert selected != null;
+    pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-option" { inherit selected; } ''
+      test -x "$selected/bin/gentle-shell" || {
+        echo "the launcher entry in home.packages has no executable bin/gentle-shell" >&2
+        exit 1
+      }
+      touch "$out"
+    '';
+
+  # With the launcher enabled, Pi provisions gentle-pi from the launcher's own
+  # package root, so plain `pi` and `gentle-shell --link` load one copy and the
+  # launcher sees a path declaration resolving to itself instead of injecting
+  # a second one. Disabled, the channel source is untouched. Both channels are
+  # covered, since only the disabled case differs between them. The rendered
+  # retirement rules must follow: the launcher path is what has to be present
+  # before npm or git spellings go, and a launcher path left behind by an
+  # earlier generation is displaced once the launcher is off again.
+  gentleShellLauncherProvisionsGentlePiFromItself =
+    let
+      configurationFor =
+        release: launcher:
+        evaluate [
+          {
+            programs.gentle-ai = {
+              enable = true;
+              providers.pi = {
+                enable = true;
+                provisionPackages = true;
+                inherit release;
+                launcher.enable = launcher;
+              };
+            };
+          }
+        ];
+      overridesOf =
+        release: launcher:
+        (configurationFor release launcher).config.programs.gentle-ai.piProvisionOverrides.gentle-pi;
+      launcherPathOf =
+        release:
+        "${
+          self.packages.${system}.${if release == "stable" then "gentle-shell" else "gentle-shell-main"}
+        }/lib/gentle-shell";
+
+      stableEnabled = configurationFor "stable" true;
+      stableDisabled = configurationFor "stable" false;
+    in
+    assert overridesOf "stable" true == launcherPathOf "stable";
+    assert overridesOf "main" true == launcherPathOf "main";
+    assert overridesOf "stable" false == "npm:gentle-pi@4.3.0";
+    assert overridesOf "main" false == gentleShellMainSource;
+    pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-provisions-gentle-pi"
+      {
+        enabledActivation = stableEnabled.config.home.activationPackage;
+        disabledActivation = stableDisabled.config.home.activationPackage;
+        launcherPath = launcherPathOf "stable";
+      }
+      ''
+        set -euo pipefail
+
+        test -f "$launcherPath/package.json" || {
+          echo "the launcher path gentle-pi is provisioned from is not a package root" >&2
+          exit 1
+        }
+        grep -qF "\"keep\":\"$launcherPath\",\"type\":\"package\",\"wanted\":\"$launcherPath\"" "$enabledActivation/activate" || {
+          echo "the launcher did not render a package rule keeping its own path" >&2
+          exit 1
+        }
+        grep -qF "\"name\":\"gentle-pi\",\"type\":\"npm\",\"wanted\":\"$launcherPath\"" "$enabledActivation/activate" || {
+          echo "the launcher did not render the guarded npm gentle-pi retirement rule" >&2
+          exit 1
+        }
+        grep -qF '"patterns":["-gentle-shell-[^/]*/lib/gentle-shell$"],"type":"local","wanted":"npm:gentle-pi@4.3.0"' "$disabledActivation/activate" || {
+          echo "the disabled launcher did not render the rule retiring a leftover launcher path" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
 
   # The eval-level assertions this check replaced used to reject a misplaced
   # field before it ever reached Gentle AI. `misplacedProfilesNoLongerRejectedAtEval`

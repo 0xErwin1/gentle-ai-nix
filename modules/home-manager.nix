@@ -106,6 +106,16 @@ let
     lib.filterAttrs (name: provider: name != "pi" && provider.quietTools != true) enabledProviders
   );
 
+  # The standalone launcher is Pi-scoped too -- it is built from the channel
+  # `providers.pi.release` selects by default -- so it carries the same
+  # refusal as `release` above, naming the providers at fault.
+  nonPiProvidersWithLauncher = lib.attrNames (
+    lib.filterAttrs (
+      name: provider:
+      name != "pi" && (provider.launcher.enable != false || provider.launcher.package != null)
+    ) enabledProviders
+  );
+
   # The engram component's channel options are read by that component alone;
   # a component that sets either is named here so the assertion below can
   # point at it. Deliberately over every declared component rather than only
@@ -157,6 +167,25 @@ let
 
   selectedGentlePiRelease = gentlePiReleases.${cfg.providers.pi.release};
 
+  # The standalone gentle-shell launcher, built from the channel
+  # `providers.pi.release` selects. Unlike gentle-pi itself, this IS a
+  # derivation this flake builds: it puts the `gentle-shell` binary on PATH,
+  # the one entry point Pi's own provisioning never provides. Nix's laziness
+  # keeps it from being evaluated, let alone built, unless
+  # `providers.pi.launcher.enable` turns it on.
+  defaultLauncherPackage = pkgs.callPackage ../packages/gentle-shell.nix {
+    release = selectedGentlePiRelease;
+  };
+
+  # `providers.pi.launcher.package` is an override, not a default, the same
+  # way `components.engram.package` is: the option defaults to null so that a
+  # key left unset resolves to the channel's own build.
+  selectedLauncherPackage =
+    if cfg.providers.pi.launcher.package != null then
+      cfg.providers.pi.launcher.package
+    else
+      defaultLauncherPackage;
+
   # gentle-pi is not a derivation this flake builds: Pi installs it itself
   # from whatever source string this resolves to. `stable` already names one
   # directly; every other channel is a revision Pi's own git installer
@@ -166,15 +195,42 @@ let
   gentlePiSource =
     release: release.source or "git:github.com/Gentleman-Programming/gentle-shell@${release.rev}";
 
+  # With the launcher enabled, Pi installs gentle-pi from the launcher's own
+  # package root rather than from the channel source. The launcher loads the
+  # copy it carries, and a declaration of any other spelling -- npm or git --
+  # makes it inject that copy next to the one Pi already loaded, so every
+  # gentle-pi tool is registered twice. A path declaration that resolves to
+  # the launcher's root is the one shape it recognises as itself, which is
+  # what lets plain `pi` and `gentle-shell --link` share a single copy.
+  #
+  # Unlike Engram's plugin this is the store path itself, not a copy under the
+  # home: the launcher compares real paths, so a copied tree would be a second
+  # package root. Its identity therefore changes on every launcher rebuild;
+  # the `package` retirement rule below displaces the earlier store path once
+  # the new one is installed, and home.packages keeps the current one alive.
+  launcherGentlePiPath = "${selectedLauncherPackage}/lib/gentle-shell";
+
+  gentlePiSelectedSource =
+    if cfg.providers.pi.launcher.enable then
+      launcherGentlePiPath
+    else
+      gentlePiSource selectedGentlePiRelease;
+
   # Pi-only install source overrides, keyed the way the contract's
   # `providers.pi.packages` wants them: by the npm package name the adapter
   # installs. gentle-pi is always explicit: stable pins the exact npm release
   # this flake supports, while main pins its commit SHA. Neither source travels
   # through the rendered document.
   pluginPackagesFor =
-    optionalAttrs (selectedGentlePiRelease ? source || cfg.providers.pi.release != "stable") {
-      gentle-pi = gentlePiSource selectedGentlePiRelease;
-    }
+    optionalAttrs
+      (
+        selectedGentlePiRelease ? source
+        || cfg.providers.pi.release != "stable"
+        || cfg.providers.pi.launcher.enable
+      )
+      {
+        gentle-pi = gentlePiSelectedSource;
+      }
     // {
       # Always an override, on every channel: on stable it pins the npm
       # source to the version the release ships, and off stable it swaps in
@@ -558,6 +614,67 @@ let
             already shows (`read`, `bash`, `ls`, `find`, `grep`) quietly. With
             it off, `GENTLE_PI_QUIET_TOOLS=0` is exported for the session so
             those rows come back.
+
+            Only Pi reads this; a provider other than pi setting it is refused
+            at eval.
+          '';
+        };
+
+        launcher = mkOption {
+          type = types.submodule {
+            options = {
+              enable = mkOption {
+                type = types.bool;
+                default = false;
+                description = ''
+                  Put the standalone `gentle-shell` launcher on PATH.
+
+                  gentle-shell is its own entry point: it runs the Pi the
+                  package carries (the peer its lockfile pins, under the
+                  package's own Node), applies the version gate, and boots
+                  the session in its own home
+                  (`~/.gentle-shell/agent`) unless `--link` -- or
+                  `gentle-shell home link` -- reuses `~/.pi/agent`. That
+                  distinction matters here: this module renders into
+                  `~/.pi/agent`, so a launcher left on its default home runs
+                  without anything this flake renders. Linking the two homes
+                  is what makes them meet, and it is a runtime decision the
+                  launcher owns, not a file this module writes.
+
+                  Enabling it also makes Pi provision gentle-pi from the
+                  launcher package's own `lib/gentle-shell` directory instead
+                  of the source `providers.pi.release` names, so `pi` and
+                  `gentle-shell --link` load a single copy rather than the
+                  launcher injecting its own next to the one Pi installed.
+                  Disabling it restores the channel source.
+
+                  It is off by default: the binary is only worth building for
+                  an installation that actually launches it, and enabling it
+                  does not require `providers.pi.enable` -- the launcher is
+                  standalone and carries its own runtime.
+                '';
+              };
+
+              package = mkOption {
+                type = types.nullOr types.package;
+                default = null;
+                example = literalExpression "pkgs.gentle-shell";
+                description = ''
+                  Which gentle-shell build to put on PATH.
+
+                  Null resolves to this flake's own build of the channel
+                  `providers.pi.release` selects (`packages/gentle-shell.nix`,
+                  built from the repository archive with the dependencies its
+                  pnpm lockfile pins). An installation that wants a different
+                  build -- a locally patched one, say -- names it here.
+                '';
+              };
+            };
+          };
+          default = { };
+          description = ''
+            The standalone `gentle-shell` launcher this installation puts on
+            PATH. See `enable` and `package` inside.
 
             Only Pi reads this; a provider other than pi setting it is refused
             at eval.
@@ -1902,6 +2019,34 @@ let
   # first is what keeps that failure costing only a missed retirement instead
   # of the harness itself.
   displacedPiRules =
+    if cfg.providers.pi.launcher.enable then launcherDisplacedPiRules else channelDisplacedPiRules;
+
+  # The launcher's package root displaces every other gentle-pi spelling,
+  # whichever channel built it: the npm package, the legacy gentle-pi git
+  # repository, and -- through the `package` rule, whose identity for a local
+  # path is its basename -- both the canonical gentle-shell git source and an
+  # earlier launcher's store path. Each waits for the launcher path to be
+  # installed first, for the same reason the channel rules wait for theirs.
+  launcherDisplacedPiRules = [
+    {
+      type = "npm";
+      name = "gentle-pi";
+      wanted = launcherGentlePiPath;
+    }
+    {
+      type = "git";
+      name = "gentle-pi";
+      wanted = launcherGentlePiPath;
+    }
+    {
+      type = "package";
+      keep = launcherGentlePiPath;
+      wanted = launcherGentlePiPath;
+    }
+  ]
+  ++ engramDisplacedPiRules;
+
+  channelDisplacedPiRules =
     lib.optional (cfg.providers.pi.release != "stable") {
       type = "npm";
       name = "gentle-pi";
@@ -1943,7 +2088,21 @@ let
       name = "gentle-shell";
       wanted = gentlePiNpmStable;
     }
-    ++ lib.optional (cfg.components.engram.release != "stable") {
+    # A launcher turned off leaves its store path declared in Pi. On main the
+    # `package` rule above already covers it (same basename as the git
+    # source); on stable nothing else would, so it is named here for both.
+    ++ [
+      {
+        type = "local";
+        patterns = [ "-gentle-shell-[^/]*/lib/gentle-shell$" ];
+        wanted = gentlePiSource selectedGentlePiRelease;
+      }
+    ]
+    ++ engramDisplacedPiRules;
+
+  # Everything below is independent of where gentle-pi comes from.
+  engramDisplacedPiRules =
+    lib.optional (cfg.components.engram.release != "stable") {
       type = "npm";
       name = "gentle-engram";
       wanted = gentleEngramPiHomePath;
@@ -2293,7 +2452,13 @@ let
   );
 
   packages = builtins.filter (package: package != null) (
-    [ cfg.package ] ++ lib.optional engramEnabled selectedEngramPackage ++ enabledCommunityToolPackages
+    [ cfg.package ]
+    ++ lib.optional engramEnabled selectedEngramPackage
+    ++ enabledCommunityToolPackages
+    # The standalone launcher rides the same list: enabling it is what puts
+    # `gentle-shell` on PATH, and leaving it at its default puts nothing
+    # there -- the launcher is opt-in, and it carries its own Pi.
+    ++ lib.optional cfg.providers.pi.launcher.enable selectedLauncherPackage
   );
 
   enableGroup =
@@ -3040,6 +3205,10 @@ in
       {
         assertion = nonPiProvidersWithQuietTools == [ ];
         message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithQuietTools}.quietTools is refused: only providers.pi reads quietTools";
+      }
+      {
+        assertion = nonPiProvidersWithLauncher == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithLauncher}.launcher is refused: only providers.pi reads launcher";
       }
       {
         # The engram component's own channel options, refused on a component
