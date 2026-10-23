@@ -214,8 +214,15 @@ func packageNameOf(source string) string {
 	}
 }
 
-func matchesPackage(entry, keep string) bool {
+// A local keep is compared by the location it resolves to, the way a
+// "wanted" path is: Pi records a local install relative to its settings
+// directory, so the entry for an absolute keep is never the same string.
+func matchesPackage(entry, keep, settingsDir string) bool {
 	if entry == keep {
+		return false
+	}
+	if !hasSchemePrefix(entry) && !hasSchemePrefix(keep) &&
+		resolvedLocal(entry, settingsDir) == resolvedLocal(keep, settingsDir) {
 		return false
 	}
 	return packageNameOf(entry) == packageNameOf(keep)
@@ -230,7 +237,7 @@ func matchesRule(entry string, rule Rule, settingsDir string) (bool, error) {
 	case "local":
 		return matchesLocal(entry, rule.Patterns, rule.Except, settingsDir), nil
 	case "package":
-		return matchesPackage(entry, rule.Keep), nil
+		return matchesPackage(entry, rule.Keep, settingsDir), nil
 	default:
 		return false, fmt.Errorf("unknown displaced-package rule type %q", rule.Type)
 	}

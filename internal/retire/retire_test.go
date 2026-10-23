@@ -203,6 +203,38 @@ func TestPinnedFixedPackageKeepsThePinnedSpelling(t *testing.T) {
 	assertEntries(t, remover.removed, []string{"npm:pi-btw"})
 }
 
+// Pi records a local install relative to its settings directory, so the
+// entry it keeps for an absolute `keep` path is a different spelling of the
+// same location. Comparing the strings retired the very package the rule was
+// meant to keep, and with it the harness.
+func TestPackageRuleKeepsALocalPathPiRecordedRelatively(t *testing.T) {
+	dir := t.TempDir()
+	settingsDir := filepath.Join(dir, ".pi", "agent")
+	keep := filepath.Join(dir, "store", "new-gentle-shell", "lib", "gentle-shell")
+	relative, err := filepath.Rel(settingsDir, keep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := "../../store/old-gentle-shell/lib/gentle-shell"
+	settings := writeSettings(t, dir, []string{
+		relative,
+		old,
+		"git:github.com/Gentleman-Programming/gentle-shell@rev",
+		"npm:pi-btw",
+	})
+
+	rules := []Rule{{Type: "package", Keep: keep, Wanted: ptr(keep)}}
+
+	remover := &fakeRemover{present: true}
+	if _, err := Run(Options{Settings: settings, Rules: rules}, remover); err != nil {
+		t.Fatal(err)
+	}
+	assertEntries(t, remover.removed, []string{
+		old,
+		"git:github.com/Gentleman-Programming/gentle-shell@rev",
+	})
+}
+
 func TestUnparsableSettingsDegradeToNoPackagesRatherThanFailing(t *testing.T) {
 	for _, shape := range []string{"{ invalid json", "[]"} {
 		dir := t.TempDir()
