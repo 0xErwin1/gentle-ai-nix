@@ -41,7 +41,13 @@
           codegraph = pkgs.callPackage ./packages/codegraph.nix { release = codegraphReleases.stable; };
           gentle-nix = pkgs.callPackage ./packages/gentle-nix.nix { };
           gentlePiReleases = import ./packages/pi-versions.nix;
-          gentleShellFor = release: pkgs.callPackage ./packages/gentle-shell.nix { inherit release; };
+          pi-coding-agent = pkgs.callPackage ./packages/pi-coding-agent.nix { };
+          gentleShellFor =
+            release:
+            pkgs.callPackage ./packages/gentle-shell.nix {
+              inherit release;
+              pi = pi-coding-agent;
+            };
         in
         {
           inherit
@@ -49,6 +55,7 @@
             engram
             codegraph
             gentle-nix
+            pi-coding-agent
             ;
           default = gentle-ai;
 
@@ -72,7 +79,8 @@
           # The standalone gentle-shell launcher, built from the stable
           # channel's revision. `providers.pi.launcher.package` defaults to a
           # build of whichever channel that option selects; this attribute is
-          # the name `nix build` can reach it by.
+          # the name `nix build` can reach it by. Both run the packaged Pi
+          # (pi-coding-agent) rather than the peer their lockfile pins.
           gentle-shell = gentleShellFor gentlePiReleases.stable;
           gentle-shell-main = gentleShellFor gentlePiReleases.main;
 

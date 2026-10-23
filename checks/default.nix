@@ -2027,6 +2027,43 @@ in
         touch "$out"
       '';
 
+  # Both channel builds run the packaged Pi 1.4.0 (packages/pi-coding-agent.nix)
+  # through GENTLE_SHELL_PI rather than the 1.2.0 peer their lockfile pins:
+  # Pi 1.2.0 delivers `session_start` to extensions loaded after gentle-pi
+  # seconds late. `--version` reports the Pi it resolved without booting a
+  # session, so a scratch HOME and no network are enough.
+  gentleShellLauncherRunsPackagedPi =
+    pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-pi-version"
+      {
+        launchers = [
+          self.packages.${system}.gentle-shell
+          self.packages.${system}.gentle-shell-main
+        ];
+        pi = self.packages.${system}.pi-coding-agent;
+      }
+      ''
+        set -euo pipefail
+        export HOME="$PWD/home"
+        mkdir -p "$HOME"
+
+        for launcher in $launchers; do
+          output="$("$launcher/bin/gentle-shell" --link --version 2>&1)"
+          printf '%s\n' "$output" | grep -qx 'pi 1.4.0' || {
+            echo "$launcher does not run Pi 1.4.0:" >&2
+            printf '%s\n' "$output" >&2
+            exit 1
+          }
+        done
+
+        version="$("$pi/bin/pi" --version 2>&1)"
+        [ "$version" = 1.4.0 ] || {
+          echo "pi-coding-agent --version printed: $version" >&2
+          exit 1
+        }
+
+        touch "$out"
+      '';
+
   # Both channel builds carry the Gentle AI runtime their package resolves
   # without a download: `resolveGentleAiBinary()`, imported from the store
   # exactly as the launcher imports it, returns the package-local binary

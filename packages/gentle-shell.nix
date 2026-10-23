@@ -8,14 +8,17 @@
 # Path A of the launcher's own documentation. It applies the version gate and
 # boots the session in its own home unless `--link` reuses ~/.pi/agent.
 #
-# The Pi it runs is the one this build carries. pnpm installs the package's
-# devDependencies, so @earendil-works/pi-coding-agent (an optional peer, at
-# the version the lockfile pins) lands next to gentle-pi, and the launcher
-# prefers that adjacent peer over a `pi` on PATH, running its CLI with this
-# derivation's Node. That is what makes the extensions' child processes work:
-# gentle-pi spawns helpers such as its native audio worker through
+# The Pi it runs is resolved GENTLE_SHELL_PI first, then the adjacent peer,
+# then PATH. pnpm installs the package's devDependencies, so
+# @earendil-works/pi-coding-agent (an optional peer, at the version the
+# lockfile pins) lands next to gentle-pi and is the fallback. When `pi` is
+# given (the flake passes packages/pi-coding-agent.nix), the wrapper sets
+# GENTLE_SHELL_PI to it by default instead, so a newer Pi than the lockfile's
+# runs; a GENTLE_SHELL_PI already in the environment still wins. Either way
+# Pi runs under Node, which is what makes the extensions' child processes
+# work: gentle-pi spawns helpers such as its native audio worker through
 # process.execPath, which under a standalone Pi binary is Pi itself rather
-# than Node. GENTLE_SHELL_PI still overrides it at runtime.
+# than Node.
 #
 # The pnpm lockfile is the only lockfile the repository ships (there is no
 # package-lock.json), so the build is pnpm's: fetchPnpmDeps vendors the store
@@ -48,6 +51,10 @@
   # Which channel to build from. The channels live in pi-versions.nix so that
   # adding one is a data entry rather than another copy of this expression.
   release ? (import ./pi-versions.nix).stable,
+
+  # The Pi to run instead of the lockfile's peer: a package with `bin/pi`,
+  # exported to the launcher as GENTLE_SHELL_PI. Null keeps the peer.
+  pi ? null,
 }:
 
 let
@@ -107,11 +114,13 @@ stdenv.mkDerivation (finalAttrs: {
     # The entry point carries a `#!/usr/bin/env node` shebang but resolves its
     # imports relative to its own path, so it cannot be copied to bin/ and
     # wrapped there: the wrapper has to execute it where it lives. It needs no
-    # `pi` on PATH: it resolves the adjacent Pi peer itself, so PATH is only
-    # inherited, never extended here.
+    # `pi` on PATH: it runs GENTLE_SHELL_PI when `pi` is given, the adjacent
+    # Pi peer otherwise, so PATH is only inherited, never extended here.
     mkdir -p $out/bin
     makeWrapper ${lib.getExe nodejs} $out/bin/gentle-shell \
-      --add-flags "$out/lib/gentle-shell/bin/gentle-shell.mjs"
+      --add-flags "$out/lib/gentle-shell/bin/gentle-shell.mjs" ${
+        lib.optionalString (pi != null) "--set-default GENTLE_SHELL_PI ${lib.getExe' pi "pi"}"
+      }
 
     runHook postInstall
   '';

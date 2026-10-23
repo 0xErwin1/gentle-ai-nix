@@ -269,12 +269,15 @@ One caveat decides how the two paths meet: this module renders into
 A launcher left on its default home runs without anything this flake renders —
 passing `--link` when launching it, or running `gentle-shell home link` once,
 is what reuses `~/.pi/agent` and makes the two the same session. The launcher
-runs the Pi peer its pnpm lockfile pins, under the package's own Node, rather
-than a `pi` on PATH. That keeps the version its lockfile was tested with, and it
-is what lets gentle-pi's helper processes (its native notification audio among
-them) start: they are spawned through `process.execPath`, which under the
-standalone Pi binary is Pi itself rather than Node. `GENTLE_SHELL_PI` still
-selects a different Pi at runtime.
+runs the Pi this flake packages (`nix build .#pi-coding-agent`, Pi 1.4.0 from
+the npm tarball, under Node), pointed at through `GENTLE_SHELL_PI`, rather than
+the 1.2.0 peer its pnpm lockfile pins or a `pi` on PATH: Pi 1.2.0 delivers
+`session_start` to extensions loaded after gentle-pi many seconds late. Running
+Pi under Node is also what lets gentle-pi's helper processes (its native
+notification audio among them) start: they are spawned through
+`process.execPath`, which under the standalone Pi binary is Pi itself rather
+than Node. A `GENTLE_SHELL_PI` already set in the environment still selects a
+different Pi at runtime.
 
 Enabling the launcher also changes where Pi installs gentle-pi from: the
 launcher's own package root (`<launcher>/lib/gentle-shell` in the store)

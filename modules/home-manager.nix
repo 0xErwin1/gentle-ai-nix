@@ -172,9 +172,12 @@ let
   # derivation this flake builds: it puts the `gentle-shell` binary on PATH,
   # the one entry point Pi's own provisioning never provides. Nix's laziness
   # keeps it from being evaluated, let alone built, unless
-  # `providers.pi.launcher.enable` turns it on.
+  # `providers.pi.launcher.enable` turns it on. It runs the Pi this flake
+  # packages (packages/pi-coding-agent.nix) rather than the peer the
+  # channel's lockfile pins.
   defaultLauncherPackage = pkgs.callPackage ../packages/gentle-shell.nix {
     release = selectedGentlePiRelease;
+    pi = pkgs.callPackage ../packages/pi-coding-agent.nix { };
   };
 
   # `providers.pi.launcher.package` is an override, not a default, the same
@@ -629,9 +632,9 @@ let
                 description = ''
                   Put the standalone `gentle-shell` launcher on PATH.
 
-                  gentle-shell is its own entry point: it runs the Pi the
-                  package carries (the peer its lockfile pins, under the
-                  package's own Node), applies the version gate, and boots
+                  gentle-shell is its own entry point: it runs the Pi this
+                  flake packages (`pi-coding-agent`, under Node, selected
+                  through `GENTLE_SHELL_PI`), applies the version gate, and boots
                   the session in its own home
                   (`~/.gentle-shell/agent`) unless `--link` -- or
                   `gentle-shell home link` -- reuses `~/.pi/agent`. That
@@ -665,7 +668,8 @@ let
                   Null resolves to this flake's own build of the channel
                   `providers.pi.release` selects (`packages/gentle-shell.nix`,
                   built from the repository archive with the dependencies its
-                  pnpm lockfile pins). An installation that wants a different
+                  pnpm lockfile pins, wired to run this flake's packaged Pi).
+                  An installation that wants a different
                   build -- a locally patched one, say -- names it here.
                 '';
               };
