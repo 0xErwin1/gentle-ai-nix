@@ -8,7 +8,7 @@
 let
   lib = pkgs.lib;
   module = self.homeManagerModules.default;
-  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@ca893c9c4e62a72106d3d68b0e4ac5fbf0dab522";
+  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@24752dad7af5afe73d96c1945e23cb54ee713bce";
 
   evaluate =
     extraModules:
@@ -541,7 +541,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-shell@ca893c9c4e62a72106d3d68b0e4ac5fbf0dab522" \
+          "pi install git:github.com/Gentleman-Programming/gentle-shell@24752dad7af5afe73d96c1945e23cb54ee713bce" \
           "pi install ${gentleEngramPiPath}"
         do
           grep -qxF "$want" overridden.commands || {
@@ -3966,9 +3966,11 @@ in
       touch "$out"
     '';
 
-  # The default component set renders the OpenCode logo, and enabling skills
-  # renders the skill registry as a skill. Neither tree should stage the
-  # retired OpenCode plugin directories.
+  # The default component set renders the OpenCode logo on an OpenCode 1.x
+  # client and omits it on 2.x, which has no slot for it (the same omission the
+  # imperative installer reports as skipped). Enabling skills renders the skill
+  # registry as a skill. Neither tree should stage the retired OpenCode plugin
+  # directories.
   openCodeRenderUsesDeclaredClientWithoutRetiredAssets =
     let
       configurationFor =
@@ -3989,18 +3991,28 @@ in
         (configurationFor {
           components.skills.enable = true;
         }).config.programs.gentle-ai.rendered;
+      logoSupported = !(lib.versionAtLeast pkgs.opencode.version "2");
     in
     pkgs.runCommandLocal "gentle-ai-check-opencode-render-without-retired-assets"
       {
         inherit defaultComponents declaredComponents;
+        logoSupported = if logoSupported then "1" else "";
       }
       ''
         set -euo pipefail
 
-        test -f "$defaultComponents/tree/.config/opencode/tui-plugins/gentle-logo.tsx" || {
-          echo "the default OpenCode logo was not staged" >&2
-          exit 1
-        }
+        logo="$defaultComponents/tree/.config/opencode/tui-plugins/gentle-logo.tsx"
+        if [ -n "$logoSupported" ]; then
+          test -f "$logo" || {
+            echo "the default OpenCode logo was not staged" >&2
+            exit 1
+          }
+        else
+          test ! -e "$logo" || {
+            echo "the OpenCode logo was staged for an OpenCode 2.x client" >&2
+            exit 1
+          }
+        fi
         test -f "$declaredComponents/tree/.config/opencode/skills/skill-registry/SKILL.md" || {
           echo "the declared OpenCode skill registry was not staged" >&2
           exit 1
