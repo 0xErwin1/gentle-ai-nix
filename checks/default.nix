@@ -302,7 +302,7 @@ in
         providers.pi.release = "main";
         components.engram.release = "main";
       };
-      # Pi's Engram channel defaults to main, so the stable 0.4.2 npm pin
+      # Pi's Engram channel defaults to main, so the stable 0.5.1 npm pin
       # is only observable from a configuration that does not enable Pi.
       nonPiConfiguration = evaluate [
         {
@@ -328,7 +328,7 @@ in
     assert defaultOverrides.gentle-engram == "/home/test-user/.pi/gentle-ai/plugins/gentle-engram";
     # Without Pi the channel keeps its stable default, and with it the
     # exact npm pin the stable release ships -- never `latest`.
-    assert nonPiOverrides.gentle-engram == "npm:gentle-engram@0.4.2";
+    assert nonPiOverrides.gentle-engram == "npm:gentle-engram@0.5.1";
     assert overriddenOverrides.gentle-pi == gentleShellMainSource;
     # A store path here would change identity on every rebuild and leave Pi
     # holding two entries for the same plugin, so the source Pi is given is
@@ -366,7 +366,7 @@ in
     in
     assert piConfiguration.config.programs.gentle-ai.components.engram.release == "main";
     assert nonPiConfiguration.config.programs.gentle-ai.components.engram.release == "stable";
-    # gentle-engram@0.4.2, the plugin the stable release ships, serves Pi's
+    # gentle-engram@0.5.1, the plugin the stable release ships, serves Pi's
     # native `.pi/agent/mcp.json` itself, so naming `stable` while Pi is
     # enabled is an operator choice the module accepts rather than refuses.
     assert accepted [
@@ -528,7 +528,7 @@ in
 
         # The default configuration's Engram channel follows Pi to main, so
         # the install source is the stable home path the native plugin is
-        # linked into, not npm's 0.4.2 pin. Activation belongs to the package.
+        # linked into, not npm's 0.5.1 pin. Activation belongs to the package.
         for want in \
           "pi install npm:gentle-pi@4.3.0" \
           "pi install ${defaultEngramPiPath}"

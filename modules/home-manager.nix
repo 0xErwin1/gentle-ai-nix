@@ -2007,10 +2007,10 @@ let
   gentlePiNpmStable = gentlePiSource gentlePiReleases.stable;
 
   # gentle-engram's stable npm source, pinned the same way and for the same
-  # reason. Engram 3.4.0 carries `gentle-engram@0.4.2`; pinning keeps
+  # reason. Engram 3.6.0 carries `gentle-engram@0.5.1`; pinning keeps
   # the plugin paired with that binary even if npm's `latest` moves. Off
   # stable the plugin is built from the same revision as the binary.
-  gentleEngramNpmDefault = "npm:gentle-engram@0.4.2";
+  gentleEngramNpmDefault = "npm:gentle-engram@0.5.1";
 
   # Every rule below carries a `wanted` spelling: the exact entry (or, for a
   # local path, the location it resolves to) that has to already be present
@@ -3263,7 +3263,7 @@ in
       # choice winning, and since `gentle-engram@0.2.0` the stable npm
       # plugin also serves the native transport, so naming `stable`
       # explicitly is accepted. Non-Pi installations keep the stable
-      # default and their 0.4.2 npm pin.
+      # default and their 0.5.1 npm pin.
       # The default rides on the `release` field itself, not on the
       # component's attribute set: a `mkDefault` wrapping the whole set is
       # discarded as a unit once the operator states any field of the

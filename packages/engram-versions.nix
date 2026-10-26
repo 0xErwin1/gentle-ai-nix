@@ -7,15 +7,15 @@
 #   nix-prefetch-url --unpack https://github.com/Gentleman-Programming/engram/archive/<ref>.tar.gz
 #   nix hash convert --hash-algo sha256 --to sri <hash>
 {
-  # The newest tagged release. Its Pi plugin is `gentle-engram@0.4.2`,
+  # The newest tagged release. Its Pi plugin is `gentle-engram@0.5.1`,
   # the exact npm version the module pins for this channel. The pair is read
   # from the release's own `plugin/pi/package.json`, not from npm's `latest`:
   # the plugin's own tags can run ahead of the core release.
   stable = {
-    version = "3.4.0";
-    rev = "v3.4.0";
-    hash = "sha256-nF64HUlc2wnZFYlI8QVPB77IqA6SHY09W6kQH1CdR7E=";
-    vendorHash = "sha256-9RTI+XAdIHDKPkW+s6htk1Me6/gaE0fpuCP0xTLtYio=";
+    version = "3.6.0";
+    rev = "v3.6.0";
+    hash = "sha256-lVLGjn/eYUNy5S/Ct9lTWGiFso40EKrlIDmD+aUaDgg=";
+    vendorHash = "sha256-uNoFAUJfu3SFU9OqT1AJvHKKN6t6oPo6nC6GEbYhYJs=";
   };
 
   # Tracks the tip of Engram's default branch the way versions.nix's beta tracks
@@ -27,8 +27,8 @@
   #
   # The version carries the `-main.` prerelease tag so a build from here is
   # never mistaken for a release. This revision is 9 commits past the commit the
-  # `v3.6.0` tag names, and its Pi plugin is `gentle-engram@0.5.1` -- ahead of
-  # the v3.4.0 / 0.4.2 pair the stable channel still ships.
+  # `v3.6.0` tag names; its Pi plugin is still `gentle-engram@0.5.1`, the one
+  # the stable channel ships.
   main = {
     version = "3.6.0-main.523289f0";
     rev = "523289f086cc343d01ee4ce10d5610b3bf935e0d";
