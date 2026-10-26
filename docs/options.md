@@ -313,6 +313,107 @@ gentle-ai-nix.packages.${pkgs.system}.engram
 
 
 
+## programs\.gentle-ai\.components\.\<name>\.cloud\.autosync
+
+
+
+Whether the wrapper also exports ` ENGRAM_CLOUD_AUTOSYNC=1 `, which
+makes ` engram mcp ` and ` engram serve ` sync in the background\. Off,
+syncing is manual through ` engram sync --cloud `\. Read only when
+` server ` is set\.
+
+
+
+*Type:*
+boolean
+
+
+
+*Default:*
+
+```nix
+true
+```
+
+
+
+## programs\.gentle-ai\.components\.\<name>\.cloud\.server
+
+
+
+Engram Cloud server to sync memories with\. Setting it wraps the
+installed ` engram ` so every client that runs it (the MCP server each
+client starts, Engram’s Pi plugin, and the shell) gets
+` ENGRAM_CLOUD_SERVER `, which Engram reads for autosync and
+` engram sync --cloud `\. A value already exported in the environment
+wins\. Null installs ` engram ` unwrapped\.
+
+Only the engram component reads this; another component setting it
+is refused at eval\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"https://engram.example.com"
+```
+
+
+
+## programs\.gentle-ai\.components\.\<name>\.cloud\.tokenFile
+
+
+
+Absolute path of a file holding the Engram Cloud token, read each
+time ` engram ` runs and exported as ` ENGRAM_CLOUD_TOKEN ` unless that
+variable is already set\. It is a string rather than a path on
+purpose: a Nix path would be copied into the world-readable store,
+and a path inside the store is refused at eval\. Point it at a
+runtime secret such as ` config.sops.secrets.<name>.path ` or
+` config.age.secrets.<name>.path `\. When the file is not readable,
+` engram ` still runs, says so on stderr, and syncs unauthenticated\.
+
+Null leaves the token to ` ENGRAM_CLOUD_TOKEN ` or to the
+` cloud.json ` that ` engram cloud config ` writes in Engram’s data
+directory\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+config.sops.secrets.engram-cloud-token.path
+```
+
+
+
 ## programs\.gentle-ai\.components\.\<name>\.release
 
 
@@ -2770,8 +2871,6 @@ null
 
 ## programs\.gentle-ai\.roles\.\<name>\.mode
 
-
-
 Whether the operator addresses this role directly or another role
 delegates to it\.
 
@@ -2833,6 +2932,8 @@ null
 
 
 ## programs\.gentle-ai\.roles\.\<name>\.model\.model
+
+
 
 Model id within the provider\.
 

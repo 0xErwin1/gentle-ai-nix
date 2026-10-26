@@ -126,6 +126,24 @@ drift apart there by construction.
 `components.engram.package` overrides the binary alone, for a build this flake
 does not package; the Pi plugin still follows the release.
 
+Engram Cloud sync is declared on the same component. Engram reads its cloud
+settings from the environment, and every client runs the `engram` on PATH, so
+setting a server wraps that binary: it exports `ENGRAM_CLOUD_SERVER`,
+`ENGRAM_CLOUD_AUTOSYNC=1` (unless `autosync = false`), and the token it reads
+from `tokenFile` each time it runs. The token file is a runtime secret, never a
+Nix path, so it stays out of the store:
+
+```nix
+programs.gentle-ai.components.engram.cloud = {
+  server = "https://engram.example.com";
+  tokenFile = config.sops.secrets.engram-cloud-token.path;
+};
+```
+
+A value already exported in the environment wins over the wrapper's. The
+clients start `engram` when they start, so restart them after a switch to pick
+up the new settings.
+
 A community tool takes the same shape one level down. `communityTools.codegraph.enable` writes the guidance, `communityTools.codegraph.package` is where its binary comes from, and the CLI call that points it at the declared clients runs at activation from the commands Gentle AI put in the manifest:
 
 ```nix

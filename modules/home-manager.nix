@@ -55,6 +55,56 @@ let
     else
       defaultEngramPackage;
 
+  # Engram starts cloud autosync inside `engram mcp` and `engram serve` from
+  # its environment alone, and every client runs the `engram` on PATH, so a
+  # declared server wraps that binary instead of configuring each client. The
+  # token is read from its file when the wrapper runs, never at build time, so
+  # it stays out of the store. A value the caller already exported wins, which
+  # keeps a one-off `ENGRAM_CLOUD_TOKEN=... engram sync --cloud` working.
+  engramCloud = cfg.components.engram.cloud;
+
+  engramCloudWrapper = pkgs.writeShellScript "engram" (
+    ''
+      if [ -z "''${ENGRAM_CLOUD_SERVER+x}" ]; then
+        export ENGRAM_CLOUD_SERVER=${lib.escapeShellArg engramCloud.server}
+      fi
+    ''
+    + lib.optionalString engramCloud.autosync ''
+      if [ -z "''${ENGRAM_CLOUD_AUTOSYNC+x}" ]; then
+        export ENGRAM_CLOUD_AUTOSYNC=1
+      fi
+    ''
+    + lib.optionalString (engramCloud.tokenFile != null) ''
+      if [ -z "''${ENGRAM_CLOUD_TOKEN+x}" ]; then
+        if [ -f ${lib.escapeShellArg engramCloud.tokenFile} ] && [ -r ${lib.escapeShellArg engramCloud.tokenFile} ]; then
+          ENGRAM_CLOUD_TOKEN="$(cat ${lib.escapeShellArg engramCloud.tokenFile})"
+          export ENGRAM_CLOUD_TOKEN
+        else
+          echo ${lib.escapeShellArg "engram: cloud token file ${engramCloud.tokenFile} is not readable; cloud sync will not authenticate"} >&2
+        fi
+      fi
+    ''
+    + ''
+      exec ${lib.escapeShellArg (lib.getExe' selectedEngramPackage "engram")} "$@"
+    ''
+  );
+
+  installedEngramPackage =
+    if engramCloud.server == null then
+      selectedEngramPackage
+    else
+      pkgs.symlinkJoin {
+        name = "${selectedEngramPackage.name}-cloud";
+        paths = [ selectedEngramPackage ];
+        postBuild = ''
+          rm "$out/bin/engram"
+          ln -s ${engramCloudWrapper} "$out/bin/engram"
+        '';
+        meta = (selectedEngramPackage.meta or { }) // {
+          mainProgram = "engram";
+        };
+      };
+
   # Engram's Pi plugin, built only when it is actually wanted: Nix's laziness
   # means this derivation is never evaluated, let alone built, unless
   # `components.engram.release` is off stable and Pi is enabled, the one case
@@ -123,7 +173,15 @@ let
   # only takes effect once something else is switched on is worse to debug.
   componentsWithEngramChannelOptions = lib.attrNames (
     lib.filterAttrs (
-      name: component: name != "engram" && (component.release != "stable" || component.package != null)
+      name: component:
+      name != "engram"
+      && (
+        component.release != "stable"
+        || component.package != null
+        || component.cloud.server != null
+        || component.cloud.tokenFile != null
+        || !component.cloud.autosync
+      )
     ) cfg.components
   );
 
@@ -2457,7 +2515,7 @@ let
 
   packages = builtins.filter (package: package != null) (
     [ cfg.package ]
-    ++ lib.optional engramEnabled selectedEngramPackage
+    ++ lib.optional engramEnabled installedEngramPackage
     ++ enabledCommunityToolPackages
     # The standalone launcher rides the same list: enabling it is what puts
     # `gentle-shell` on PATH, and leaving it at its default puts nothing
@@ -2602,6 +2660,56 @@ in
           Only the engram component reads this; another component setting it is
           refused at eval.
         '';
+      };
+
+      cloud = {
+        server = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "https://engram.example.com";
+          description = ''
+            Engram Cloud server to sync memories with. Setting it wraps the
+            installed `engram` so every client that runs it (the MCP server each
+            client starts, Engram's Pi plugin, and the shell) gets
+            `ENGRAM_CLOUD_SERVER`, which Engram reads for autosync and
+            `engram sync --cloud`. A value already exported in the environment
+            wins. Null installs `engram` unwrapped.
+
+            Only the engram component reads this; another component setting it
+            is refused at eval.
+          '';
+        };
+
+        autosync = mkOption {
+          type = types.bool;
+          default = true;
+          description = ''
+            Whether the wrapper also exports `ENGRAM_CLOUD_AUTOSYNC=1`, which
+            makes `engram mcp` and `engram serve` sync in the background. Off,
+            syncing is manual through `engram sync --cloud`. Read only when
+            `server` is set.
+          '';
+        };
+
+        tokenFile = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = literalExpression "config.sops.secrets.engram-cloud-token.path";
+          description = ''
+            Absolute path of a file holding the Engram Cloud token, read each
+            time `engram` runs and exported as `ENGRAM_CLOUD_TOKEN` unless that
+            variable is already set. It is a string rather than a path on
+            purpose: a Nix path would be copied into the world-readable store,
+            and a path inside the store is refused at eval. Point it at a
+            runtime secret such as `config.sops.secrets.<name>.path` or
+            `config.age.secrets.<name>.path`. When the file is not readable,
+            `engram` still runs, says so on stderr, and syncs unauthenticated.
+
+            Null leaves the token to `ENGRAM_CLOUD_TOKEN` or to the
+            `cloud.json` that `engram cloud config` writes in Engram's data
+            directory.
+          '';
+        };
       };
     };
 
@@ -3220,7 +3328,26 @@ in
         # `.package` are declared for every component because the reference
         # generator cannot enumerate a submodule's options by name.
         assertion = componentsWithEngramChannelOptions == [ ];
-        message = "programs.gentle-ai.components.${lib.concatStringsSep ", " componentsWithEngramChannelOptions}.release or .package is refused: only components.engram reads them";
+        message = "programs.gentle-ai.components.${lib.concatStringsSep ", " componentsWithEngramChannelOptions}.release, .package or .cloud is refused: only components.engram reads them";
+      }
+      {
+        assertion = engramCloud.tokenFile == null || engramCloud.server != null;
+        message = "programs.gentle-ai.components.engram.cloud.tokenFile is set without cloud.server: the token has no server to authenticate against";
+      }
+      {
+        assertion = engramCloud.tokenFile == null || lib.hasPrefix "/" engramCloud.tokenFile;
+        message = "programs.gentle-ai.components.engram.cloud.tokenFile = \"${toString engramCloud.tokenFile}\" must be an absolute path read at run time";
+      }
+      {
+        assertion = engramCloud.tokenFile == null || !lib.hasPrefix builtins.storeDir engramCloud.tokenFile;
+        message = "programs.gentle-ai.components.engram.cloud.tokenFile = \"${toString engramCloud.tokenFile}\" is inside the Nix store, which every user can read; point it at a runtime secret such as a sops-nix or agenix path";
+      }
+      {
+        assertion =
+          engramCloud.server == null
+          || lib.hasPrefix "https://" engramCloud.server
+          || lib.hasPrefix "http://" engramCloud.server;
+        message = "programs.gentle-ai.components.engram.cloud.server = \"${toString engramCloud.server}\" must be an http:// or https:// URL";
       }
       {
         # Mirrors the pinned fork's own `config.role.unsupported-adapter`

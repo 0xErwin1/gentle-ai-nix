@@ -2105,6 +2105,209 @@ in
         touch "$out"
       '';
 
+  # Engram's cloud sync is environment only: `engram mcp` and `engram serve`
+  # start autosync from ENGRAM_CLOUD_AUTOSYNC, ENGRAM_CLOUD_SERVER and
+  # ENGRAM_CLOUD_TOKEN, and every client runs the `engram` on PATH. Declaring a
+  # server therefore wraps the installed binary, which reads the token from a
+  # runtime file so it never enters the store, and leaves any value the caller
+  # already exported in place. A fake engram that prints what it received
+  # stands in for the real one, so the check proves the environment and the
+  # forwarded arguments and exit code rather than a network round trip.
+  engramCloudSyncWrapsTheInstalledBinary =
+    let
+      fakeEngram = pkgs.writeShellScriptBin "engram" ''
+        printf 'server=%s\nautosync=%s\ntoken=%s\nargs=%s\n' \
+          "''${ENGRAM_CLOUD_SERVER-<unset>}" "''${ENGRAM_CLOUD_AUTOSYNC-<unset>}" \
+          "''${ENGRAM_CLOUD_TOKEN-<unset>}" "$*"
+        exit 3
+      '';
+
+      engramFor =
+        cloud:
+        let
+          configuration = evaluate [
+            {
+              programs.gentle-ai = {
+                enable = true;
+                providers.opencode.enable = true;
+                components.engram = {
+                  enable = true;
+                  package = fakeEngram;
+                  inherit cloud;
+                };
+              };
+            }
+          ];
+        in
+        lib.findSingle (
+          package: lib.hasPrefix "engram" (package.name or "")
+        ) null null configuration.config.home.packages;
+
+      # Home Manager throws on a failed assertion before `config` is readable,
+      # so the messages come from the same modules evaluated without that
+      # check, which is what modules/default.nix does internally.
+      failedAssertions =
+        modules:
+        let
+          hmLib = import "${home-manager}/modules/lib/stdlib-extended.nix" lib;
+          raw = hmLib.evalModules {
+            modules = [
+              module
+              {
+                home.username = "test-user";
+                home.homeDirectory = "/home/test-user";
+                home.stateVersion = "26.05";
+              }
+            ]
+            ++ modules
+            ++ import "${home-manager}/modules/modules.nix" {
+              inherit pkgs;
+              lib = hmLib;
+            };
+            class = "homeManager";
+            specialArgs.modulesPath = "${home-manager}/modules";
+          };
+        in
+        map (assertion: assertion.message) (
+          lib.filter (assertion: !assertion.assertion) raw.config.assertions
+        );
+
+      withCloud = cloud: [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.opencode.enable = true;
+            components.engram = {
+              enable = true;
+              inherit cloud;
+            };
+          };
+        }
+      ];
+
+      # The builder creates this absolute runtime file after evaluation. It is
+      # outside the store, like a sops-nix or agenix secret path.
+      fromRuntimeFile = engramFor {
+        server = "https://engram.example.test";
+        tokenFile = "/tmp/gentle-ai-check-engram-cloud-token";
+      };
+      missingFile = engramFor {
+        server = "https://engram.example.test";
+        tokenFile = "/nonexistent/engram-token";
+      };
+      directoryFile = engramFor {
+        server = "https://engram.example.test";
+        tokenFile = "/dev";
+      };
+      manualSync = engramFor {
+        server = "https://engram.example.test";
+        autosync = false;
+      };
+      noServer = engramFor { };
+    in
+    assert noServer.outPath == fakeEngram.outPath;
+    assert fromRuntimeFile.outPath != fakeEngram.outPath;
+    assert lib.getExe fromRuntimeFile == "${fromRuntimeFile}/bin/engram";
+    assert
+      failedAssertions (withCloud {
+        tokenFile = "/run/user/1000/secrets/engram";
+      }) == [
+        "programs.gentle-ai.components.engram.cloud.tokenFile is set without cloud.server: the token has no server to authenticate against"
+      ];
+    assert
+      failedAssertions (withCloud {
+        server = "https://engram.example.test";
+        tokenFile = "secrets/engram";
+      }) == [
+        "programs.gentle-ai.components.engram.cloud.tokenFile = \"secrets/engram\" must be an absolute path read at run time"
+      ];
+    assert
+      failedAssertions (withCloud {
+        server = "https://engram.example.test";
+        tokenFile = "/nix/store/0000-engram-token";
+      }) == [
+        "programs.gentle-ai.components.engram.cloud.tokenFile = \"/nix/store/0000-engram-token\" is inside the Nix store, which every user can read; point it at a runtime secret such as a sops-nix or agenix path"
+      ];
+    assert
+      failedAssertions (withCloud {
+        server = "engram.example.test";
+      }) == [
+        "programs.gentle-ai.components.engram.cloud.server = \"engram.example.test\" must be an http:// or https:// URL"
+      ];
+    assert
+      failedAssertions [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.opencode.enable = true;
+            components.skills = {
+              enable = true;
+              cloud.server = "https://engram.example.test";
+            };
+          };
+        }
+      ] == [
+        "programs.gentle-ai.components.skills.release, .package or .cloud is refused: only components.engram reads them"
+      ];
+    pkgs.runCommandLocal "gentle-ai-check-engram-cloud-sync"
+      {
+        inherit
+          directoryFile
+          fromRuntimeFile
+          missingFile
+          manualSync
+          ;
+      }
+      ''
+        set +e -uo pipefail
+
+        expect() {
+          local name="$1" wantStatus="$2" wantOut="$3" wantErr="$4"
+          if [ "$status" != "$wantStatus" ]; then
+            echo "$name: exit $status, want $wantStatus" >&2; exit 1
+          fi
+          if [ "$(cat out)" != "$wantOut" ]; then
+            echo "$name: stdout differs:" >&2; cat out >&2; exit 1
+          fi
+          if [ "$(cat err)" != "$wantErr" ]; then
+            echo "$name: stderr differs:" >&2; cat err >&2; exit 1
+          fi
+        }
+
+        printf 'tok-123\n' > /tmp/gentle-ai-check-engram-cloud-token
+        "$fromRuntimeFile/bin/engram" mcp --tools=agent >out 2>err
+        status=$?
+        expect "token from file" 3 "$(printf 'server=https://engram.example.test\nautosync=1\ntoken=tok-123\nargs=mcp --tools=agent')" ""
+
+        ENGRAM_CLOUD_SERVER=https://other.test ENGRAM_CLOUD_AUTOSYNC=0 \
+          ENGRAM_CLOUD_TOKEN=env-tok "$fromRuntimeFile/bin/engram" sync --cloud >out 2>err
+        status=$?
+        expect "explicit environment wins" 3 "$(printf 'server=https://other.test\nautosync=0\ntoken=env-tok\nargs=sync --cloud')" ""
+
+        ENGRAM_CLOUD_SERVER= ENGRAM_CLOUD_AUTOSYNC= ENGRAM_CLOUD_TOKEN= \
+          "$fromRuntimeFile/bin/engram" mcp >out 2>err
+        status=$?
+        expect "explicit empty environment wins" 3 "$(printf 'server=\nautosync=\ntoken=\nargs=mcp')" ""
+
+        "$missingFile/bin/engram" mcp </dev/null >out 2>err
+        status=$?
+        expect "unreadable token file" 3 \
+          "$(printf 'server=https://engram.example.test\nautosync=1\ntoken=<unset>\nargs=mcp')" \
+          "engram: cloud token file /nonexistent/engram-token is not readable; cloud sync will not authenticate"
+
+        "$directoryFile/bin/engram" mcp </dev/null >out 2>err
+        status=$?
+        expect "directory token path" 3 \
+          "$(printf 'server=https://engram.example.test\nautosync=1\ntoken=<unset>\nargs=mcp')" \
+          "engram: cloud token file /dev is not readable; cloud sync will not authenticate"
+
+        "$manualSync/bin/engram" sync --cloud </dev/null >out 2>err
+        status=$?
+        expect "autosync off" 3 "$(printf 'server=https://engram.example.test\nautosync=<unset>\ntoken=<unset>\nargs=sync --cloud')" ""
+
+        touch "$out"
+      '';
+
   # The launcher option is opt-in in both directions: enabling it puts the
   # launcher in home.packages (through the module's existing assembly), and
   # leaving it at its default puts nothing there. Both halves are asserted at
