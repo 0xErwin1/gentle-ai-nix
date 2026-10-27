@@ -26,13 +26,13 @@
   # the plugin is built from the same source and linked into the rendered tree.
   #
   # The version carries the `-main.` prerelease tag so a build from here is
-  # never mistaken for a release. This revision is 15 commits past the commit the
+  # never mistaken for a release. This revision is 19 commits past the commit the
   # `v3.6.0` tag names; its Pi plugin is still `gentle-engram@0.5.1`, the one
   # the stable channel ships.
   main = {
-    version = "3.6.0-main.9824739d";
-    rev = "9824739d228879d219db2e3098830fb723ac2c12";
-    hash = "sha256-rY9Bm+j/A15xddFTZcsipZtpIx6uFnA7fX9MzCKb23g=";
+    version = "3.6.0-main.ee1d5ade";
+    rev = "ee1d5ade5e56ad06f8b22e4e7a1b6ec52d453666";
+    hash = "sha256-cA16lx+HYmQ3ca+rsyePtHFp3kWJFrmqmOSE1IMzk4w=";
     vendorHash = "sha256-uNoFAUJfu3SFU9OqT1AJvHKKN6t6oPo6nC6GEbYhYJs=";
   };
 }

@@ -8,7 +8,7 @@
 let
   lib = pkgs.lib;
   module = self.homeManagerModules.default;
-  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@2d1d3a4eb6621641401f8be6f62ada2427168521";
+  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@9fa616df105de3f5578f0ebee163430110cf0d05";
 
   evaluate =
     extraModules:
@@ -321,7 +321,7 @@ in
     in
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] defaultDocument.selection);
     assert !(lib.hasAttrByPath [ "providers" "pi" "packages" ] overriddenDocument.selection);
-    assert defaultOverrides.gentle-pi == "npm:gentle-pi@4.3.0";
+    assert defaultOverrides.gentle-pi == "npm:gentle-pi@4.4.0";
     # Pi enabled defaults the Engram channel to main, so the override is
     # the stable home path the native plugin is linked into, never a store
     # path or npm's moving `latest`.
@@ -424,7 +424,7 @@ in
           echo "main did not render the guarded legacy gentle-pi Git migration rule" >&2
           exit 1
         }
-        grep -qF '"name":"gentle-shell","type":"git","wanted":"npm:gentle-pi@4.3.0"' "$stableActivation/activate" || {
+        grep -qF '"name":"gentle-shell","type":"git","wanted":"npm:gentle-pi@4.4.0"' "$stableActivation/activate" || {
           echo "stable did not render the guarded canonical gentle-shell Git retirement rule" >&2
           exit 1
         }
@@ -530,7 +530,7 @@ in
         # the install source is the stable home path the native plugin is
         # linked into, not npm's 0.5.1 pin. Activation belongs to the package.
         for want in \
-          "pi install npm:gentle-pi@4.3.0" \
+          "pi install npm:gentle-pi@4.4.0" \
           "pi install ${defaultEngramPiPath}"
         do
           grep -qxF "$want" default.commands || {
@@ -541,7 +541,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-shell@2d1d3a4eb6621641401f8be6f62ada2427168521" \
+          "pi install git:github.com/Gentleman-Programming/gentle-shell@9fa616df105de3f5578f0ebee163430110cf0d05" \
           "pi install ${gentleEngramPiPath}"
         do
           grep -qxF "$want" overridden.commands || {
@@ -1478,7 +1478,7 @@ in
           "npm:gentle-pi"
           "npm:gentle-pi@2.4.0"
           "npm:gentle-pi@3.7.0"
-          "npm:gentle-pi@4.3.0"
+          "npm:gentle-pi@4.4.0"
           "git:github.com/Gentleman-Programming/gentle-pi@abc123"
           "git:github.com/Gentleman-Programming/gentle-shell@def456"
           "npm:gentle-engram"
@@ -1553,12 +1553,12 @@ in
       canonicalGentleShellGitRetirement = builtins.toJSON {
         type = "git";
         name = "gentle-shell";
-        wanted = "npm:gentle-pi@4.3.0";
+        wanted = "npm:gentle-pi@4.4.0";
       };
       packageRuleKeepingStableGentlePi = builtins.toJSON {
         type = "package";
-        keep = "npm:gentle-pi@4.3.0";
-        wanted = "npm:gentle-pi@4.3.0";
+        keep = "npm:gentle-pi@4.4.0";
+        wanted = "npm:gentle-pi@4.4.0";
       };
 
       # Pinning one of Pi's own fixed packages (here pi-btw) retires the bare
@@ -1710,7 +1710,7 @@ in
             "npm:gentle-pi"
             "npm:gentle-pi@2.4.0"
             "npm:gentle-pi@3.7.0"
-            "npm:gentle-pi@4.3.0"
+            "npm:gentle-pi@4.4.0"
             "git:github.com/Gentleman-Programming/gentle-pi@abc123"
             "npm:gentle-engram"
             "npm:gentle-engram@0.1.12"
@@ -2389,7 +2389,7 @@ in
     in
     assert overridesOf "stable" true == launcherPathOf "stable";
     assert overridesOf "main" true == launcherPathOf "main";
-    assert overridesOf "stable" false == "npm:gentle-pi@4.3.0";
+    assert overridesOf "stable" false == "npm:gentle-pi@4.4.0";
     assert overridesOf "main" false == gentleShellMainSource;
     pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-provisions-gentle-pi"
       {
@@ -2412,7 +2412,7 @@ in
           echo "the launcher did not render the guarded npm gentle-pi retirement rule" >&2
           exit 1
         }
-        grep -qF '"patterns":["-gentle-shell-[^/]*/lib/gentle-shell$"],"type":"local","wanted":"npm:gentle-pi@4.3.0"' "$disabledActivation/activate" || {
+        grep -qF '"patterns":["-gentle-shell-[^/]*/lib/gentle-shell$"],"type":"local","wanted":"npm:gentle-pi@4.4.0"' "$disabledActivation/activate" || {
           echo "the disabled launcher did not render the rule retiring a leftover launcher path" >&2
           exit 1
         }

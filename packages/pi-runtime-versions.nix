@@ -2,7 +2,7 @@
 # packages/pi-coding-agent.nix from the published npm tarball.
 #
 # The launcher would otherwise run the @earendil-works/pi-coding-agent peer
-# its pnpm lockfile pins (1.2.0 at gentle-shell 4.3.0), which delivers
+# its pnpm lockfile pins (1.2.0 at gentle-shell 4.4.0), which delivers
 # `session_start` to extensions loaded after gentle-pi seconds late. This is
 # the newer Pi it is pointed at instead, through GENTLE_SHELL_PI.
 #
