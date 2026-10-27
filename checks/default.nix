@@ -3997,6 +3997,33 @@ in
     }
   '';
 
+  # The package is a prebuilt release whose runtime the build rewrites (ELF
+  # interpreter, rpath); evaluating and building it proves nothing about
+  # whether the result starts, so this runs it and indexes a small project.
+  codegraph-runs =
+    pkgs.runCommandLocal "gentle-ai-check-codegraph-runs"
+      {
+        nativeBuildInputs = [
+          self.packages.${system}.codegraph
+          pkgs.git
+        ];
+      }
+      ''
+        set -euo pipefail
+        export HOME="$TMPDIR/home" CODEGRAPH_TELEMETRY=0
+        mkdir -p "$HOME" project
+
+        test "$(codegraph --version)" = "${self.packages.${system}.codegraph.version}"
+
+        cd project
+        git init -q
+        printf 'export function greet(name: string) {\n  return name;\n}\n' > greet.ts
+        codegraph init . </dev/null
+        test -d .codegraph
+
+        touch "$out"
+      '';
+
   formatting = pkgs.runCommandLocal "gentle-ai-check-formatting" { } ''
     cp -r --no-preserve=mode,ownership ${self} source
     ${

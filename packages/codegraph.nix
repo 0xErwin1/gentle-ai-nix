@@ -4,6 +4,7 @@
   fetchurl,
   autoPatchelfHook,
   makeWrapper,
+  nodejs_24,
 
   # Which release to install. The channels live in codegraph-versions.nix so
   # that adding one is a data entry rather than another copy of this expression.
@@ -55,8 +56,23 @@ stdenv.mkDerivation (finalAttrs: {
 
     mkdir -p $out/lib/codegraph
     cp -r lib $out/lib/codegraph/lib
-    cp node $out/lib/codegraph/node
-
+  ''
+  + (
+    # On Linux the bundled Node runtime is replaced with nixpkgs' Node 24, the
+    # same major the release bundles. Rewriting the bundled binary's interpreter
+    # with patchelf 0.19 leaves it segfaulting on start (even `node --version`),
+    # and the only native addon, the kernel, is N-API, so it does not depend on
+    # the exact Node build.
+    if stdenv.hostPlatform.isLinux then
+      ''
+        ln -s ${lib.getExe nodejs_24} $out/lib/codegraph/node
+      ''
+    else
+      ''
+        cp node $out/lib/codegraph/node
+      ''
+  )
+  + ''
     install -Dm 755 bin/codegraph $out/lib/codegraph/bin/codegraph
 
     mkdir -p $out/bin
