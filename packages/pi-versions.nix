@@ -96,7 +96,7 @@ in
     version = "4.3.0-main.2d1d3a4e";
     rev = "2d1d3a4eb6621641401f8be6f62ada2427168521";
     archiveHash = "sha256-t3wNW9UAR25U8mR0gZf9vSfiNqoxFE8Pz6Kl/u8lBD8=";
-    pnpmDepsHash = "sha256-7/qFx9LTDo717xj+iojzyx2gXiUW20B8CmTGN9yO9NI=";
+    pnpmDepsHash = "sha256-9f42sgPoej0zUg5wlZx0+LB+vttCXdeS9PPm5HUetuE=";
     gentleAi = gentleAi_4_2_0;
   };
 }
