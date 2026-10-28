@@ -22,10 +22,10 @@
 # Refresh main with:
 #   git ls-remote https://github.com/Gentleman-Programming/gentle-shell main
 #
-# `stable` is npm's `gentle-pi@4.4.0`, which needs Node >= 22.19 and Pi >= 1.2.0.
+# `stable` is npm's `gentle-pi@4.5.1`, which needs Node >= 22.19 and Pi >= 1.2.0.
 # Pinning the npm source makes a switch
 # converge on the release this flake tested, rather than whatever `latest`
-# resolves to when Pi runs its installer. `rev` is the commit the `v4.4.0`
+# resolves to when Pi runs its installer. `rev` is the commit the `v4.5.1`
 # tag peels to, which is where the launcher build comes from.
 #
 # `gentleAi` is the Gentle AI runtime the launcher build carries in its package
@@ -70,12 +70,12 @@ let
 in
 {
   stable = {
-    source = "npm:gentle-pi@4.4.0";
+    source = "npm:gentle-pi@4.5.1";
 
-    version = "4.4.0";
-    rev = "b6c301c41b426ebb09cbd9dc3309cfceedcc1820";
-    archiveHash = "sha256-XzCDwN7iqesp6JUb6HSuYFd1eGkTmPK78KSPqRIIJpc=";
-    pnpmDepsHash = "sha256-9f42sgPoej0zUg5wlZx0+LB+vttCXdeS9PPm5HUetuE=";
+    version = "4.5.1";
+    rev = "e8b2814934f98ded9199f49bde8f482c97eece3a";
+    archiveHash = "sha256-rjm8PVesjSiX3oYpbj9La8Bj+UzEVPZFoHjmcy14cok=";
+    pnpmDepsHash = "sha256-IzSAJVOfq/LqgRIGMyBda+iEHypXUASnzl5vu8XQPjA=";
     gentleAi = gentleAi_4_3_1;
   };
 
@@ -83,8 +83,8 @@ in
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # This revision is the tip of gentle-shell's `main`, 1 commit past the
-  # commit the `v4.4.0` tag peels to; `package.json` there still reads `4.4.0`,
+  # This revision is the tip of gentle-shell's `main`, the same commit the
+  # `v4.5.1` tag peels to; `package.json` there reads `4.5.1`,
   # the release `stable` above names on npm. The `-main.` prerelease label keeps a build
   # from here from being mistaken for that published release.
   #
@@ -93,10 +93,10 @@ in
   # selecting the separately pinned beta channel does not change the plugin's
   # installer target.
   main = {
-    version = "4.4.0-main.9fa616df";
-    rev = "9fa616df105de3f5578f0ebee163430110cf0d05";
-    archiveHash = "sha256-SBPVxpFNjdqUiJppaTXo24QS7zqgQJroXWCz73f0aho=";
-    pnpmDepsHash = "sha256-9f42sgPoej0zUg5wlZx0+LB+vttCXdeS9PPm5HUetuE=";
+    version = "4.5.1-main.e8b28149";
+    rev = "e8b2814934f98ded9199f49bde8f482c97eece3a";
+    archiveHash = "sha256-rjm8PVesjSiX3oYpbj9La8Bj+UzEVPZFoHjmcy14cok=";
+    pnpmDepsHash = "sha256-IzSAJVOfq/LqgRIGMyBda+iEHypXUASnzl5vu8XQPjA=";
     gentleAi = gentleAi_4_3_1;
   };
 }
