@@ -248,7 +248,7 @@ func TestPruneAntigravityWindsurfTraeIDEBuiltInDirs(t *testing.T) {
 		agent string
 		rel   string
 	}{
-		{"antigravity", filepath.Join(".gemini", "antigravity-cli", "skills")},
+		{"antigravity", filepath.Join(".gemini", "config", "skills")},
 		{"windsurf", filepath.Join(".codeium", "windsurf", "skills")},
 		{"trae-ide", filepath.Join(".trae", "skills")},
 	}
@@ -283,7 +283,7 @@ func TestPruneSkillsDirOverrideWinsOverBuiltInTable(t *testing.T) {
 
 	// The built-in antigravity directory must be left untouched: the
 	// override redirects Prune away from it entirely.
-	builtinDir := filepath.Join(tree, ".gemini", "antigravity-cli", "skills")
+	builtinDir := filepath.Join(tree, ".gemini", "config", "skills")
 	mkSkill(t, builtinDir, "c")
 
 	spec := Spec{

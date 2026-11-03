@@ -2065,7 +2065,7 @@ let
   gentlePiNpmStable = gentlePiSource gentlePiReleases.stable;
 
   # gentle-engram's stable npm source, pinned the same way and for the same
-  # reason. Engram 3.6.0 carries `gentle-engram@0.5.1`; pinning keeps
+  # reason. Engram 3.6.1 carries `gentle-engram@0.5.1`; pinning keeps
   # the plugin paired with that binary even if npm's `latest` moves. Off
   # stable the plugin is built from the same revision as the binary.
   gentleEngramNpmDefault = "npm:gentle-engram@0.5.1";

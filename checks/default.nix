@@ -8,7 +8,7 @@
 let
   lib = pkgs.lib;
   module = self.homeManagerModules.default;
-  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@9fe14aadc1f6c905f7aee93ecb4e724e342cba50";
+  gentleShellMainSource = "git:github.com/Gentleman-Programming/gentle-shell@b76a31d800d643650a8dc8bd3522c1cd06c2d7b1";
 
   evaluate =
     extraModules:
@@ -541,7 +541,7 @@ in
         done
 
         for want in \
-          "pi install git:github.com/Gentleman-Programming/gentle-shell@9fe14aadc1f6c905f7aee93ecb4e724e342cba50" \
+          "pi install git:github.com/Gentleman-Programming/gentle-shell@b76a31d800d643650a8dc8bd3522c1cd06c2d7b1" \
           "pi install ${gentleEngramPiPath}"
         do
           grep -qxF "$want" overridden.commands || {
@@ -2894,11 +2894,11 @@ in
         exit 1
       }
 
-      test -d "$osVariantTree/tree/.gemini/antigravity-cli/skills/go-testing" || {
+      test -d "$osVariantTree/tree/.gemini/config/skills/go-testing" || {
         echo "antigravity is missing the skill named in its own assignment" >&2
         exit 1
       }
-      test -d "$osVariantTree/tree/.gemini/antigravity-cli/skills/cognitive-doc-design" && {
+      test -d "$osVariantTree/tree/.gemini/config/skills/cognitive-doc-design" && {
         echo "antigravity kept a skill outside its own assignment; pruning did not run in its Linux skills dir" >&2
         exit 1
       }

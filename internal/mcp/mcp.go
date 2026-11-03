@@ -274,12 +274,13 @@ func WriteTree(tree string, spec Spec) error {
 // windsurfMCPConfigRel and antigravityMCPConfigRel are OS-invariant: both
 // adapters resolve their MCPConfigPath under a home-relative directory that
 // never varies by runtime.GOOS (windsurf's GlobalConfigDir; antigravity's
-// own variant directory -- see hermesMCPConfigRel's sibling doc on
-// internal/settings' antigravity fallback for why that one is a run-time,
-// not an OS, choice).
+// shared config root as of agy 1.4 -- only antigravity's settings path
+// stays in its variant directory, which is a run-time, not an OS, choice;
+// see hermesMCPConfigRel's sibling doc on internal/settings' antigravity
+// fallback for that).
 const (
 	windsurfMCPConfigRel    = ".codeium/windsurf/mcp_config.json"
-	antigravityMCPConfigRel = ".gemini/antigravity-cli/mcp_config.json"
+	antigravityMCPConfigRel = ".gemini/config/mcp_config.json"
 	hermesMCPConfigRel      = ".hermes/config.yaml"
 )
 

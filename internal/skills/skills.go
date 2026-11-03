@@ -29,7 +29,10 @@
 // (which was already OS-invariant). A caller that still wants to redirect
 // one (say, to match a real antigravity install that landed in its
 // "desktop" variant rather than the "cli" fallback this package assumes)
-// can do so through Spec.SkillsDir.
+// can do so through Spec.SkillsDir. As of agy 1.4 antigravity's skills
+// live under its shared config root (.gemini/config) regardless of which
+// variant directory its settings landed in; the override also covers older
+// installs that still keep them in the variant directory.
 package skills
 
 import (
@@ -79,7 +82,7 @@ var skillsDirs = map[string]string{
 
 	// OS-invariant despite their settings/MCP paths being OS-variant -- see
 	// the package doc.
-	"antigravity": filepath.Join(".gemini", "antigravity-cli", "skills"),
+	"antigravity": filepath.Join(".gemini", "config", "skills"),
 	"windsurf":    filepath.Join(".codeium", "windsurf", "skills"),
 	"trae-ide":    filepath.Join(".trae", "skills"),
 }

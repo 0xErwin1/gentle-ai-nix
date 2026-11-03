@@ -19,15 +19,18 @@
 # has to know or care about: every path here is simply handed down as an
 # override, and an override always wins.
 #
-# Antigravity is the one exception worth calling out: the fork's own adapter
-# does not actually select its directory by OS at all -- it inspects which
-# of two variant directories already exists on the real machine at run time,
-# which a Nix derivation, sandboxed away from the user's home directory at
-# build time, cannot do. Both OS entries below carry the same "cli" variant
-# the adapter itself falls back to when neither exists yet. There is no
-# user-facing option to redirect this at the time of writing; an
-# installation that actually landed in the "desktop" variant has to override
-# this table directly (a local module override of
+# Antigravity is the one exception worth calling out: the fork's own
+# adapter does not actually select its settings directory by OS at all --
+# it inspects which of two variant directories already exists on the real
+# machine at run time, which a Nix derivation, sandboxed away from the
+# user's home directory at build time, cannot do. Both OS entries below
+# carry the same "cli" variant the adapter itself falls back to when
+# neither exists yet -- and since agy 1.4 only settings is variant-scoped:
+# mcp and skills moved to Antigravity's shared config root
+# (.gemini/config), which is OS- and variant-invariant. There is no
+# user-facing option to redirect the settings path at the time of writing;
+# an installation that actually landed in the "desktop" variant has to
+# override this table directly (a local module override of
 # clientLocations.<os>.antigravity, or a gentle-nix settings/mcp/skills
 # invocation of its own outside this module) until one is added.
 {
@@ -48,8 +51,8 @@
     };
     antigravity = {
       settings = ".gemini/antigravity-cli/settings.json";
-      mcp = ".gemini/antigravity-cli/mcp_config.json";
-      skills = ".gemini/antigravity-cli/skills";
+      mcp = ".gemini/config/mcp_config.json";
+      skills = ".gemini/config/skills";
     };
     hermes.mcp = ".hermes/config.yaml";
   };
@@ -70,8 +73,8 @@
     };
     antigravity = {
       settings = ".gemini/antigravity-cli/settings.json";
-      mcp = ".gemini/antigravity-cli/mcp_config.json";
-      skills = ".gemini/antigravity-cli/skills";
+      mcp = ".gemini/config/mcp_config.json";
+      skills = ".gemini/config/skills";
     };
     hermes.mcp = ".hermes/config.yaml";
   };

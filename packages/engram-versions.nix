@@ -12,9 +12,9 @@
   # from the release's own `plugin/pi/package.json`, not from npm's `latest`:
   # the plugin's own tags can run ahead of the core release.
   stable = {
-    version = "3.6.0";
-    rev = "v3.6.0";
-    hash = "sha256-lVLGjn/eYUNy5S/Ct9lTWGiFso40EKrlIDmD+aUaDgg=";
+    version = "3.6.1";
+    rev = "v3.6.1";
+    hash = "sha256-Rk6zQGrUDnv8rlvEerFFdhubJPmtO7pNcdNAHMb+H30=";
     vendorHash = "sha256-uNoFAUJfu3SFU9OqT1AJvHKKN6t6oPo6nC6GEbYhYJs=";
   };
 
@@ -26,13 +26,13 @@
   # the plugin is built from the same source and linked into the rendered tree.
   #
   # The version carries the `-main.` prerelease tag so a build from here is
-  # never mistaken for a release. This revision is 41 commits past the commit the
-  # `v3.6.0` tag names; its Pi plugin is still `gentle-engram@0.5.1`, the one
-  # the stable channel ships.
+  # never mistaken for a release. The tip of main is the commit the `v3.6.1` tag
+  # names, so both channels build the same tree and only the label differs; its
+  # Pi plugin is still `gentle-engram@0.5.1`, the one the stable channel ships.
   main = {
-    version = "3.6.0-main.3ead0c9d";
-    rev = "3ead0c9de795735c42c5166b92b2dda9adbc537d";
-    hash = "sha256-r7tyBcpJvpenaN3BaSsJQLfrpwQ410Vtn2ZGDHDXbn8=";
+    version = "3.6.1-main.d33a14a2";
+    rev = "d33a14a2ed822784752e5678b1673289ee1c0de4";
+    hash = "sha256-Rk6zQGrUDnv8rlvEerFFdhubJPmtO7pNcdNAHMb+H30=";
     vendorHash = "sha256-uNoFAUJfu3SFU9OqT1AJvHKKN6t6oPo6nC6GEbYhYJs=";
   };
 }

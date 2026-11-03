@@ -427,7 +427,7 @@ func TestWriteTreeWindsurfAndAntigravityBuiltInPlainFiles(t *testing.T) {
 		want  string
 	}{
 		{"windsurf", filepath.Join(".codeium", "windsurf", "mcp_config.json")},
-		{"antigravity", filepath.Join(".gemini", "antigravity-cli", "mcp_config.json")},
+		{"antigravity", filepath.Join(".gemini", "config", "mcp_config.json")},
 	}
 
 	for _, tc := range cases {
