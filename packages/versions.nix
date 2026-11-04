@@ -29,16 +29,16 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # At this pin the tip of main is 198 commits past the commit v4.3.1 tags; the
+  # At this pin the tip of main is 200 commits past the commit v4.3.1 tags; the
   # two channels stay separate entries because main moves
   # on after a release and the tag does not. Every channel carries the Pi
   # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "4.3.1-main.95745ba1c";
+    version = "4.3.1-main.3ea08cdfb";
     owner = "Gentleman-Programming";
-    rev = "95745ba1cbe205c490f112c887e3e119c411cc3c";
-    hash = "sha256-BJjb3hdg9GLGE+IdzLNxON+7sYRYSY3YYUoPrAxZgHM=";
+    rev = "3ea08cdfbdce671053c82377a4365915799abe57";
+    hash = "sha256-5KY7Oar81azPAt8T/HjtxzfycpddVBod/8DWhXu1PQU=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -71,10 +71,10 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "4.3.1-main.9a2c16b0e-declarative-config";
+    version = "4.3.1-main.d42e9fcc3-declarative-config";
     owner = "0xErwin1";
-    rev = "9a2c16b0e4006bec4115d80d84087fc6ebadb23d";
-    hash = "sha256-g8v4Wb7YKNzgALFhWElM4A982fn2i7PxJMF7s4H3YRs=";
+    rev = "d42e9fcc3b3e139bfc5c2f77627574a9a52c120e";
+    hash = "sha256-JOJbqZNpKlUsRH+T6+u2Lt/HawkNTz6Vdq2uDuWwZa8=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };

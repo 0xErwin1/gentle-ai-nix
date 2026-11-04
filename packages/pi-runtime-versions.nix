@@ -5,7 +5,7 @@
 # its pnpm lockfile pins. Up to gentle-shell 4.4.0 that was 1.2.0, which
 # delivers `session_start` to extensions loaded after gentle-pi seconds late,
 # so the launcher is pointed at this Pi instead, through GENTLE_SHELL_PI. From
-# gentle-shell 4.5.1 the lockfile pins 1.4.0 too, the same version as here.
+# gentle-shell 4.5.1 onward the lockfile pins 1.4.0 too, the same version as here.
 #
 # The tarball ships no lockfile, so one is generated and committed beside the
 # derivation (packages/pi-coding-agent/package-lock.json). Refresh with:

@@ -22,10 +22,10 @@
 # Refresh main with:
 #   git ls-remote https://github.com/Gentleman-Programming/gentle-shell main
 #
-# `stable` is npm's `gentle-pi@4.5.1`, which needs Node >= 22.19 and Pi >= 1.2.0.
+# `stable` is npm's `gentle-pi@4.6.0`, which needs Node >= 22.19 and Pi >= 1.2.0.
 # Pinning the npm source makes a switch
 # converge on the release this flake tested, rather than whatever `latest`
-# resolves to when Pi runs its installer. `rev` is the commit the `v4.5.1`
+# resolves to when Pi runs its installer. `rev` is the commit the `v4.6.0`
 # tag peels to, which is where the launcher build comes from.
 #
 # `gentleAi` is the Gentle AI runtime the launcher build carries in its package
@@ -70,11 +70,11 @@ let
 in
 {
   stable = {
-    source = "npm:gentle-pi@4.5.1";
+    source = "npm:gentle-pi@4.6.0";
 
-    version = "4.5.1";
-    rev = "e8b2814934f98ded9199f49bde8f482c97eece3a";
-    archiveHash = "sha256-rjm8PVesjSiX3oYpbj9La8Bj+UzEVPZFoHjmcy14cok=";
+    version = "4.6.0";
+    rev = "1f74e9e24473e7e121a96b1680444ae0196d3009";
+    archiveHash = "sha256-M2WQtH7bZ/4ytZ+nVAaKfsTx3RRn6z+EEDiVV9HKPUQ=";
     pnpmDepsHash = "sha256-IzSAJVOfq/LqgRIGMyBda+iEHypXUASnzl5vu8XQPjA=";
     gentleAi = gentleAi_4_3_1;
   };
@@ -83,8 +83,8 @@ in
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # This revision is the tip of gentle-shell's `main`, 149 commits past the
-  # commit the `v4.5.1` tag peels to; `package.json` there still reads `4.5.1`,
+  # This revision is the tip of gentle-shell's `main`, three commits past the
+  # commit the `v4.6.0` tag peels to; `package.json` there still reads `4.6.0`,
   # the release `stable` above names on npm. The `-main.` prerelease label keeps a build
   # from here from being mistaken for that published release.
   #
@@ -93,9 +93,9 @@ in
   # selecting the separately pinned beta channel does not change the plugin's
   # installer target.
   main = {
-    version = "4.5.1-main.b76a31d8";
-    rev = "b76a31d800d643650a8dc8bd3522c1cd06c2d7b1";
-    archiveHash = "sha256-NWDnkJl+auPQ93Y+X8prkbp5qtnEzIhMMp5T5kkcT5s=";
+    version = "4.6.0-main.a1000611";
+    rev = "a10006110d74eafb83acc649a4baf75a7bf45c3b";
+    archiveHash = "sha256-wQINfUfP1LfxJyVA1G4eJOcfEowFc/faeRdyJlL7VNo=";
     pnpmDepsHash = "sha256-IzSAJVOfq/LqgRIGMyBda+iEHypXUASnzl5vu8XQPjA=";
     gentleAi = gentleAi_4_3_1;
   };
