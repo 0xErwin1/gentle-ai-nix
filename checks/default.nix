@@ -3035,6 +3035,63 @@ in
   # `providers.pi.{models,profiles,activeProfile}` used to render: the
   # profile store, the model routing, and the orchestrator defaults merged
   # into Pi's own settings.json.
+  # A profile's `tier` and `fallbacks` are gentle-pi's own: another client
+  # declaring them is refused rather than silently dropped. The same profile
+  # without them stays accepted, so the refusal is about those fields alone.
+  piProfileFieldsRefusedElsewhere =
+    let
+      withProfile = extra: [
+        {
+          programs.gentle-ai = {
+            enable = true;
+            providers.opencode = {
+              enable = true;
+              profiles.cheap = lib.recursiveUpdate {
+                orchestrator = {
+                  provider = "anthropic";
+                  model = "claude-haiku";
+                };
+              } extra;
+            };
+          };
+        }
+      ];
+    in
+    assert accepted (withProfile { });
+    assert accepted (withProfile {
+      fallbacks."*" = [ ];
+    });
+    assert rejected (withProfile {
+      fallbacks = {
+        "*" = [ ];
+        orchestrator = [
+          {
+            provider = "openai";
+            model = "gpt-5.6";
+          }
+        ];
+      };
+    });
+    assert rejected (withProfile {
+      orchestrator.tier = "fast";
+    });
+    assert rejected (withProfile {
+      phases.sdd-apply = {
+        provider = "openai";
+        model = "gpt-5.6";
+        tier = "standard";
+      };
+    });
+    assert rejected (withProfile {
+      fallbacks."*" = [
+        {
+          provider = "openai";
+          model = "gpt-5.6";
+        }
+      ];
+    });
+    pkgs.runCommandLocal "gentle-ai-check-pi-profile-fields-refused-elsewhere" { } "touch $out";
+
   piRoutingRendersIntoTree =
     let
       piRoutingConfiguration = evaluate [
@@ -3051,12 +3108,23 @@ in
                   effort = "low";
                 };
                 phases.sdd-apply = {
-                  provider = "anthropic";
-                  model = "claude-sonnet-5";
+                  provider = "openai";
+                  model = "gpt-5.6";
                   effort = "medium";
+                  tier = "fast";
                 };
+                fallbacks."*" = [
+                  {
+                    provider = "openai";
+                    model = "gpt-5.6-mini";
+                    effort = "low";
+                  }
+                ];
               };
-              models.sdd-verify.thinking = "high";
+              models.sdd-verify = {
+                thinking = "high";
+                tier = "standard";
+              };
             };
           };
         }
@@ -3079,10 +3147,18 @@ in
       grep -q '"kind": "gentle-pi.agent_model_profiles"' "$profiles" || { echo "profiles.json has the wrong kind" >&2; exit 1; }
       grep -q '"active": "cheap"' "$profiles" || { echo "the active profile was not written" >&2; exit 1; }
       grep -q '"anthropic/claude-haiku"' "$profiles" || { echo "the orchestrator model was not written" >&2; exit 1; }
-      grep -q '"anthropic/claude-sonnet-5"' "$profiles" || { echo "the phase assignment was not written" >&2; exit 1; }
+      grep -q '"openai/gpt-5.6"' "$profiles" || { echo "the phase assignment was not written" >&2; exit 1; }
+      grep -q '"tier": "fast"' "$profiles" || { echo "the phase tier was not written into profiles.json" >&2; exit 1; }
+      if grep -q 'gpt-5.6-mini' "$profiles"; then echo "a fallback chain leaked into profiles.json" >&2; exit 1; fi
+
+      fallbacks="$piRoutingRendered/tree/.pi/gentle-ai/profile-fallbacks.json"
+      test -f "$fallbacks" || { echo "profile-fallbacks.json was not rendered" >&2; exit 1; }
+      grep -q '"kind": "gentle-pi.profile_model_fallbacks"' "$fallbacks" || { echo "profile-fallbacks.json has the wrong kind" >&2; exit 1; }
+      grep -q '"model": "openai/gpt-5.6-mini"' "$fallbacks" || { echo "the fallback step was not written" >&2; exit 1; }
 
       test -f "$models" || { echo "models.json was not rendered" >&2; exit 1; }
       grep -q '"sdd-verify"' "$models" || { echo "the explicit model assignment was not rendered" >&2; exit 1; }
+      grep -q '"tier": "standard"' "$models" || { echo "the explicit model tier was not rendered into models.json" >&2; exit 1; }
       grep -q '"orchestrator"' "$models" || { echo "the active profile's orchestrator entry was not rendered into models.json" >&2; exit 1; }
 
       test -f "$settings" || { echo "Pi settings.json was not rendered" >&2; exit 1; }

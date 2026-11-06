@@ -1,7 +1,9 @@
-// Package pirouting owns the three files the pinned Gentle AI fork used to
+// Package pirouting owns the files the pinned Gentle AI fork used to
 // render for Pi from the document's providers.pi block --
 // .pi/gentle-ai/profiles.json, .pi/gentle-ai/models.json, and the
-// orchestrator defaults merged into .pi/agent/settings.json -- now that
+// orchestrator defaults merged into .pi/agent/settings.json -- plus
+// .pi/gentle-ai/profile-fallbacks.json, gentle-pi's per-profile model
+// fallback chains -- now that
 // gentle-nix stops emitting providers.pi.{models,profiles,activeProfile,
 // modelFamily,modelPreset} in the document at all. Pi's own routing and
 // gentle-pi's own profile store are not Gentle AI features: they are
@@ -43,33 +45,39 @@ func validationErrorf(format string, args ...any) error {
 // ModelAssignment is one phase's or orchestrator's model, in the same shape
 // modelAssignmentType in modules/home-manager.nix renders it: a provider and
 // a model are both required, effort is optional. This mirrors the pinned
-// fork's own config.ModelAssignment.
+// fork's own config.ModelAssignment, plus gentle-pi's own service tier.
 type ModelAssignment struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 	Effort   string `json:"effort,omitempty"`
-}
-
-func (a ModelAssignment) empty() bool {
-	return a.Provider == "" && a.Model == "" && a.Effort == ""
+	Tier     string `json:"tier,omitempty"`
 }
 
 // AgentRouting is one Pi agent's routing: a model, a reasoning level, or
 // both. Either half stands alone, mirroring the fork's own
 // model.PiAgentRouting -- a model with no level takes the level Pi is
 // running at, and a level with no model applies to whatever model the
-// session is on.
+// session is on. Tier is gentle-pi's own service tier ("standard" or
+// "fast"); gentle-pi applies it only to the OpenAI models that offer a fast
+// tier and ignores it everywhere else.
 type AgentRouting struct {
 	Model    string `json:"model,omitempty"`
 	Thinking string `json:"thinking,omitempty"`
+	Tier     string `json:"tier,omitempty"`
 }
 
 // Profile is one named gentle-pi profile: an orchestrator entry and a set of
 // per-phase entries, the same shape modules/home-manager.nix's own `profile`
 // function renders it in (see providerBlock's whenSet "phaseAssignments").
+//
+// Fallbacks are the profile's ordered model fallback chains, keyed by agent
+// name or by "*" for every agent without a chain of its own. gentle-pi keeps
+// them in their own file, profile-fallbacks.json, so profiles.json keeps the
+// shape older gentle-pi versions read.
 type Profile struct {
-	Orchestrator     *ModelAssignment           `json:"orchestrator,omitempty"`
-	PhaseAssignments map[string]ModelAssignment `json:"phaseAssignments,omitempty"`
+	Orchestrator     *ModelAssignment             `json:"orchestrator,omitempty"`
+	PhaseAssignments map[string]ModelAssignment   `json:"phaseAssignments,omitempty"`
+	Fallbacks        map[string][]ModelAssignment `json:"fallbacks,omitempty"`
 }
 
 // Spec is gentle-nix pi routing's own input contract: what the Nix module
@@ -101,6 +109,26 @@ func ValidThinking(level string) bool {
 	return level == "" || validThinkingLevels[level]
 }
 
+// ValidTier reports whether tier is empty or one of gentle-pi's own service
+// tiers, mirroring its isServiceTier. gentle-pi drops an unknown tier
+// silently, so naming one here is a mistake worth failing on instead.
+func ValidTier(tier string) bool {
+	return tier == "" || tier == "standard" || tier == "fast"
+}
+
+// safeModelID mirrors gentle-pi's own SAFE_MODEL_ID_PATTERN.
+var safeModelID = regexp.MustCompile(`^[A-Za-z0-9._~:@/+%-]+$`)
+
+// safeAgentName mirrors gentle-pi's own SAFE_AGENT_NAME_PATTERN.
+var safeAgentName = regexp.MustCompile(`^[A-Za-z0-9._:@/+%-]+$`)
+
+// defaultChainKey is the fallback chain key gentle-pi applies to every agent
+// of a profile that has no chain of its own.
+const defaultChainKey = "*"
+
+// maxChainLength mirrors gentle-pi's own MAX_CHAIN_LENGTH.
+const maxChainLength = 8
+
 // safeProfileName mirrors the fork's own safePiProfileName: the pattern
 // gentle-pi validates a profile name against.
 var safeProfileName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
@@ -128,6 +156,9 @@ func Validate(spec Spec) error {
 		if !ValidThinking(routing.Thinking) {
 			return validationErrorf("models.%s.thinking: unsupported reasoning level %q", agent, routing.Thinking)
 		}
+		if !ValidTier(routing.Tier) {
+			return validationErrorf("models.%s.tier: unsupported tier %q; use standard or fast", agent, routing.Tier)
+		}
 	}
 
 	for name, profile := range spec.Profiles {
@@ -147,6 +178,12 @@ func Validate(spec Spec) error {
 
 		for phase, assignment := range profile.PhaseAssignments {
 			if err := validateAssignment(fmt.Sprintf("profiles.%s.phaseAssignments.%s", name, phase), assignment); err != nil {
+				return err
+			}
+		}
+
+		for agent, chain := range profile.Fallbacks {
+			if err := validateChain(fmt.Sprintf("profiles.%s.fallbacks.%s", name, agent), agent, chain); err != nil {
 				return err
 			}
 		}
@@ -176,6 +213,41 @@ func validateAssignment(path string, assignment ModelAssignment) error {
 	if !ValidThinking(assignment.Effort) {
 		return validationErrorf("%s.effort: unsupported reasoning level %q", path, assignment.Effort)
 	}
+	if !ValidTier(assignment.Tier) {
+		return validationErrorf("%s.tier: unsupported tier %q; use standard or fast", path, assignment.Tier)
+	}
+	return nil
+}
+
+// validateChain mirrors gentle-pi's own normalizeFallbacksFile rules. One
+// broken chain makes gentle-pi discard the whole profile-fallbacks.json, so
+// each rule it enforces is checked here first.
+func validateChain(path, agent string, chain []ModelAssignment) error {
+	if agent != defaultChainKey && !safeAgentName.MatchString(agent) {
+		return validationErrorf("%s: invalid agent name; use an agent name or %q for every agent without a chain of its own", path, defaultChainKey)
+	}
+	if len(chain) > maxChainLength {
+		return validationErrorf("%s: a fallback chain holds at most %d steps, got %d", path, maxChainLength, len(chain))
+	}
+
+	seen := make(map[string]bool, len(chain))
+	for index, step := range chain {
+		stepPath := fmt.Sprintf("%s[%d]", path, index)
+		if step.Tier != "" {
+			return validationErrorf("%s.tier: a fallback step takes no tier; gentle-pi keeps only model and thinking", stepPath)
+		}
+		if err := validateAssignment(stepPath, step); err != nil {
+			return err
+		}
+		model := step.Provider + "/" + step.Model
+		if !safeModelID.MatchString(model) {
+			return validationErrorf("%s: %q is not a model id gentle-pi accepts", stepPath, model)
+		}
+		if seen[model] {
+			return validationErrorf("%s: model %q appears more than once in the chain", stepPath, model)
+		}
+		seen[model] = true
+	}
 	return nil
 }
 
@@ -183,8 +255,8 @@ func validateAssignment(path string, assignment ModelAssignment) error {
 // piProfileEntryFromAssignment: a phase's provider-qualified model becomes
 // "<provider>/<model>", and its effort becomes the reasoning level.
 func routingFromAssignment(assignment ModelAssignment) AgentRouting {
-	routing := AgentRouting{Thinking: assignment.Effort}
-	if !assignment.empty() {
+	routing := AgentRouting{Thinking: assignment.Effort, Tier: assignment.Tier}
+	if assignment.Provider != "" || assignment.Model != "" {
 		routing.Model = assignment.Provider + "/" + assignment.Model
 	}
 	return routing
@@ -192,12 +264,14 @@ func routingFromAssignment(assignment ModelAssignment) AgentRouting {
 
 // Result is what Build resolves from a validated Spec: the bytes for
 // profiles.json (nil when there is nothing to write), the routing table for
-// models.json (nil when empty), and the orchestrator defaults to merge into
-// Pi's own settings.json (nil when the active profile assigns none).
+// models.json (nil when empty), the bytes for profile-fallbacks.json (nil
+// when no profile declares a chain), and the orchestrator defaults to merge
+// into Pi's own settings.json (nil when the active profile assigns none).
 type Result struct {
-	ProfilesDocument []byte
-	ModelRouting     map[string]AgentRouting
-	SettingsDefaults map[string]string
+	ProfilesDocument  []byte
+	ModelRouting      map[string]AgentRouting
+	FallbacksDocument []byte
+	SettingsDefaults  map[string]string
 }
 
 // piAgentForPhase renames the phases whose gentle-pi agent name differs from
@@ -274,10 +348,16 @@ func Build(spec Spec, presets *PresetsDocument) (Result, error) {
 		modelRouting = routing
 	}
 
+	fallbacksDocument, err := marshalFallbacksDocument(spec)
+	if err != nil {
+		return Result{}, err
+	}
+
 	return Result{
-		ProfilesDocument: profilesDocument,
-		ModelRouting:     modelRouting,
-		SettingsDefaults: settingsDefaults,
+		ProfilesDocument:  profilesDocument,
+		ModelRouting:      modelRouting,
+		FallbacksDocument: fallbacksDocument,
+		SettingsDefaults:  settingsDefaults,
 	}, nil
 }
 
@@ -303,10 +383,11 @@ func orchestratorDefaults(assignment ModelAssignment) map[string]string {
 type profileEntry struct {
 	Model    string `json:"model,omitempty"`
 	Thinking string `json:"thinking,omitempty"`
+	Tier     string `json:"tier,omitempty"`
 }
 
 func entryFromRouting(routing AgentRouting) profileEntry {
-	return profileEntry{Model: routing.Model, Thinking: routing.Thinking}
+	return profileEntry{Model: routing.Model, Thinking: routing.Thinking, Tier: routing.Tier}
 }
 
 // profilesDocument mirrors the fork's own piAgentProfilesDocument: the file
@@ -342,6 +423,54 @@ func marshalProfilesDocument(spec Spec) ([]byte, error) {
 	encoded, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("marshal Pi agent profiles: %w", err)
+	}
+	return append(encoded, '\n'), nil
+}
+
+// fallbackStep is one step of a fallback chain, mirroring gentle-pi's own
+// FallbackStep: exactly a model and an optional thinking level.
+type fallbackStep struct {
+	Model    string `json:"model"`
+	Thinking string `json:"thinking,omitempty"`
+}
+
+// fallbacksDocument mirrors gentle-pi's own FallbacksFile.
+type fallbacksDocument struct {
+	Kind     string                               `json:"kind"`
+	Version  int                                  `json:"version"`
+	Profiles map[string]map[string][]fallbackStep `json:"profiles"`
+}
+
+const fallbacksKind = "gentle-pi.profile_model_fallbacks"
+
+// marshalFallbacksDocument returns nil when no profile declares a non-empty
+// chain: gentle-pi drops empty chains and emptied profiles itself, so
+// writing them would only produce a file it reads as empty.
+func marshalFallbacksDocument(spec Spec) ([]byte, error) {
+	profiles := map[string]map[string][]fallbackStep{}
+	for name, profile := range spec.Profiles {
+		chains := map[string][]fallbackStep{}
+		for agent, chain := range profile.Fallbacks {
+			if len(chain) == 0 {
+				continue
+			}
+			steps := make([]fallbackStep, 0, len(chain))
+			for _, step := range chain {
+				steps = append(steps, fallbackStep{Model: step.Provider + "/" + step.Model, Thinking: step.Effort})
+			}
+			chains[agent] = steps
+		}
+		if len(chains) > 0 {
+			profiles[name] = chains
+		}
+	}
+	if len(profiles) == 0 {
+		return nil, nil
+	}
+
+	encoded, err := json.MarshalIndent(fallbacksDocument{Kind: fallbacksKind, Version: 1, Profiles: profiles}, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal Pi profile fallbacks: %w", err)
 	}
 	return append(encoded, '\n'), nil
 }
@@ -437,8 +566,8 @@ func familyPresetFill(family, preset string, document PresetsDocument) (map[stri
 	return routing, nil
 }
 
-// WriteTree writes Build(spec)'s result into tree: profiles.json and
-// models.json under .pi/gentle-ai, and the orchestrator defaults merged into
+// WriteTree writes Build(spec)'s result into tree: profiles.json,
+// models.json and profile-fallbacks.json under .pi/gentle-ai, and the orchestrator defaults merged into
 // .pi/agent/settings.json. It runs before gentle-nix settings so a value
 // declared through providers.pi.settings keeps winning over a routing
 // default at the same key, the same way an operator's own setting always
@@ -470,6 +599,15 @@ func WriteTree(tree string, spec Spec, presets *PresetsDocument) error {
 		}
 		if err := os.WriteFile(filepath.Join(gentleAIDir, "models.json"), append(encoded, '\n'), 0o644); err != nil {
 			return fmt.Errorf("write Pi model routing: %w", err)
+		}
+	}
+
+	if result.FallbacksDocument != nil {
+		if err := os.MkdirAll(gentleAIDir, 0o755); err != nil {
+			return fmt.Errorf("create Pi gentle-ai directory: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(gentleAIDir, "profile-fallbacks.json"), result.FallbacksDocument, 0o644); err != nil {
+			return fmt.Errorf("write Pi profile fallbacks: %w", err)
 		}
 	}
 

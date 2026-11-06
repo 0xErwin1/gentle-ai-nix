@@ -60,7 +60,7 @@ Options are grouped the way you think about the installation. Names inside the g
 | `permissions`, `mcpServers` | Rules layered over the shipped guardrails, and servers no component configures. |
 | `persona`, `preset`, `schemaVersion`, `package` | The rest. |
 
-Two different things are called a profile, and both live on the client. `providers.<name>.modelPreset` names a tier Gentle AI recommends — Codex, Claude and Kiro each offer their own, with their own vocabulary. `providers.<name>.profiles.<name>` is a model configuration *you* name, switchable at runtime; OpenCode and Pi both take it, but materialise it differently. OpenCode generates its own orchestrator and phase agents per profile, alongside the default set — `providers.opencode.profileStrategy` says whether Gentle AI generates them itself or leaves an external profile manager to keep one active. Pi has no agents of its own to generate: its profiles live in gentle-pi's global profile store, `~/.pi/gentle-ai/profiles.json`, and `providers.pi.activeProfile` is the declarative form of running `/gentle:profiles` inside Pi. Unlike every other provider's own fields, these five — `models`, `profiles`, `activeProfile`, `modelFamily`, `modelPreset` — never reach the Gentle AI document for Pi: gentle-nix writes `profiles.json` and `models.json` and merges the orchestrator defaults into Pi's own settings directly, because gentle-pi's routing and profile store are not a Gentle AI feature.
+Two different things are called a profile, and both live on the client. `providers.<name>.modelPreset` names a tier Gentle AI recommends — Codex, Claude and Kiro each offer their own, with their own vocabulary. `providers.<name>.profiles.<name>` is a model configuration *you* name, switchable at runtime; OpenCode and Pi both take it, but materialise it differently. OpenCode generates its own orchestrator and phase agents per profile, alongside the default set — `providers.opencode.profileStrategy` says whether Gentle AI generates them itself or leaves an external profile manager to keep one active. Pi has no agents of its own to generate: its profiles live in gentle-pi's global profile store, `~/.pi/gentle-ai/profiles.json`, and `providers.pi.activeProfile` is the declarative form of running `/gentle:profiles` inside Pi. Unlike every other provider's own fields, these five — `models`, `profiles`, `activeProfile`, `modelFamily`, `modelPreset` — never reach the Gentle AI document for Pi: gentle-nix writes `profiles.json`, `models.json` and `profile-fallbacks.json` and merges the orchestrator defaults into Pi's own settings directly, because gentle-pi's routing and profile store are not a Gentle AI feature.
 
 ### Model assignment helpers
 
@@ -100,6 +100,18 @@ takes profiles — [`examples/home.nix`](examples/home.nix) sets `defaultEffort`
 on its cheap profile.
 
 A profile and explicit assignments compose rather than exclude each other. For OpenCode, name the profile for the shape you want, then override the phases you care about with `providers.<name>.models`, and the rest stay on the profile. For Pi, routing follows one precedence order: an explicit `providers.pi.models` entry wins, then the active profile, then `modelPreset` and `modelFamily` fill in whatever agent neither of those named.
+
+Pi's profiles take two fields no other client reads, and another client setting either is refused. `tier` on a profile assignment (or on a `providers.pi.models` entry) is gentle-pi's service tier: `"fast"` asks for the provider's priority tier, `"standard"` for its default one, and gentle-pi applies it only to the OpenAI and OpenAI Codex models that offer a fast tier. `fallbacks` is an ordered chain of models per agent, or `"*"` for every agent without its own, that gentle-pi switches to when the agent's model fails on quota, auth, rate limits, an unavailable provider, a timeout or the network. Chains go to their own file, `~/.pi/gentle-ai/profile-fallbacks.json`, hold at most 8 steps and name each model once:
+
+```nix
+programs.gentle-ai.providers.pi.profiles.daily = {
+  orchestrator = (models.on "openai" "gpt-5.6") // { tier = "fast"; };
+  fallbacks = {
+    orchestrator = [ (models.on "anthropic" "claude-opus-5-5") ];
+    "*" = [ (models.effort.low (models.on "openai" "gpt-5.6-mini")) ];
+  };
+};
+```
 
 Model profiles live on the client, not on the installation: `providers.codex.modelPreset = "low-cost"` alongside `providers.claude-code.modelPreset = "performance"` is a thing you can want, because subscriptions differ per client. Naming the profile rather than restating the models it resolves to is what keeps it the profile Gentle AI recommends today rather than the one it recommended when you wrote the file. A client that offers no profiles is reported rather than accepted and ignored.
 

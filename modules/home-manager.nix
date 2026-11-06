@@ -139,6 +139,21 @@ let
     lib.filterAttrs (name: provider: name != "pi" && provider.modelProviders != { }) enabledProviders
   );
 
+  # A profile's `tier` and `fallbacks` are gentle-pi's own -- nothing renders
+  # them for any other client -- so they carry the same refusal, naming the
+  # providers at fault.
+  profileUsesPiOnlyFields =
+    value:
+    lib.any (chain: chain != [ ]) (lib.attrValues value.fallbacks)
+    || (value.orchestrator != null && value.orchestrator.tier != null)
+    || lib.any (assignment: assignment.tier != null) (lib.attrValues value.phases);
+
+  nonPiProvidersWithPiProfileFields = lib.attrNames (
+    lib.filterAttrs (
+      name: provider: name != "pi" && lib.any profileUsesPiOnlyFields (lib.attrValues provider.profiles)
+    ) enabledProviders
+  );
+
   # `release` is the third option only Pi reads -- the same refusal as
   # `packages` and `modelProviders` above, naming the providers at fault.
   nonPiProvidersWithRelease = lib.attrNames (
@@ -362,20 +377,50 @@ let
   whenSet =
     name: value: optionalAttrs (value != null && value != [ ] && value != { }) { ${name} = value; };
 
-  modelAssignmentType = types.submodule {
-    options = {
-      provider = mkOption {
-        type = types.str;
-        description = "Model provider id.";
-      };
-      model = mkOption {
-        type = types.str;
-        description = "Model id within the provider.";
-      };
-      effort = mkOption {
-        type = types.nullOr types.str;
+  modelAssignmentOptions = {
+    provider = mkOption {
+      type = types.str;
+      description = "Model provider id.";
+    };
+    model = mkOption {
+      type = types.str;
+      description = "Model id within the provider.";
+    };
+    effort = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      description = "Reasoning effort, where the provider expresses one.";
+    };
+  };
+
+  modelAssignmentType = types.submodule { options = modelAssignmentOptions; };
+
+  # A profile's own assignments also take gentle-pi's service tier. Only
+  # profiles carry it -- roles and other providers have nothing that reads it.
+  profileAssignmentType = types.submodule {
+    options = modelAssignmentOptions // {
+      tier = mkOption {
+        type = types.nullOr (
+          types.enum [
+            "standard"
+            "fast"
+          ]
+        );
         default = null;
-        description = "Reasoning effort, where the provider expresses one.";
+        example = "fast";
+        description = ''
+          gentle-pi's service tier for this assignment: `fast` asks the
+          provider for its priority tier, `standard` for its default one.
+          Omitted, gentle-pi uses its own default.
+
+          gentle-pi applies it only to the OpenAI and OpenAI Codex models
+          that offer a fast tier and ignores it on every other model, so a
+          profile can set it without knowing which of its models honour it.
+          Pi's own `models` takes the same field, as `tier` on an entry.
+
+          Only Pi reads this; a provider other than pi is refused for
+          setting it.
+        '';
       };
     };
   };
@@ -383,10 +428,12 @@ let
   toModelAssignment =
     assignment: { inherit (assignment) provider model; } // whenSet "effort" assignment.effort;
 
+  toPiModelAssignment = assignment: toModelAssignment assignment // whenSet "tier" assignment.tier;
+
   profileType = types.submodule {
     options = {
       orchestrator = mkOption {
-        type = types.nullOr modelAssignmentType;
+        type = types.nullOr profileAssignmentType;
         default = null;
         description = "Model this profile's orchestrator runs on.";
       };
@@ -413,7 +460,7 @@ let
         '';
       };
       phases = mkOption {
-        type = types.attrsOf modelAssignmentType;
+        type = types.attrsOf profileAssignmentType;
         default = { };
         example = literalExpression ''
           {
@@ -424,6 +471,46 @@ let
           }
         '';
         description = "Model per SDD phase within this profile.";
+      };
+      fallbacks = mkOption {
+        type = types.attrsOf (types.listOf modelAssignmentType);
+        default = { };
+        example = literalExpression ''
+          {
+            orchestrator = [
+              {
+                provider = "openai";
+                model = "gpt-5.6";
+                effort = "high";
+              }
+            ];
+            "*" = [
+              {
+                provider = "anthropic";
+                model = "claude-sonnet-5";
+              }
+            ];
+          }
+        '';
+        description = ''
+          Ordered models gentle-pi falls back to when an agent's own model
+          fails with a quota, auth, rate-limit, unavailable-provider, timeout
+          or network error, keyed by agent name -- `orchestrator` or a
+          phase -- or by `*` for every agent of this profile without a chain
+          of its own.
+
+          gentle-pi keeps these in their own file,
+          `~/.pi/gentle-ai/profile-fallbacks.json`, next to the profile
+          store. A chain holds at most 8 steps and names each model once;
+          gentle-pi discards the whole file when any chain breaks a rule,
+          so `gentle-nix pi routing` refuses such a chain at build time
+          instead. A step takes no `tier`, and `defaultEffort` does not
+          reach it: a step without an `effort` keeps the level the session
+          already runs at.
+
+          Only Pi reads this; a provider other than pi is refused for
+          setting it.
+        '';
       };
     };
   };
@@ -1356,8 +1443,8 @@ let
   # level once says what repeating it on every phase said. Only this
   # profile's own assignments: one that states an effort keeps it, and
   # nothing outside the profile is filled.
-  profile =
-    value:
+  profileWith =
+    toAssignment: value:
     let
       withDefaultEffort =
         assignment:
@@ -1367,11 +1454,20 @@ let
           assignment // { effort = value.defaultEffort; };
     in
     optionalAttrs (value.orchestrator != null) {
-      orchestrator = toModelAssignment (withDefaultEffort value.orchestrator);
+      orchestrator = toAssignment (withDefaultEffort value.orchestrator);
     }
     // whenSet "phaseAssignments" (
-      lib.mapAttrs (_: assignment: toModelAssignment (withDefaultEffort assignment)) value.phases
+      lib.mapAttrs (_: assignment: toAssignment (withDefaultEffort assignment)) value.phases
     );
+
+  profile = profileWith toModelAssignment;
+
+  # Pi's profiles also carry gentle-pi's service tier and fallback chains,
+  # which only `gentle-nix pi routing` writes.
+  piProfile =
+    value:
+    profileWith toPiModelAssignment value
+    // whenSet "fallbacks" (lib.mapAttrs (_: map toModelAssignment) value.fallbacks);
 
   # OpenCode is the one client whose `models` carries full provider-qualified
   # assignments rather than a vocabulary it decodes itself; every other client
@@ -1435,7 +1531,7 @@ let
         piProvider = cfg.providers.pi;
       in
       whenSet "models" (providerModels "pi" piProvider.models)
-      // whenSet "profiles" (lib.mapAttrs (_: profile) piProvider.profiles)
+      // whenSet "profiles" (lib.mapAttrs (_: piProfile) piProvider.profiles)
       // whenSet "activeProfile" piProvider.activeProfile
       // whenSet "modelFamily" piProvider.modelFamily
       // whenSet "modelPreset" piProvider.modelPreset
@@ -3309,6 +3405,10 @@ in
         # looking like it did something.
         assertion = nonPiProvidersWithRelease == [ ];
         message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithRelease}.release is refused: only providers.pi reads release";
+      }
+      {
+        assertion = nonPiProvidersWithPiProfileFields == [ ];
+        message = "programs.gentle-ai.providers.${lib.concatStringsSep ", " nonPiProvidersWithPiProfileFields}.profiles sets tier or fallbacks, which is refused: only providers.pi reads them";
       }
       {
         assertion = nonPiProvidersWithGuardrails == [ ];

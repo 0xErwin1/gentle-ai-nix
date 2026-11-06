@@ -2264,6 +2264,113 @@ null
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.fallbacks
+
+
+
+Ordered models gentle-pi falls back to when an agent’s own model
+fails with a quota, auth, rate-limit, unavailable-provider, timeout
+or network error, keyed by agent name – ` orchestrator ` or a
+phase – or by ` * ` for every agent of this profile without a chain
+of its own\.
+
+gentle-pi keeps these in their own file,
+` ~/.pi/gentle-ai/profile-fallbacks.json `, next to the profile
+store\. A chain holds at most 8 steps and names each model once;
+gentle-pi discards the whole file when any chain breaks a rule,
+so ` gentle-nix pi routing ` refuses such a chain at build time
+instead\. A step takes no ` tier `, and ` defaultEffort ` does not
+reach it: a step without an ` effort ` keeps the level the session
+already runs at\.
+
+Only Pi reads this; a provider other than pi is refused for
+setting it\.
+
+
+
+*Type:*
+attribute set of list of (submodule)
+
+
+
+*Default:*
+
+```nix
+{ }
+```
+
+
+
+*Example:*
+
+```nix
+{
+  orchestrator = [
+    {
+      provider = "openai";
+      model = "gpt-5.6";
+      effort = "high";
+    }
+  ];
+  "*" = [
+    {
+      provider = "anthropic";
+      model = "claude-sonnet-5";
+    }
+  ];
+}
+
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.fallbacks\.\<name>\.\*\.effort
+
+
+
+Reasoning effort, where the provider expresses one\.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.fallbacks\.\<name>\.\*\.model
+
+
+
+Model id within the provider\.
+
+
+
+*Type:*
+string
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.fallbacks\.\<name>\.\*\.provider
+
+
+
+Model provider id\.
+
+
+
+*Type:*
+string
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.orchestrator
 
 
@@ -2329,6 +2436,45 @@ Model provider id\.
 
 *Type:*
 string
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.orchestrator\.tier
+
+
+
+gentle-pi’s service tier for this assignment: ` fast ` asks the
+provider for its priority tier, ` standard ` for its default one\.
+Omitted, gentle-pi uses its own default\.
+
+gentle-pi applies it only to the OpenAI and OpenAI Codex models
+that offer a fast tier and ignores it on every other model, so a
+profile can set it without knowing which of its models honour it\.
+Pi’s own ` models ` takes the same field, as ` tier ` on an entry\.
+
+Only Pi reads this; a provider other than pi is refused for
+setting it\.
+
+
+
+*Type:*
+null or one of “standard”, “fast”
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"fast"
+```
 
 
 
@@ -2411,6 +2557,45 @@ Model provider id\.
 
 *Type:*
 string
+
+
+
+## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.phases\.\<name>\.tier
+
+
+
+gentle-pi’s service tier for this assignment: ` fast ` asks the
+provider for its priority tier, ` standard ` for its default one\.
+Omitted, gentle-pi uses its own default\.
+
+gentle-pi applies it only to the OpenAI and OpenAI Codex models
+that offer a fast tier and ignores it on every other model, so a
+profile can set it without knowing which of its models honour it\.
+Pi’s own ` models ` takes the same field, as ` tier ` on an entry\.
+
+Only Pi reads this; a provider other than pi is refused for
+setting it\.
+
+
+
+*Type:*
+null or one of “standard”, “fast”
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
+*Example:*
+
+```nix
+"fast"
+```
 
 
 
@@ -2723,8 +2908,6 @@ null
 
 ## programs\.gentle-ai\.release
 
-
-
 Which Gentle AI release to build, by channel\.
 
 ` stable ` is the newest tagged release\. ` beta ` is the tip of Gentle AI’s
@@ -2870,6 +3053,8 @@ null
 
 
 ## programs\.gentle-ai\.roles\.\<name>\.mode
+
+
 
 Whether the operator addresses this role directly or another role
 delegates to it\.
