@@ -182,10 +182,16 @@ func Validate(spec Spec) error {
 			}
 		}
 
-		for agent, chain := range profile.Fallbacks {
-			if err := validateChain(fmt.Sprintf("profiles.%s.fallbacks.%s", name, agent), agent, chain); err != nil {
+		chainOwners := make(map[string]string, len(profile.Fallbacks))
+		for _, agent := range sortedKeys(profile.Fallbacks) {
+			if err := validateChain(fmt.Sprintf("profiles.%s.fallbacks.%s", name, agent), agent, profile.Fallbacks[agent]); err != nil {
 				return err
 			}
+			piAgent := fallbackAgent(agent)
+			if other, taken := chainOwners[piAgent]; taken {
+				return validationErrorf("profiles.%s.fallbacks: %q and %q name the same gentle-pi agent %q; keep one", name, other, agent, piAgent)
+			}
+			chainOwners[piAgent] = agent
 		}
 	}
 
@@ -443,6 +449,15 @@ type fallbacksDocument struct {
 
 const fallbacksKind = "gentle-pi.profile_model_fallbacks"
 
+// fallbackAgent renames a phase key to the gentle-pi agent it names, the same
+// way familyPresetFill does, so a chain keyed by sdd-propose still applies.
+func fallbackAgent(key string) string {
+	if renamed, ok := piAgentForPhase[key]; ok {
+		return renamed
+	}
+	return key
+}
+
 // marshalFallbacksDocument returns nil when no profile declares a non-empty
 // chain: gentle-pi drops empty chains and emptied profiles itself, so
 // writing them would only produce a file it reads as empty.
@@ -458,7 +473,7 @@ func marshalFallbacksDocument(spec Spec) ([]byte, error) {
 			for _, step := range chain {
 				steps = append(steps, fallbackStep{Model: step.Provider + "/" + step.Model, Thinking: step.Effort})
 			}
-			chains[agent] = steps
+			chains[fallbackAgent(agent)] = steps
 		}
 		if len(chains) > 0 {
 			profiles[name] = chains

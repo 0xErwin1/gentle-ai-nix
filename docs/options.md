@@ -2272,7 +2272,8 @@ Ordered models gentle-pi falls back to when an agent’s own model
 fails with a quota, auth, rate-limit, unavailable-provider, timeout
 or network error, keyed by agent name – ` orchestrator ` or a
 phase – or by ` * ` for every agent of this profile without a chain
-of its own\.
+of its own\. A phase whose gentle-pi agent is named differently,
+such as ` sdd-propose `, is written under that agent’s name\.
 
 gentle-pi keeps these in their own file,
 ` ~/.pi/gentle-ai/profile-fallbacks.json `, next to the profile

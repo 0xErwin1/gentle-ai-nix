@@ -226,3 +226,26 @@ func TestWriteTreeWritesFallbacksDocument(t *testing.T) {
 		t.Fatalf("unexpected profile-fallbacks.json:\n%s", content)
 	}
 }
+
+func TestBuildRenamesFallbackPhaseKeysToPiAgents(t *testing.T) {
+	spec := Spec{Profiles: map[string]Profile{"daily": {Fallbacks: map[string][]ModelAssignment{
+		"sdd-propose": {{Provider: "openai", Model: "gpt-5.6"}},
+	}}}}
+	result, err := Build(spec, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !strings.Contains(string(result.FallbacksDocument), `"sdd-proposal": [`) || strings.Contains(string(result.FallbacksDocument), `"sdd-propose":`) {
+		t.Fatalf("sdd-propose must be written under gentle-pi's sdd-proposal agent:\n%s", result.FallbacksDocument)
+	}
+}
+
+func TestValidateRejectsFallbackKeysNamingTheSameAgent(t *testing.T) {
+	step := []ModelAssignment{{Provider: "openai", Model: "gpt-5.6"}}
+	err := Validate(Spec{Profiles: map[string]Profile{"daily": {Fallbacks: map[string][]ModelAssignment{
+		"sdd-propose": step, "sdd-proposal": step,
+	}}}})
+	if err == nil || !strings.Contains(err.Error(), "same gentle-pi agent") {
+		t.Fatalf("Validate = %v, want a same-agent collision error", err)
+	}
+}
