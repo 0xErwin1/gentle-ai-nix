@@ -40,8 +40,10 @@
 #   curl -sL https://raw.githubusercontent.com/Gentleman-Programming/gentle-shell/<rev>/scripts/gentle-ai-installer.mjs \
 #     | grep -E 'INSTALLER_VERSION =|asset\("'
 let
-  # Both channels currently pin the same installer version, so they share
-  # one table; a channel whose revision moves it gets its own.
+  # Each channel pins the installer version its own revision names: `stable`
+  # runs the tag's `INSTALLER_VERSION` (4.3.1) and `main` already asks for 4.4.0,
+  # so a channel whose revision moves it gets its own table rather than sharing
+  # one that only matches half the tree.
   gentleAi_4_3_1 = {
     version = "4.3.1";
     assets = {
@@ -67,6 +69,32 @@ let
       };
     };
   };
+
+  gentleAi_4_4_0 = {
+    version = "4.4.0";
+    assets = {
+      x86_64-linux = {
+        asset = "gentle-ai_4.4.0_linux_amd64.tar.gz";
+        assetSha256 = "1f72ca13b32e87cb7f65b29e7fae6df4490b53d69d4763cdf23e944165880cd6";
+        binarySha256 = "9f39a94cef0b9882be4cd519fac3ef3602e602e3bf437df7db55c8cbd42f358d";
+      };
+      aarch64-linux = {
+        asset = "gentle-ai_4.4.0_linux_arm64.tar.gz";
+        assetSha256 = "2d8874464cbe54b66a77d7c9fe66ce577933de00936ed1a035c81de6406a95fc";
+        binarySha256 = "b9913af83cbeff2719e33d4b6c09e6ed568a000c4d6b885b4806ec5ce796f2b7";
+      };
+      x86_64-darwin = {
+        asset = "gentle-ai_4.4.0_darwin_amd64.tar.gz";
+        assetSha256 = "95686ea30615516aa29ebb6257227b1cdd4c67649dff63ec7adb576ca26a678d";
+        binarySha256 = "634189866db1db635aed6257716969e87e7cde6830c26627795becbd2969e104";
+      };
+      aarch64-darwin = {
+        asset = "gentle-ai_4.4.0_darwin_arm64.tar.gz";
+        assetSha256 = "b6e00957eb81115f18e33197ae2035f75812a624c6d53e72826ecf7b4a635539";
+        binarySha256 = "5bb53e7e32da585f08b668444209bde7a9b5c9c26489e2052bf180b05a2aab81";
+      };
+    };
+  };
 in
 {
   stable = {
@@ -83,20 +111,20 @@ in
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # This revision is the tip of gentle-shell's `main`, 135 commits past the
+  # This revision is the tip of gentle-shell's `main`, 223 commits past the
   # commit the `v4.6.0` tag peels to; `package.json` there still reads `4.6.0`,
   # the release `stable` above names on npm. The `-main.` prerelease label keeps a build
   # from here from being mistaken for that published release.
   #
-  # The plugin installs Gentle AI v4.3.1 through `INSTALLER_VERSION` in
+  # The plugin installs Gentle AI v4.4.0 through `INSTALLER_VERSION` in
   # `scripts/gentle-ai-installer.mjs`. That matches this flake's stable channel;
   # selecting the separately pinned beta channel does not change the plugin's
   # installer target.
   main = {
-    version = "4.6.0-main.220b7969";
-    rev = "220b796951a52a063722efe161dca61e5ab5c5fd";
-    archiveHash = "sha256-VaTsdsjVgI+9RojCxp29v+9lch072U7JvKc0prFRZvc=";
+    version = "4.6.0-main.fccc8625";
+    rev = "fccc8625e938a567ae99c959f34e4addade4cc67";
+    archiveHash = "sha256-m1UUjeEMaGZRtt40VFOtepwesoV//smX0gko2IVWtY8=";
     pnpmDepsHash = "sha256-IzSAJVOfq/LqgRIGMyBda+iEHypXUASnzl5vu8XQPjA=";
-    gentleAi = gentleAi_4_3_1;
+    gentleAi = gentleAi_4_4_0;
   };
 }

@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "4.3.1";
+    version = "4.4.0";
     owner = "Gentleman-Programming";
-    rev = "v4.3.1";
-    hash = "sha256-/CjKb/FFdE5Lm8fxqQ/csDgsdfySc5EpMeoYWj5oDDg=";
+    rev = "v4.4.0";
+    hash = "sha256-zkJfRwWnUY+ltvVhEWzjlKzzq395tgJDO4ZWsO6LSXY=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,16 +29,16 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # At this pin the tip of main is 224 commits past the commit v4.3.1 tags; the
-  # two channels stay separate entries because main moves
-  # on after a release and the tag does not. Every channel carries the Pi
+  # At this pin the tip of main is the commit `v4.4.0` tags, so beta and stable
+  # build the same tree and differ only in the channel label; main moves on
+  # after a release, which is why the two entries stay separate. Every channel carries the Pi
   # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "4.3.1-main.4ff8377a9";
+    version = "4.4.0-main.55240afb1";
     owner = "Gentleman-Programming";
-    rev = "4ff8377a9c15ed11cf5ccc8bf9e65b5b7dccfd84";
-    hash = "sha256-cEQBRO4xclekSmT1Z29pDBjs2uX83HZqNk1WvJvQ/QU=";
+    rev = "55240afb100ad6d2ef5fbe16f7be33a7693f77ad";
+    hash = "sha256-zkJfRwWnUY+ltvVhEWzjlKzzq395tgJDO4ZWsO6LSXY=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -71,10 +71,10 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "4.3.1-main.29fb7cf0a-declarative-config";
+    version = "4.4.0-main.8a682c84c-declarative-config";
     owner = "0xErwin1";
-    rev = "29fb7cf0a44bea28f0002655243ba0da3fff4090";
-    hash = "sha256-lC9KlSRQsUhipXoCpr7yNTqql4yUgFngFWGHJndYPi4=";
+    rev = "8a682c84c3e7f1b5d0c70789ddb141640fcc872b";
+    hash = "sha256-YYNP9Q34AtKZhtMRkDL4uEYIpvr9PdxXfmuoW9HiRvk=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
