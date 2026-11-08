@@ -22,10 +22,10 @@
 # Refresh main with:
 #   git ls-remote https://github.com/Gentleman-Programming/gentle-shell main
 #
-# `stable` is npm's `gentle-pi@4.6.0`, which needs Node >= 22.19 and Pi >= 1.2.0.
+# `stable` is npm's `gentle-pi@4.7.0`, which needs Node >= 22.19 and Pi >= 1.2.0.
 # Pinning the npm source makes a switch
 # converge on the release this flake tested, rather than whatever `latest`
-# resolves to when Pi runs its installer. `rev` is the commit the `v4.6.0`
+# resolves to when Pi runs its installer. `rev` is the commit the `v4.7.0`
 # tag peels to, which is where the launcher build comes from.
 #
 # `gentleAi` is the Gentle AI runtime the launcher build carries in its package
@@ -40,35 +40,8 @@
 #   curl -sL https://raw.githubusercontent.com/Gentleman-Programming/gentle-shell/<rev>/scripts/gentle-ai-installer.mjs \
 #     | grep -E 'INSTALLER_VERSION =|asset\("'
 let
-  # Each channel pins the installer version its own revision names: `stable`
-  # runs the tag's `INSTALLER_VERSION` (4.3.1) and `main` already asks for 4.4.0,
-  # so a channel whose revision moves it gets its own table rather than sharing
-  # one that only matches half the tree.
-  gentleAi_4_3_1 = {
-    version = "4.3.1";
-    assets = {
-      x86_64-linux = {
-        asset = "gentle-ai_4.3.1_linux_amd64.tar.gz";
-        assetSha256 = "04ec685c56b42c29dff6db10fc7dc2c730217dc9c96736e53ad2acf3226dafb7";
-        binarySha256 = "86248792bde3fe5e9ca93b128c07e7caa6a5b31fac0f9fc84b5b3011b123cb90";
-      };
-      aarch64-linux = {
-        asset = "gentle-ai_4.3.1_linux_arm64.tar.gz";
-        assetSha256 = "99e7d313a2ff85eaf23a6415e9b3aae67bf74c2fa169b21b93070ada7613f6a0";
-        binarySha256 = "df3580506bb5ea63cc4ef5ccebe8b68cfedf66b72f3b51f84ff393183d8cea2b";
-      };
-      x86_64-darwin = {
-        asset = "gentle-ai_4.3.1_darwin_amd64.tar.gz";
-        assetSha256 = "6cf57fee0574daef2abed07f54a355fec3b93ac8f01733dc6c4d3674f1746112";
-        binarySha256 = "ca44c3fce186b63a7e7ad455c338133ba1982f4a13485301ce4d66edb73d2928";
-      };
-      aarch64-darwin = {
-        asset = "gentle-ai_4.3.1_darwin_arm64.tar.gz";
-        assetSha256 = "13e8828447f9081465ee0c35a61b24fb49296d51a310c6999227e2aed178956b";
-        binarySha256 = "749d08062b0dec13681678a1a1c018613d223ddcca47b5f27681b1d8ab5d14c2";
-      };
-    };
-  };
+  # Both channels pin the same installer version, so they share one table; a
+  # channel whose revision moves `INSTALLER_VERSION` gets its own.
 
   gentleAi_4_4_0 = {
     version = "4.4.0";
@@ -98,21 +71,21 @@ let
 in
 {
   stable = {
-    source = "npm:gentle-pi@4.6.0";
+    source = "npm:gentle-pi@4.7.0";
 
-    version = "4.6.0";
-    rev = "1f74e9e24473e7e121a96b1680444ae0196d3009";
-    archiveHash = "sha256-M2WQtH7bZ/4ytZ+nVAaKfsTx3RRn6z+EEDiVV9HKPUQ=";
+    version = "4.7.0";
+    rev = "8e11f0e2fb19af2a28233d1774848f7a3a33bbf1";
+    archiveHash = "sha256-3nNC6jFpYO2UoJ9gl2Rjpgt3i55zExeNiDNmevlJDOY=";
     pnpmDepsHash = "sha256-IzSAJVOfq/LqgRIGMyBda+iEHypXUASnzl5vu8XQPjA=";
-    gentleAi = gentleAi_4_3_1;
+    gentleAi = gentleAi_4_4_0;
   };
 
   # Tracks gentle-shell's main the same way versions.nix's beta channel tracks
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # This revision is the tip of gentle-shell's `main`, 223 commits past the
-  # commit the `v4.6.0` tag peels to; `package.json` there still reads `4.6.0`,
+  # This revision is the tip of gentle-shell's `main`, 22 commits past the
+  # commit the `v4.7.0` tag peels to; `package.json` there still reads `4.7.0`,
   # the release `stable` above names on npm. The `-main.` prerelease label keeps a build
   # from here from being mistaken for that published release.
   #
@@ -121,9 +94,9 @@ in
   # selecting the separately pinned beta channel does not change the plugin's
   # installer target.
   main = {
-    version = "4.6.0-main.fccc8625";
-    rev = "fccc8625e938a567ae99c959f34e4addade4cc67";
-    archiveHash = "sha256-m1UUjeEMaGZRtt40VFOtepwesoV//smX0gko2IVWtY8=";
+    version = "4.7.0-main.dd439816";
+    rev = "dd4398166dba60d2e51c74069a0a332336756e37";
+    archiveHash = "sha256-NyE58i33+GN4knCj30YpKNFFnrvJ9YvDAQ3yTixQxgU=";
     pnpmDepsHash = "sha256-IzSAJVOfq/LqgRIGMyBda+iEHypXUASnzl5vu8XQPjA=";
     gentleAi = gentleAi_4_4_0;
   };
