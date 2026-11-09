@@ -26,13 +26,13 @@
   # the plugin is built from the same source and linked into the rendered tree.
   #
   # The version carries the `-main.` prerelease tag so a build from here is
-  # never mistaken for a release. The tip of main is the commit the `v3.7.0` tag
-  # names, so both channels build the same tree and only the label differs; its
-  # Pi plugin is `gentle-engram@0.7.0`, the one the stable channel ships.
+  # never mistaken for a release. This revision is seven commits past the commit
+  # the `v3.7.0` tag names; its Pi plugin is still `gentle-engram@0.7.0`, the one
+  # the stable channel ships.
   main = {
-    version = "3.7.0-main.f96b6130";
-    rev = "f96b613952bf7b4fd2d51f30286a68bd5ffdebf2";
-    hash = "sha256-RuNg8m+zspKQy5m10ay+Y7dWKCJrDPOGAD0TRPGFSm0=";
+    version = "3.7.0-main.b53422f4";
+    rev = "b53422f45c57c1003cc9c063c5a4e1fe1c694f27";
+    hash = "sha256-RT7Ms9s2xp7jyE6nfVCV75EKupW0eU0I3Mk8ZkLoJWY=";
     vendorHash = "sha256-uNoFAUJfu3SFU9OqT1AJvHKKN6t6oPo6nC6GEbYhYJs=";
   };
 }
