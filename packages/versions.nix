@@ -29,16 +29,16 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # At this pin the tip of main is the commit `v4.4.0` tags, so beta and stable
-  # build the same tree and differ only in the channel label; main moves on
-  # after a release, which is why the two entries stay separate. Every channel carries the Pi
+  # At this pin the tip of main is 24 commits past the commit `v4.4.0` tags;
+  # main moves on after a release, which is why the two entries stay separate.
+  # Every channel carries the Pi
   # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "4.4.0-main.a9c446bdc";
+    version = "4.4.0-main.64b0ebc0c";
     owner = "Gentleman-Programming";
-    rev = "a9c446bdcf4378e647d26c3bd644a814a61042a0";
-    hash = "sha256-7xhYrObPDWgtdZuaWf6jpBLyi6dwICnQE7vjumH9AHY=";
+    rev = "64b0ebc0cffedb143bf738b00136740a5766a8bf";
+    hash = "sha256-3fCFVf32JRERJyHe8u7I+ULqBBTZzxHsC5AgUH4SOxs=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -71,10 +71,10 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "4.4.0-main.5e4bbfac2-declarative-config";
+    version = "4.4.0-main.9f3136824-declarative-config";
     owner = "0xErwin1";
-    rev = "5e4bbfac2a09c84196c861ae96c9e3a9ee95e3e9";
-    hash = "sha256-8AFzPQ3uID+moSBEThaUOUXcBh+9kgVINHHqIR3gYas=";
+    rev = "9f3136824bed885ab41db733f5138fab35ff590a";
+    hash = "sha256-X0UCbHF7bSQNhEHX++noeti51R+TuugnLtp48q6RufY=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };

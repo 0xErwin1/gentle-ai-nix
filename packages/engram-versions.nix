@@ -28,7 +28,9 @@
   # The version carries the `-main.` prerelease tag so a build from here is
   # never mistaken for a release. This revision is eleven commits past the commit
   # the `v3.7.0` tag names; its Pi plugin is still `gentle-engram@0.7.0`, the one
-  # the stable channel ships.
+  # the stable channel ships. Main has moved past it, but the commits since raise
+  # the `go` directive to 1.26.11 while this flake's nixpkgs still ships 1.26.8,
+  # so the channel stays on the newest revision that builds.
   main = {
     version = "3.7.0-main.8dd4cb22";
     rev = "8dd4cb227178aef4e391172ff3d8d7b6a593d1fb";
