@@ -2027,11 +2027,12 @@ in
         touch "$out"
       '';
 
-  # Both channel builds run the packaged Pi 1.4.0 (packages/pi-coding-agent.nix)
-  # through GENTLE_SHELL_PI rather than the 1.2.0 peer their lockfile pins:
-  # Pi 1.2.0 delivers `session_start` to extensions loaded after gentle-pi
-  # seconds late. `--version` reports the Pi it resolved without booting a
-  # session, so a scratch HOME and no network are enough.
+  # Both channel builds run the packaged Pi 1.5.2 (packages/pi-coding-agent.nix)
+  # through GENTLE_SHELL_PI rather than whatever peer their own lockfile pins:
+  # the v4.7.0 tag still pins 1.4.0 while main pins 1.5.2, and a launcher older
+  # than the lockfile is what makes a main-channel build misbehave. `--version`
+  # reports the Pi it resolved without booting a session, so a scratch HOME and
+  # no network are enough.
   gentleShellLauncherRunsPackagedPi =
     pkgs.runCommandLocal "gentle-ai-check-gentle-shell-launcher-pi-version"
       {
@@ -2048,15 +2049,15 @@ in
 
         for launcher in $launchers; do
           output="$("$launcher/bin/gentle-shell" --link --version 2>&1)"
-          printf '%s\n' "$output" | grep -qx 'pi 1.4.0' || {
-            echo "$launcher does not run Pi 1.4.0:" >&2
+          printf '%s\n' "$output" | grep -qx 'pi 1.5.2' || {
+            echo "$launcher does not run Pi 1.5.2:" >&2
             printf '%s\n' "$output" >&2
             exit 1
           }
         done
 
         version="$("$pi/bin/pi" --version 2>&1)"
-        [ "$version" = 1.4.0 ] || {
+        [ "$version" = 1.5.2 ] || {
           echo "pi-coding-agent --version printed: $version" >&2
           exit 1
         }

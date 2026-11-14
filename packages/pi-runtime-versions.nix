@@ -5,7 +5,9 @@
 # its pnpm lockfile pins. Up to gentle-shell 4.4.0 that was 1.2.0, which
 # delivers `session_start` to extensions loaded after gentle-pi seconds late,
 # so the launcher is pointed at this Pi instead, through GENTLE_SHELL_PI. From
-# gentle-shell 4.5.1 onward the lockfile pins 1.4.0 too, the same version as here.
+# gentle-shell's main lockfile pins 1.5.2, the same version as here, while the
+# v4.7.0 tag still pins 1.4.0: the launcher carries this one so a main-channel
+# build runs the Pi its own lockfile expects.
 #
 # The tarball ships no lockfile, so one is generated and committed beside the
 # derivation (packages/pi-coding-agent/package-lock.json). Refresh with:
@@ -17,8 +19,8 @@
 # then build `.#pi-coding-agent` with `npmDepsHash = lib.fakeHash` and take
 # the hash the mismatch reports.
 {
-  version = "1.4.0";
-  url = "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.4.0.tgz";
-  hash = "sha256-0VXBbvb6AJYPv1iykRU26AsF8zcA4LFPvQiWft4MdCg=";
-  npmDepsHash = "sha256-npDQwvrXeoxvoK/ItLeB4q5UGEbslZ9onOlgclM8IcI=";
+  version = "1.5.2";
+  url = "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.5.2.tgz";
+  hash = "sha256-aRveGGJztFfZ0cQdD9R7V4U7XoXe0a3Rofa3jmbCYfQ=";
+  npmDepsHash = "sha256-FG7/Bga+d+pO3AkowtcYMFJlHFPq2tVLt+WzHRLYl5o=";
 }
