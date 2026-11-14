@@ -22,10 +22,10 @@
 # Refresh main with:
 #   git ls-remote https://github.com/Gentleman-Programming/gentle-shell main
 #
-# `stable` is npm's `gentle-pi@4.7.0`, which needs Node >= 22.19 and Pi >= 1.2.0.
+# `stable` is npm's `gentle-pi@4.8.0`, which needs Node >= 22.19 and Pi >= 1.2.0.
 # Pinning the npm source makes a switch
 # converge on the release this flake tested, rather than whatever `latest`
-# resolves to when Pi runs its installer. `rev` is the commit the `v4.7.0`
+# resolves to when Pi runs its installer. `rev` is the commit the `v4.8.0`
 # tag peels to, which is where the launcher build comes from.
 #
 # `gentleAi` is the Gentle AI runtime the launcher build carries in its package
@@ -43,61 +43,61 @@ let
   # Both channels pin the same installer version, so they share one table; a
   # channel whose revision moves `INSTALLER_VERSION` gets its own.
 
-  gentleAi_4_4_0 = {
-    version = "4.4.0";
+  gentleAi_4_5_0 = {
+    version = "4.5.0";
     assets = {
       x86_64-linux = {
-        asset = "gentle-ai_4.4.0_linux_amd64.tar.gz";
-        assetSha256 = "1f72ca13b32e87cb7f65b29e7fae6df4490b53d69d4763cdf23e944165880cd6";
-        binarySha256 = "9f39a94cef0b9882be4cd519fac3ef3602e602e3bf437df7db55c8cbd42f358d";
+        asset = "gentle-ai_4.5.0_linux_amd64.tar.gz";
+        assetSha256 = "6dfd0a6fc27122541d20da4b65ec449763e672051daf2069611ca33134270c5b";
+        binarySha256 = "76295de0b0abae140f0356d2da5a9955f8770f54c9d7a9b7ac768821126d5fe3";
       };
       aarch64-linux = {
-        asset = "gentle-ai_4.4.0_linux_arm64.tar.gz";
-        assetSha256 = "2d8874464cbe54b66a77d7c9fe66ce577933de00936ed1a035c81de6406a95fc";
-        binarySha256 = "b9913af83cbeff2719e33d4b6c09e6ed568a000c4d6b885b4806ec5ce796f2b7";
+        asset = "gentle-ai_4.5.0_linux_arm64.tar.gz";
+        assetSha256 = "a0a8bf642abbdcb8b93013ab3f2ff90d01c9087a27927c93d980ddb57de74378";
+        binarySha256 = "7820589547c4dddcc130532643aa5ba001667525d2a0fbec1189a8398ceacfa6";
       };
       x86_64-darwin = {
-        asset = "gentle-ai_4.4.0_darwin_amd64.tar.gz";
-        assetSha256 = "95686ea30615516aa29ebb6257227b1cdd4c67649dff63ec7adb576ca26a678d";
-        binarySha256 = "634189866db1db635aed6257716969e87e7cde6830c26627795becbd2969e104";
+        asset = "gentle-ai_4.5.0_darwin_amd64.tar.gz";
+        assetSha256 = "45c65d04fb429f8065682360d9a3c650d988842fe62f843b36598953c8acc0a1";
+        binarySha256 = "4b89ffad9ee7fb1ed70058bd6f73914dc6256aea6c79998838ca2d2c363f24b4";
       };
       aarch64-darwin = {
-        asset = "gentle-ai_4.4.0_darwin_arm64.tar.gz";
-        assetSha256 = "b6e00957eb81115f18e33197ae2035f75812a624c6d53e72826ecf7b4a635539";
-        binarySha256 = "5bb53e7e32da585f08b668444209bde7a9b5c9c26489e2052bf180b05a2aab81";
+        asset = "gentle-ai_4.5.0_darwin_arm64.tar.gz";
+        assetSha256 = "b8522090394d93aa5dd8d3f5c80982e6163c4d5d2e7952c3c1917da8a150ae31";
+        binarySha256 = "699a44555e544447f5db342b918aa8558b5e0e3213bb9404b66863319b1f58d4";
       };
     };
   };
 in
 {
   stable = {
-    source = "npm:gentle-pi@4.7.0";
+    source = "npm:gentle-pi@4.8.0";
 
-    version = "4.7.0";
-    rev = "8e11f0e2fb19af2a28233d1774848f7a3a33bbf1";
-    archiveHash = "sha256-3nNC6jFpYO2UoJ9gl2Rjpgt3i55zExeNiDNmevlJDOY=";
-    pnpmDepsHash = "sha256-IzSAJVOfq/LqgRIGMyBda+iEHypXUASnzl5vu8XQPjA=";
-    gentleAi = gentleAi_4_4_0;
+    version = "4.8.0";
+    rev = "3dc9029755912358d0a172b4972e5842c239570c";
+    archiveHash = "sha256-omnDN+63kUj8clSzm3cF4z2sOGUVzXJzMvWmXSv871g=";
+    pnpmDepsHash = "sha256-WwHXiOokzoneIUqkjzSV8E9TP7+wL8B3xLr9wu70gJE=";
+    gentleAi = gentleAi_4_5_0;
   };
 
   # Tracks gentle-shell's main the same way versions.nix's beta channel tracks
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # This revision is the tip of gentle-shell's `main`, 347 commits past the
-  # commit the `v4.7.0` tag peels to; `package.json` there still reads `4.7.0`,
+  # This revision is the tip of gentle-shell's `main`, which is the commit the
+  # `v4.8.0` tag peels to; `package.json` there reads `4.8.0`,
   # the release `stable` above names on npm. The `-main.` prerelease label keeps a build
   # from here from being mistaken for that published release.
   #
-  # The plugin installs Gentle AI v4.4.0 through `INSTALLER_VERSION` in
+  # The plugin installs Gentle AI v4.5.0 through `INSTALLER_VERSION` in
   # `scripts/gentle-ai-installer.mjs`. That matches this flake's stable channel;
   # selecting the separately pinned beta channel does not change the plugin's
   # installer target.
   main = {
-    version = "4.7.0-main.116821b9";
-    rev = "116821b9a749567300815051387954caa8d46441";
-    archiveHash = "sha256-Vr1k4Gv4tnJxhGhsTk8dH+SjOdNDq0nkN9GBl4AbwCQ=";
+    version = "4.8.0-main.3dc90297";
+    rev = "3dc9029755912358d0a172b4972e5842c239570c";
+    archiveHash = "sha256-omnDN+63kUj8clSzm3cF4z2sOGUVzXJzMvWmXSv871g=";
     pnpmDepsHash = "sha256-WwHXiOokzoneIUqkjzSV8E9TP7+wL8B3xLr9wu70gJE=";
-    gentleAi = gentleAi_4_4_0;
+    gentleAi = gentleAi_4_5_0;
   };
 }

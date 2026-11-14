@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "4.4.0";
+    version = "4.5.0";
     owner = "Gentleman-Programming";
-    rev = "v4.4.0";
-    hash = "sha256-zkJfRwWnUY+ltvVhEWzjlKzzq395tgJDO4ZWsO6LSXY=";
+    rev = "v4.5.0";
+    hash = "sha256-nDCsV86OpjXikXy9njuj9ZNjvjP0QK0AqQ5JG6T0oIw=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,13 +29,14 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # At this pin the tip of main is 110 commits past the commit `v4.4.0` tags;
-  # main moves on after a release, which is why the two entries stay separate.
+  # At this pin the tip of main is the commit `v4.5.0` tags, so beta and stable
+  # build the same tree and differ only in the channel label; main moves on
+  # after a release, which is why the two entries stay separate.
   # Every channel carries the Pi
   # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "4.4.0-main.f2f7d7b16";
+    version = "4.5.0-main.f2f7d7b16";
     owner = "Gentleman-Programming";
     rev = "f2f7d7b16c2cf1afe5e07f717cf8265946ac3feb";
     hash = "sha256-nDCsV86OpjXikXy9njuj9ZNjvjP0QK0AqQ5JG6T0oIw=";
@@ -71,7 +72,7 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "4.4.0-main.726c2678f-declarative-config";
+    version = "4.5.0-main.726c2678f-declarative-config";
     owner = "0xErwin1";
     rev = "726c2678ff26416b948fa8115fc8d0cd10066923";
     hash = "sha256-Q0pJAAt8I3EkikBDAmG97LnkxU9pGSf/QSDBipMnyUo=";
