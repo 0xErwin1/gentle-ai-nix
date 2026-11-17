@@ -84,7 +84,7 @@ in
   # Gentle AI's own: a pin is how a flake expresses a branch, and refreshing
   # it is what letting Pi install the tip of main again would have done.
   #
-  # This revision is the tip of gentle-shell's `main`, eight commits past the
+  # This revision is the tip of gentle-shell's `main`, twelve commits past the
   # commit the `v4.8.0` tag peels to; `package.json` there reads `4.8.0`,
   # the release `stable` above names on npm. The `-main.` prerelease label keeps a build
   # from here from being mistaken for that published release.
@@ -94,9 +94,9 @@ in
   # selecting the separately pinned beta channel does not change the plugin's
   # installer target.
   main = {
-    version = "4.8.0-main.67c432cc";
-    rev = "67c432cc5018067f7a71bd0a00db5d82f0259cea";
-    archiveHash = "sha256-r/XBRHxajVklAEd693iQvlCoA9UMIKPdmNw02OkpEDA=";
+    version = "4.8.0-main.95179bd6";
+    rev = "95179bd6db8e4eaa2fe22440e35e5512759f89c0";
+    archiveHash = "sha256-VoJ5Ao0uzhBjfQQYyvKUIiro1nn+TTBTA4335ZAOpZc=";
     pnpmDepsHash = "sha256-WwHXiOokzoneIUqkjzSV8E9TP7+wL8B3xLr9wu70gJE=";
     gentleAi = gentleAi_4_5_0;
   };

@@ -71,10 +71,10 @@
   # `providers.<name>.package` exists for, and why an OpenCode configuration
   # without it fails to render from this generation on.
   contract = {
-    version = "4.5.0-main.726c2678f-declarative-config";
+    version = "4.5.0-main.fad87dfce-declarative-config";
     owner = "0xErwin1";
-    rev = "726c2678ff26416b948fa8115fc8d0cd10066923";
-    hash = "sha256-Q0pJAAt8I3EkikBDAmG97LnkxU9pGSf/QSDBipMnyUo=";
+    rev = "fad87dfce54ea856dcca7239c58a1d11ffcf7b1c";
+    hash = "sha256-cJMJjlW8ZqADecui38j5WQNdrYQFqqSKq0JRmRAQ/rg=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = true;
   };
