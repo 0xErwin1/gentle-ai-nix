@@ -14,10 +14,10 @@
 # rather than deep inside the renderer with a command-not-found.
 {
   stable = {
-    version = "4.6.0";
+    version = "5.0.0";
     owner = "Gentleman-Programming";
-    rev = "v4.6.0";
-    hash = "sha256-X4BHBI8XWsrxmg9WQZvSgI18GlXfD8Hw6+iYiutYPgQ=";
+    rev = "v5.0.0";
+    hash = "sha256-LOU/2In5Yy1EL1HhJanmECnz+jIZal+s8jUCLcBb8PM=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
@@ -29,16 +29,17 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # At this pin the tip of main is 94 commits past the commit `v4.6.0` tags;
+  # At this pin the tip of main is the commit `v5.0.0` tags, so beta and stable
+  # build the same tree and differ only in the channel label.
   # main moves on after a release, which is why the two entries stay separate.
   # Every channel carries the Pi
   # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "4.6.0-main.f10148af3";
+    version = "5.0.0-main.4716b3cbc";
     owner = "Gentleman-Programming";
-    rev = "f10148af358d3957570aef7ff9a4f4220615d4a4";
-    hash = "sha256-Uyrq42o16JcZaoClkBYlmQSVmtTmWY7P39whGrlY+h0=";
+    rev = "4716b3cbca158c35c3b316dbd517f54e5f240f97";
+    hash = "sha256-LOU/2In5Yy1EL1HhJanmECnz+jIZal+s8jUCLcBb8PM=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
