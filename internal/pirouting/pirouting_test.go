@@ -263,11 +263,25 @@ func TestProfilesDocumentCarriesOnlyDeclaredFullDelegation(t *testing.T) {
 	if strings.Contains(string(before), "workflow") {
 		t.Fatalf("a profile that declares nothing wrote a workflow key:\n%s", before)
 	}
-	if !strings.Contains(string(after), `"workflow": "full-delegation"`) {
-		t.Fatalf("the declared mode is absent from the document:\n%s", after)
+	// The mode lives beside the profiles, keyed by name: gentle-pi reads a
+	// profile's own keys as agent names, so writing it inside the profile is
+	// what it reports as an unknown agent at launch.
+	var declaredDoc map[string]json.RawMessage
+	if err := json.Unmarshal(after, &declaredDoc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
 	}
-	if strings.Count(string(after), `"workflow"`) != 1 {
-		t.Fatalf("only the declaring profile may carry a mode:\n%s", after)
+	var workflow map[string]string
+	if err := json.Unmarshal(declaredDoc["workflow"], &workflow); err != nil {
+		t.Fatalf("the declared mode is absent from the document: %v\n%s", err, after)
+	}
+	if got := workflow["heavy"]; got != "full-delegation" {
+		t.Fatalf("workflow[heavy] = %q, want full-delegation", got)
+	}
+	if _, ok := workflow["quiet"]; ok {
+		t.Fatalf("a profile that declares nothing must have no workflow entry: %v", workflow)
+	}
+	if strings.Contains(string(after), `"workflow": {`) == false {
+		t.Fatalf("the mode must sit beside the profiles, not inside one:\n%s", after)
 	}
 
 	// The undeclaring profile keeps its exact bytes: adding the mode elsewhere

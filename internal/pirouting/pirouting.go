@@ -409,6 +409,11 @@ type profilesDocument struct {
 	Version  int                       `json:"version"`
 	Active   string                    `json:"active,omitempty"`
 	Profiles map[string]map[string]any `json:"profiles"`
+
+	// Workflow carries each profile's orchestrator workflow mode, keyed by
+	// profile name, beside the profiles rather than inside them: gentle-pi
+	// reads a profile's own keys as agent names, and "organic" needs no entry.
+	Workflow map[string]string `json:"workflow,omitempty"`
 }
 
 const profilesKind = "gentle-pi.agent_model_profiles"
@@ -429,13 +434,17 @@ func marshalProfilesDocument(spec Spec) ([]byte, error) {
 		for phase, assignment := range profile.PhaseAssignments {
 			entries[phase] = entryFromRouting(routingFromAssignment(assignment))
 		}
-		// gentle-pi reads the orchestrator workflow mode from this same object,
-		// as a plain string rather than a routing entry, and only when a profile
-		// opted into full delegation; "organic" is the absence of the key.
-		if profile.Workflow != "" {
-			entries["workflow"] = profile.Workflow
-		}
 		document.Profiles[name] = entries
+	}
+
+	for name, profile := range spec.Profiles {
+		if profile.Workflow == "" {
+			continue
+		}
+		if document.Workflow == nil {
+			document.Workflow = make(map[string]string, 1)
+		}
+		document.Workflow[name] = profile.Workflow
 	}
 
 	encoded, err := json.MarshalIndent(document, "", "  ")
