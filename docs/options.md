@@ -2140,6 +2140,34 @@ attribute set of anything
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.orchestratorMode
+
+
+
+Force gentle-pi’s orchestrator workflow mode for every process this
+home starts, instead of letting each profile’s own ` workflow ` decide\.
+
+This is the escape hatch for headless and CI runs, where there is no
+session to switch profiles in: it is exported as
+` GENTLE_PI_ORCHESTRATOR_MODE `, which gentle-pi applies to the process
+rather than persisting\. Leave it null so switching profiles keeps
+changing the mode, which a global value would freeze\.
+
+
+
+*Type:*
+null or one of “organic”, “full-delegation”
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.profileStrategy
 
 
@@ -2600,6 +2628,37 @@ null
 
 
 
+## programs\.gentle-ai\.providers\.\<name>\.profiles\.\<name>\.workflow
+
+
+
+Who writes in this profile’s sessions\.
+
+` organic ` lets the orchestrator implement inline and delegate only
+when a delegation trigger fires\. ` full-delegation ` never lets it
+implement: every authorized change goes to a bounded writer, small
+ones included\.
+
+Only Pi carries this, because the mode belongs to gentle-pi’s own
+profile store\. ` organic ` writes nothing — it is the absence of the
+entry — so declaring it, or leaving it out, keeps the rendered
+document exactly as it was\.
+
+
+
+*Type:*
+null or one of “organic”, “full-delegation”
+
+
+
+*Default:*
+
+```nix
+null
+```
+
+
+
 ## programs\.gentle-ai\.providers\.\<name>\.provisionEnvironment
 
 
@@ -2848,8 +2907,6 @@ list of string
 
 ## programs\.gentle-ai\.providers\.\<name>\.settings
 
-
-
 Provider-specific configuration the neutral contract does not model\.
 It is recursively merged into this provider’s settings and no other’s\.
 
@@ -2908,6 +2965,8 @@ null
 
 
 ## programs\.gentle-ai\.release
+
+
 
 Which Gentle AI release to build, by channel\.
 

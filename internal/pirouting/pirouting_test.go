@@ -237,6 +237,62 @@ func TestBuildPrecedenceExplicitOverProfileOverFamilyFill(t *testing.T) {
 	}
 }
 
+// TestProfilesDocumentCarriesOnlyDeclaredFullDelegation pins gentle-pi's own
+// rule: the orchestrator workflow mode lives under `workflow`, `organic` is the
+// absence of an entry, and a profile that never opted in serializes exactly as
+// it did before the field existed.
+func TestProfilesDocumentCarriesOnlyDeclaredFullDelegation(t *testing.T) {
+	base := map[string]Profile{
+		"quiet": {Orchestrator: &ModelAssignment{Provider: "anthropic", Model: "claude-haiku-5"}},
+		"heavy": {Orchestrator: &ModelAssignment{Provider: "anthropic", Model: "claude-opus-5"}},
+	}
+	before, err := marshalProfilesDocument(Spec{Profiles: base, ActiveProfile: "quiet"})
+	if err != nil {
+		t.Fatalf("marshal without a workflow: %v", err)
+	}
+
+	declared := map[string]Profile{
+		"quiet": base["quiet"],
+		"heavy": {Orchestrator: base["heavy"].Orchestrator, Workflow: "full-delegation"},
+	}
+	after, err := marshalProfilesDocument(Spec{Profiles: declared, ActiveProfile: "quiet"})
+	if err != nil {
+		t.Fatalf("marshal with a workflow: %v", err)
+	}
+
+	if strings.Contains(string(before), "workflow") {
+		t.Fatalf("a profile that declares nothing wrote a workflow key:\n%s", before)
+	}
+	if !strings.Contains(string(after), `"workflow": "full-delegation"`) {
+		t.Fatalf("the declared mode is absent from the document:\n%s", after)
+	}
+	if strings.Count(string(after), `"workflow"`) != 1 {
+		t.Fatalf("only the declaring profile may carry a mode:\n%s", after)
+	}
+
+	// The undeclaring profile keeps its exact bytes: adding the mode elsewhere
+	// in the document must not reorder or reformat anything here.
+	var beforeDoc, afterDoc map[string]json.RawMessage
+	for raw, target := range map[string]*map[string]json.RawMessage{
+		string(before): &beforeDoc,
+		string(after):  &afterDoc,
+	} {
+		if err := json.Unmarshal([]byte(raw), target); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+	}
+	var beforeProfiles, afterProfiles map[string]json.RawMessage
+	if err := json.Unmarshal(beforeDoc["profiles"], &beforeProfiles); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(afterDoc["profiles"], &afterProfiles); err != nil {
+		t.Fatal(err)
+	}
+	if string(beforeProfiles["quiet"]) != string(afterProfiles["quiet"]) {
+		t.Fatalf("the undeclaring profile changed:\nbefore %s\nafter  %s", beforeProfiles["quiet"], afterProfiles["quiet"])
+	}
+}
+
 func TestBuildProfilesDocumentFormat(t *testing.T) {
 	spec := Spec{
 		ActiveProfile: "cheap",

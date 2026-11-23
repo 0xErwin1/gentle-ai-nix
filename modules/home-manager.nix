@@ -437,6 +437,28 @@ let
         default = null;
         description = "Model this profile's orchestrator runs on.";
       };
+      workflow = mkOption {
+        type = types.nullOr (
+          types.enum [
+            "organic"
+            "full-delegation"
+          ]
+        );
+        default = null;
+        description = ''
+          Who writes in this profile's sessions.
+
+          `organic` lets the orchestrator implement inline and delegate only
+          when a delegation trigger fires. `full-delegation` never lets it
+          implement: every authorized change goes to a bounded writer, small
+          ones included.
+
+          Only Pi carries this, because the mode belongs to gentle-pi's own
+          profile store. `organic` writes nothing — it is the absence of the
+          entry — so declaring it, or leaving it out, keeps the rendered
+          document exactly as it was.
+        '';
+      };
       defaultEffort = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -755,6 +777,25 @@ let
           '';
         };
 
+        orchestratorMode = mkOption {
+          type = types.nullOr (
+            types.enum [
+              "organic"
+              "full-delegation"
+            ]
+          );
+          default = null;
+          description = ''
+            Force gentle-pi's orchestrator workflow mode for every process this
+            home starts, instead of letting each profile's own `workflow` decide.
+
+            This is the escape hatch for headless and CI runs, where there is no
+            session to switch profiles in: it is exported as
+            `GENTLE_PI_ORCHESTRATOR_MODE`, which gentle-pi applies to the process
+            rather than persisting. Leave it null so switching profiles keeps
+            changing the mode, which a global value would freeze.
+          '';
+        };
         quietTools = mkOption {
           type = types.bool;
           default = true;
@@ -1468,7 +1509,8 @@ let
   piProfile =
     value:
     profileWith toPiModelAssignment value
-    // whenSet "fallbacks" (lib.mapAttrs (_: map toModelAssignment) value.fallbacks);
+    // whenSet "fallbacks" (lib.mapAttrs (_: map toModelAssignment) value.fallbacks)
+    // lib.optionalAttrs (value.workflow == "full-delegation") { workflow = value.workflow; };
 
   # OpenCode is the one client whose `models` carries full provider-qualified
   # assignments rather than a vocabulary it decodes itself; every other client
@@ -3529,7 +3571,10 @@ in
     # store symlink is not writable.
     home.sessionVariables =
       lib.optionalAttrs (!cfg.telemetry.enable) { GENTLE_AI_TELEMETRY = "0"; }
-      // lib.optionalAttrs (!cfg.providers.pi.quietTools) { GENTLE_PI_QUIET_TOOLS = "0"; };
+      // lib.optionalAttrs (!cfg.providers.pi.quietTools) { GENTLE_PI_QUIET_TOOLS = "0"; }
+      // lib.optionalAttrs (cfg.providers.pi.orchestratorMode != null) {
+        GENTLE_PI_ORCHESTRATOR_MODE = cfg.providers.pi.orchestratorMode;
+      };
 
     home.packages = packages;
 

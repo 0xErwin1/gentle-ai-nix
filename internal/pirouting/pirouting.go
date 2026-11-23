@@ -78,6 +78,12 @@ type Profile struct {
 	Orchestrator     *ModelAssignment             `json:"orchestrator,omitempty"`
 	PhaseAssignments map[string]ModelAssignment   `json:"phaseAssignments,omitempty"`
 	Fallbacks        map[string][]ModelAssignment `json:"fallbacks,omitempty"`
+
+	// Workflow is the orchestrator workflow mode this profile declares.
+	// gentle-pi treats "organic" as the absence of an entry, so only a
+	// "full-delegation" mode is written and a profile that never opted in
+	// serializes exactly as it did before this field existed.
+	Workflow string `json:"workflow,omitempty"`
 }
 
 // Spec is gentle-nix pi routing's own input contract: what the Nix module
@@ -399,10 +405,10 @@ func entryFromRouting(routing AgentRouting) profileEntry {
 // profilesDocument mirrors the fork's own piAgentProfilesDocument: the file
 // gentle-pi's own "apply" reads profiles from.
 type profilesDocument struct {
-	Kind     string                             `json:"kind"`
-	Version  int                                `json:"version"`
-	Active   string                             `json:"active,omitempty"`
-	Profiles map[string]map[string]profileEntry `json:"profiles"`
+	Kind     string                    `json:"kind"`
+	Version  int                       `json:"version"`
+	Active   string                    `json:"active,omitempty"`
+	Profiles map[string]map[string]any `json:"profiles"`
 }
 
 const profilesKind = "gentle-pi.agent_model_profiles"
@@ -412,16 +418,22 @@ func marshalProfilesDocument(spec Spec) ([]byte, error) {
 		Kind:     profilesKind,
 		Version:  1,
 		Active:   spec.ActiveProfile,
-		Profiles: make(map[string]map[string]profileEntry, len(spec.Profiles)),
+		Profiles: make(map[string]map[string]any, len(spec.Profiles)),
 	}
 
 	for name, profile := range spec.Profiles {
-		entries := make(map[string]profileEntry, len(profile.PhaseAssignments)+1)
+		entries := make(map[string]any, len(profile.PhaseAssignments)+2)
 		if profile.Orchestrator != nil {
 			entries[reservedPhaseKey] = entryFromRouting(routingFromAssignment(*profile.Orchestrator))
 		}
 		for phase, assignment := range profile.PhaseAssignments {
 			entries[phase] = entryFromRouting(routingFromAssignment(assignment))
+		}
+		// gentle-pi reads the orchestrator workflow mode from this same object,
+		// as a plain string rather than a routing entry, and only when a profile
+		// opted into full delegation; "organic" is the absence of the key.
+		if profile.Workflow != "" {
+			entries["workflow"] = profile.Workflow
 		}
 		document.Profiles[name] = entries
 	}
