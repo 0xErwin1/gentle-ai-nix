@@ -46,6 +46,7 @@
   pnpmConfigHook,
   nodejs,
   makeWrapper,
+  portaudio,
   stdenv,
 
   # Which channel to build from. The channels live in pi-versions.nix so that
@@ -117,8 +118,13 @@ stdenv.mkDerivation (finalAttrs: {
     # `pi` on PATH: it runs GENTLE_SHELL_PI when `pi` is given, the adjacent
     # Pi peer otherwise, so PATH is only inherited, never extended here.
     mkdir -p $out/bin
+    # PortAudio is a dlopen target, not a linked one: the streaming extension
+    # that ships inside the tree asks the loader for libportaudio.so.2 at
+    # runtime, so the library has to be on the search path of the launcher and
+    # of the Pi it spawns. Suffixing keeps a caller's own path intact.
     makeWrapper ${lib.getExe nodejs} $out/bin/gentle-shell \
-      --add-flags "$out/lib/gentle-shell/bin/gentle-shell.mjs" ${
+      --add-flags "$out/lib/gentle-shell/bin/gentle-shell.mjs" \
+      --suffix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ portaudio ]} ${
         lib.optionalString (pi != null) "--set-default GENTLE_SHELL_PI ${lib.getExe' pi "pi"}"
       }
 
