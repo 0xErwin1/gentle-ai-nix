@@ -29,17 +29,17 @@
   #
   # The version carries the `-main.` prerelease tag Gentle AI uses to classify a
   # build's evidence channel, so a build from here is never mistaken for stable.
-  # At this pin the tip of main is one commit past the commit `v5.0.0` tags;
+  # At this pin the tip of main is 15 commits past the commit `v5.0.0` tags;
   # main moves on after a release, which is why the two entries stay separate.
   # main moves on after a release, which is why the two entries stay separate.
   # Every channel carries the Pi
   # package retirement 3.6.0 lacked, so none installs
   # `@juicesharp/rpiv-ask-user-question`.
   beta = {
-    version = "5.0.0-main.e235ee390";
+    version = "5.0.0-main.c26d38c04";
     owner = "Gentleman-Programming";
-    rev = "e235ee390f795d1091649613f0504372b2c6ecb6";
-    hash = "sha256-HRGb8FqJbRVGURa8N7NoQYvGhBFV+YDzWowHWEU+SlA=";
+    rev = "c26d38c044cd3e1c759c02193ec5e327999bee87";
+    hash = "sha256-R51wSGPTzYH5RxSNZNWqo3S5srnCAmlpO5ysdXiZsLc=";
     vendorHash = "sha256-A7iVL8Xu6tj6hpU7Xo9D9xhIOKze4H1K5LdQekJ+/oc=";
     providesContract = false;
   };
