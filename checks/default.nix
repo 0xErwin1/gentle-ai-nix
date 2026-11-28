@@ -2027,7 +2027,7 @@ in
         touch "$out"
       '';
 
-  # Both channel builds run the packaged Pi 1.6.0 (packages/pi-coding-agent.nix)
+  # Both channel builds run the packaged Pi 1.7.0 (packages/pi-coding-agent.nix)
   # through GENTLE_SHELL_PI rather than whatever peer their own lockfile pins:
   # the channel this flake ships still pins 1.5.2 while gentle-shell v5.0.0 asks
   # for 1.6.0, so the newer runtime is carried until that package lands. `--version`
@@ -2049,7 +2049,7 @@ in
 
         for launcher in $launchers; do
           output="$("$launcher/bin/gentle-shell" --link --version 2>&1)"
-          printf '%s\n' "$output" | grep -qx 'pi 1.6.0' || {
+          printf '%s\n' "$output" | grep -qx 'pi 1.7.0' || {
             echo "$launcher does not run Pi 1.6.0:" >&2
             printf '%s\n' "$output" >&2
             exit 1
@@ -2057,7 +2057,7 @@ in
         done
 
         version="$("$pi/bin/pi" --version 2>&1)"
-        [ "$version" = 1.6.0 ] || {
+        [ "$version" = 1.7.0 ] || {
           echo "pi-coding-agent --version printed: $version" >&2
           exit 1
         }
